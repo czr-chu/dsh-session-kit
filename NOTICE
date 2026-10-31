@@ -1,0 +1,12 @@
+dsh-session-kit
+Copyright (c) 2026 The dsh-session-kit contributors
+
+This package contains code derived from dsh-session-port
+(https://github.com/mswinandmc/dsh-session-port, MIT License,
+Copyright (c) 2026 mswinandmc):
+
+  lib/zip.js, lib/format.js, lib/attachments.js
+
+Those files keep the upstream MIT license terms; see LICENSE. The rest of the
+package (session management, compact export, batch archive format, client panel)
+is original work released under the same MIT License.

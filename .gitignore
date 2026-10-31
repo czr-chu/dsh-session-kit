@@ -1,0 +1,21 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# local test/runtime residue
+test/tmp/
+test/fixtures/tmp/
+*.log
+cookies.txt
+*.zip
+*.zst
+*.tar.gz
+*.tgz
+
+# research/scratch data is kept outside this repo
+.migration-research/
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
