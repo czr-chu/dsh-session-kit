@@ -12,6 +12,12 @@
  *    by the Connection service exactly like every other plugin-owned route; and
  *  - one agent tool (`session_kit`) with list / export / import actions.
  *
+ * Export/import options carried over the routes and the tool:
+ * `includeWorkspaceFiles` (pack whole workspace trees), `includeSubagents`
+ * (keep subagent transcripts; default false), `workspaceExclude` (extra
+ * workspace path patterns) and `restoreWorkspaceFiles` (unpack the archive's
+ * workspaces/ tree into the target directory).
+ *
  * The plugin imports no DSH package: session-query, persistence, attachments,
  * workspaces, presets and the working directory are read off `ctx` through the
  * Cordis service registry, keeping the bundle dependency-free.
@@ -72,7 +78,17 @@ export function apply(ctx, config) {
  * Normalize the Loader row config. Unknown keys are ignored rather than
  * rejected, because the Loader injects schema defaults we do not own.
  * @param {unknown} config - raw row config.
- * @returns {{maxImportBytes: number, maxExportBytes: number, includeAttachments: boolean, defaultMode: 'full'|'compact'}} resolved settings.
+ * @returns {{
+ *   maxImportBytes: number,
+ *   maxExportBytes: number,
+ *   includeAttachments: boolean,
+ *   includeWorkspaceFiles: boolean,
+ *   includeSubagents: boolean,
+ *   restoreWorkspaceFiles: boolean,
+ *   workspaceExclude: string[],
+ *   workspaceMaxBytes: number | undefined,
+ *   defaultMode: 'full'|'compact',
+ * }} resolved settings.
  */
 function resolveSettings(config) {
   const raw = config !== null && typeof config === 'object' ? config : {};
@@ -86,6 +102,15 @@ function resolveSettings(config) {
         ? raw.maxExportBytes
         : 1024 * 1024 * 1024,
     includeAttachments: raw.includeAttachments !== false,
+    includeWorkspaceFiles: raw.includeWorkspaceFiles === true,
+    includeSubagents: raw.includeSubagents === true,
+    restoreWorkspaceFiles: raw.restoreWorkspaceFiles === true,
+    workspaceExclude: Array.isArray(raw.workspaceExclude)
+      ? raw.workspaceExclude.filter((value) => typeof value === 'string' && value.trim() !== '').map((value) => value.trim())
+      : [],
+    workspaceMaxBytes: Number.isSafeInteger(raw.workspaceMaxBytes) && raw.workspaceMaxBytes > 0
+      ? raw.workspaceMaxBytes
+      : undefined,
     defaultMode: raw.defaultMode === 'full' ? 'full' : 'compact',
   };
 }
@@ -157,10 +182,20 @@ async function dispatchRequest(ctx, settings, connection, req, res) {
           export: true,
           import: true,
           compact: true,
+          workspaceFiles: true,
+          subagents: true,
+          restoreWorkspaceFiles: true,
           attachments: helpers.servicesOf(ctx).attachments !== undefined,
           tool: 'session_kit',
         },
-        defaults: { mode: settings.defaultMode, includeAttachments: settings.includeAttachments },
+        defaults: {
+          mode: settings.defaultMode,
+          includeAttachments: settings.includeAttachments,
+          includeWorkspaceFiles: settings.includeWorkspaceFiles,
+          includeSubagents: settings.includeSubagents,
+          restoreWorkspaceFiles: settings.restoreWorkspaceFiles,
+          ...(settings.workspaceMaxBytes !== undefined ? { workspaceMaxBytes: settings.workspaceMaxBytes } : {}),
+        },
       });
       return;
     }
@@ -189,8 +224,32 @@ async function dispatchRequest(ctx, settings, connection, req, res) {
 }
 
 /**
+ * Normalize a request-supplied boolean flag.
+ * @param {unknown} value - raw JSON value.
+ * @param {boolean} fallback - deployment default.
+ * @returns {boolean} resolved flag.
+ */
+function booleanFlag(value, fallback) {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+/**
+ * Normalize a request-supplied workspace exclusion list.
+ * @param {unknown} value - raw JSON value.
+ * @param {string[]} fallback - deployment default.
+ * @returns {string[]} resolved patterns.
+ */
+function stringList(value, fallback) {
+  if (!Array.isArray(value)) return fallback;
+  return value
+    .filter((entry) => typeof entry === 'string' && entry.trim() !== '')
+    .map((entry) => entry.trim());
+}
+
+/**
  * `POST /session-kit/export` — build one archive and stream it to the browser.
- * Body: `{ sessionIds: string[] | 'all', mode?: 'full'|'compact', includeAttachments?: boolean }`.
+ * Body: `{ sessionIds: string[] | 'all', mode?, includeAttachments?,
+ * includeWorkspaceFiles?, includeSubagents?, workspaceExclude? }`.
  * @param {object} ctx - the plugin context.
  * @param {object} settings - resolved settings.
  * @param {import('node:http').IncomingMessage} req - request.
@@ -199,7 +258,7 @@ async function dispatchRequest(ctx, settings, connection, req, res) {
 async function handleExport(ctx, settings, req, res) {
   const payload = await readJsonBody(req, MAX_JSON_BODY_BYTES);
   const requested = payload.sessionIds;
-  const includeSubagents = payload.includeSubagents === true;
+  const includeSubagents = booleanFlag(payload.includeSubagents, settings.includeSubagents);
   let sessionIds;
   if (requested === 'all') {
     const helpers = await loadSessions();
@@ -210,13 +269,14 @@ async function handleExport(ctx, settings, req, res) {
     throw new SessionPortFormatError('missing-sessions', '请求缺少 sessionIds（会话 id 数组，或 "all"）');
   }
   const mode = payload.mode === 'full' || payload.mode === 'compact' ? payload.mode : settings.defaultMode;
-  const includeAttachments = typeof payload.includeAttachments === 'boolean'
-    ? payload.includeAttachments
-    : settings.includeAttachments;
   const exported = await buildArchive(ctx, {
     sessionIds,
     mode,
-    includeAttachments,
+    includeAttachments: booleanFlag(payload.includeAttachments, settings.includeAttachments),
+    includeWorkspaceFiles: booleanFlag(payload.includeWorkspaceFiles, settings.includeWorkspaceFiles),
+    includeSubagents,
+    workspaceExclude: stringList(payload.workspaceExclude, settings.workspaceExclude),
+    ...(settings.workspaceMaxBytes !== undefined ? { workspaceMaxBytes: settings.workspaceMaxBytes } : {}),
     maxExportBytes: settings.maxExportBytes,
   });
   res.writeHead(200, {
@@ -228,13 +288,14 @@ async function handleExport(ctx, settings, req, res) {
     'x-session-kit-filename': encodeURIComponent(exported.filename),
     'x-session-kit-warnings': encodeURIComponent(JSON.stringify(exported.warnings ?? [])),
     'x-session-kit-sessions': String(exported.sessionCount),
+    'x-session-kit-workspace-files': String(exported.workspaceFileCount ?? 0),
   });
   res.end(exported.data);
 }
 
 /**
  * `POST /session-kit/import` — commit one uploaded archive as new sessions.
- * Query carries `cwd`, `workspaceId`, `filename` hints.
+ * Query carries `cwd`, `workspaceId`, `restoreWorkspaceFiles`, `filename` hints.
  * @param {object} ctx - the plugin context.
  * @param {object} settings - resolved settings.
  * @param {URL} url - parsed request URL.
@@ -243,10 +304,15 @@ async function handleExport(ctx, settings, req, res) {
  */
 async function handleImport(ctx, settings, url, req, res) {
   const buffer = await readRequestBody(req, settings.maxImportBytes);
+  const rawRestore = url.searchParams.get('restoreWorkspaceFiles');
+  const restoreWorkspaceFiles = rawRestore === null || rawRestore === ''
+    ? settings.restoreWorkspaceFiles
+    : rawRestore === '1' || rawRestore.toLowerCase() === 'true';
   const result = await importArchive(ctx, {
     buffer,
     cwd: url.searchParams.get('cwd') ?? undefined,
     workspaceId: url.searchParams.get('workspaceId') ?? undefined,
+    restoreWorkspaceFiles,
     maxImportBytes: settings.maxImportBytes,
   });
   sendJson(res, 200, { ok: true, ...result });
@@ -338,7 +404,8 @@ function registerTool(ctx, settings) {
           'Manage DSH conversations as session archives.',
           'action=list summarizes workspaces and sessions.',
           'action=export writes selected sessions (or all) as ONE ZIP under a plugin-owned folder and returns its path; mode=compact keeps only the conversational spine, mode=full keeps the complete session logs.',
-          'action=import creates NEW sessions from an archive produced by this plugin or by DSH\'s built-in session-log export; it never modifies or deletes an existing session.',
+          'Export can optionally pack whole workspace trees (includeWorkspaceFiles) while excluding VCS/build caches and secret files, and can include subagent transcripts (includeSubagents, default false).',
+          'action=import creates NEW sessions from an archive produced by this plugin or by DSH\'s built-in session-log export; it never modifies or deletes an existing session, never imports subagent transcripts, and can restore the archive\'s workspace files into the target directory (restoreWorkspaceFiles).',
         ].join(' '),
         parameters: {
           type: 'object',
@@ -364,13 +431,26 @@ function registerTool(ctx, settings) {
               type: 'boolean',
               description: 'list/export only: include subagent transcript sessions (default false).',
             },
+            includeWorkspaceFiles: {
+              type: 'boolean',
+              description: 'export only: also pack the selected sessions\' workspace file tree (sensitive files and build caches are excluded).',
+            },
+            workspaceExclude: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'export only: extra workspace path patterns/directories to exclude from the packed tree.',
+            },
+            restoreWorkspaceFiles: {
+              type: 'boolean',
+              description: 'import only: restore the archive\'s workspace files into the target directory (existing files are never overwritten).',
+            },
             path: {
               type: 'string',
               description: 'import only: absolute archive path, or a path relative to the current session directory.',
             },
             cwd: {
               type: 'string',
-              description: 'import only: working directory the new sessions record (defaults to the current session directory).',
+              description: 'import only: target working directory for the new sessions and any restored workspace files (defaults to the current session directory).',
             },
           },
           required: ['action'],
@@ -385,7 +465,7 @@ function registerTool(ctx, settings) {
             ? args.action
             : '';
           const helpers = await loadSessions();
-          const includeSubagents = args.includeSubagents === true;
+          const includeSubagents = args.includeSubagents === true ? true : settings.includeSubagents;
           if (action === 'list') {
             const sessions = await helpers.listSessionEntries(ctx, { includeSubagents });
             const workspaces = typeof helpers.listWorkspaceEntries === 'function'
@@ -405,6 +485,10 @@ function registerTool(ctx, settings) {
               sessionIds,
               mode,
               includeAttachments: settings.includeAttachments,
+              includeWorkspaceFiles: booleanFlag(args.includeWorkspaceFiles, settings.includeWorkspaceFiles),
+              includeSubagents,
+              workspaceExclude: stringList(args.workspaceExclude, settings.workspaceExclude),
+              ...(settings.workspaceMaxBytes !== undefined ? { workspaceMaxBytes: settings.workspaceMaxBytes } : {}),
               maxExportBytes: settings.maxExportBytes,
             });
             const directory = defaultExportDirectory();
@@ -423,6 +507,7 @@ function registerTool(ctx, settings) {
             const result = await importArchive(ctx, {
               buffer: file.buffer,
               cwd: targetCwd,
+              restoreWorkspaceFiles: booleanFlag(args.restoreWorkspaceFiles, settings.restoreWorkspaceFiles),
               maxImportBytes: settings.maxImportBytes,
             });
             return importToolText(result);
@@ -474,6 +559,9 @@ function listToolText(sessions, workspaces) {
 /** Tool result text for the export action. */
 function exportToolText(path, exported) {
   const parts = [`${exported.sessionCount} 个会话`, `${exported.eventCount} 条事件`, `${exported.attachmentCount} 个附件`];
+  if ((exported.workspaceFileCount ?? 0) > 0) {
+    parts.push(`${exported.workspaceFileCount} 个工作区文件（${exported.workspaceBytes} 字节）`);
+  }
   const lines = [`已导出到 ${path}（${parts.join('，')}，模式 ${exported.manifest.mode}）`];
   for (const warning of exported.warnings ?? []) lines.push(`注意：${warning}`);
   return lines.join('\n');
@@ -488,6 +576,9 @@ function importToolText(result) {
     if (session.verified === false) flags.push('未能读回校验');
     lines.push(`- ${session.sessionId}（${flags.join('，')}）`);
     for (const warning of session.warnings ?? []) lines.push(`  注意：${warning}`);
+  }
+  if ((result.restoredFiles ?? 0) > 0 || (result.restoredBytes ?? 0) > 0) {
+    lines.push(`恢复工作区文件 ${result.restoredFiles} 个（${result.restoredBytes} 字节），跳过 ${result.skipped ?? 0} 个`);
   }
   for (const warning of result.warnings ?? []) lines.push(`注意：${warning}`);
   return lines.join('\n');

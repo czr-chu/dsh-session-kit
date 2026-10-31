@@ -9,7 +9,7 @@
 
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -153,7 +153,7 @@ function makePersistence() {
  * @param {object} options - persistence, attachments, verify hook and flags.
  * @returns {object} helper module mock.
  */
-function makeImportDeps({ persistence, attachments, verifyFails = false, writes } = {}) {
+function makeImportDeps({ persistence, attachments, verifyFails = false, writes, workspaceFiles } = {}) {
   const calls = writes ?? { written: [] };
   const deps = {
     calls,
@@ -199,6 +199,7 @@ function makeImportDeps({ persistence, attachments, verifyFails = false, writes 
         },
       };
     },
+    ...(workspaceFiles !== undefined ? { workspaceFiles } : {}),
   };
   return deps;
 }
@@ -550,3 +551,263 @@ test('imports into the repository real JSONL persistence backend (guarded)', asy
     backend.cleanup();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Workspace files + subagent filtering (task-11)
+// ---------------------------------------------------------------------------
+
+/** Mock `lib/workspace-files.js` exclusion surface for restore tests. */
+function makeRestoreSafety() {
+  return {
+    isSensitivePath(relPath) {
+      const base = relPath.split('/').pop() ?? '';
+      return base === '.env' || base.startsWith('.env.') || /\.(?:pem|key)$/u.test(base);
+    },
+    isExcludedDir(relPath) {
+      return relPath.split('/').some((segment) => segment === 'node_modules' || segment === '.git');
+    },
+  };
+}
+
+/** Build a plugin-shaped ZIP with session logs and an optional workspaces tree. */
+function pluginZipWithWorkspaces({ sessions, workspaces = [], files = {}, manifestExtra = {} }) {
+  const pairs = [];
+  const manifestSessions = [];
+  for (const session of sessions) {
+    const events = session.events ?? [];
+    const logText = serializeSessionLog(session.header, events);
+    const logName = `sessions/${session.header.id}/session.v4.jsonl`;
+    pairs.push([logName, Buffer.from(logText, 'utf8')]);
+    manifestSessions.push({
+      id: session.header.id,
+      title: session.title,
+      cwd: session.header.cwd,
+      createdAt: session.header.createdAt,
+      updatedAt: session.header.createdAt,
+      formatVersion: session.header.version,
+      mode: 'full',
+      eventCount: events.length,
+      log: logName,
+      attachments: [],
+    });
+  }
+  for (const [name, data] of Object.entries(files)) {
+    pairs.push([name, Buffer.isBuffer(data) ? data : Buffer.from(String(data), 'utf8')]);
+  }
+  const manifest = {
+    manifestVersion: 1,
+    kind: 'dsh-session-kit',
+    createdAt: new Date(0).toISOString(),
+    source: { sessionFormatVersion: 4, compression: 'deflate' },
+    mode: 'full',
+    sessions: manifestSessions,
+    attachments: [],
+    workspaces,
+    ...manifestExtra,
+  };
+  pairs.unshift(['manifest.json', Buffer.from(JSON.stringify(manifest, null, 2), 'utf8')]);
+  return zipOf(pairs);
+}
+
+/** Whether a path exists (test helper). */
+async function exists(path) {
+  return stat(path).then(() => true, () => false);
+}
+
+test('restoreWorkspaceFiles unpacks workspaces/ into the target directory', async () => {
+  const target = await mkdtemp(join(tmpdir(), 'session-kit-target-'));
+  try {
+    const archive = pluginZipWithWorkspaces({
+      sessions: [{ header: makeHeader('ws-src'), events: [] }],
+      workspaces: [{ path: '/source/ws', archivePath: 'workspaces/abc', sessionIds: ['ws-src'], bytes: 5, files: 2, skipped: 0 }],
+      files: {
+        'workspaces/abc/a.txt': Buffer.from('abc'),
+        'workspaces/abc/sub/b.txt': Buffer.from('de'),
+      },
+    });
+    const deps = makeImportDeps({ persistence: makePersistence(), workspaceFiles: makeRestoreSafety() });
+    const result = await importArchive({}, { buffer: archive, cwd: target, restoreWorkspaceFiles: true, deps });
+    assert.equal(result.restoredFiles, 2);
+    assert.equal(result.restoredBytes, 5);
+    assert.equal(result.skipped, 0);
+    assert.equal(result.sessions.length, 1);
+    assert.equal(result.sessions[0].verified, true);
+    assert.equal(await readFile(join(target, 'a.txt'), 'utf8'), 'abc');
+    assert.equal(await readFile(join(target, 'sub/b.txt'), 'utf8'), 'de');
+    assert.equal(deps.calls.written[0].header.cwd, target, 'restored sessions record the target directory');
+    assert.deepEqual(result.warnings, []);
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});
+
+test('restoreWorkspaceFiles never overwrites an existing file', async () => {
+  const target = await mkdtemp(join(tmpdir(), 'session-kit-target-'));
+  try {
+    await writeFile(join(target, 'a.txt'), Buffer.from('keep'));
+    const archive = pluginZipWithWorkspaces({
+      sessions: [{ header: makeHeader('ws-src'), events: [] }],
+      workspaces: [{ path: '/source/ws', archivePath: 'workspaces/abc', sessionIds: ['ws-src'], bytes: 0, files: 0, skipped: 0 }],
+      files: {
+        'workspaces/abc/a.txt': Buffer.from('NEW'),
+        'workspaces/abc/b.txt': Buffer.from('b'),
+      },
+    });
+    const deps = makeImportDeps({ persistence: makePersistence(), workspaceFiles: makeRestoreSafety() });
+    const result = await importArchive({}, { buffer: archive, cwd: target, restoreWorkspaceFiles: true, deps });
+    assert.equal(result.restoredFiles, 1);
+    assert.equal(result.skipped, 1);
+    assert.equal(await readFile(join(target, 'a.txt'), 'utf8'), 'keep');
+    assert.ok(result.warnings.some((warning) => /已存在/u.test(warning)));
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});
+
+test('restoreWorkspaceFiles skips sensitive and excluded entries', async () => {
+  const target = await mkdtemp(join(tmpdir(), 'session-kit-target-'));
+  try {
+    const archive = pluginZipWithWorkspaces({
+      sessions: [{ header: makeHeader('ws-src'), events: [] }],
+      workspaces: [{ path: '/source/ws', archivePath: 'workspaces/abc', sessionIds: ['ws-src'], bytes: 0, files: 0, skipped: 0 }],
+      files: {
+        'workspaces/abc/.env': Buffer.from('SECRET=1'),
+        'workspaces/abc/node_modules/x.js': Buffer.from('x'),
+        'workspaces/abc/ok.txt': Buffer.from('ok'),
+      },
+    });
+    const deps = makeImportDeps({ persistence: makePersistence(), workspaceFiles: makeRestoreSafety() });
+    const result = await importArchive({}, { buffer: archive, cwd: target, restoreWorkspaceFiles: true, deps });
+    assert.equal(result.restoredFiles, 1);
+    assert.equal(result.skipped, 2);
+    assert.ok(result.warnings.some((warning) => /跳过 2 个敏感/u.test(warning)));
+    assert.equal(await exists(join(target, '.env')), false);
+    assert.equal(await exists(join(target, 'node_modules')), false);
+    assert.equal(await readFile(join(target, 'ok.txt'), 'utf8'), 'ok');
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});
+
+test('restoreWorkspaceFiles falls back to built-in exclusions without the workspace module', async () => {
+  const target = await mkdtemp(join(tmpdir(), 'session-kit-target-'));
+  try {
+    const archive = pluginZipWithWorkspaces({
+      sessions: [{ header: makeHeader('ws-src'), events: [] }],
+      workspaces: [{ path: '/source/ws', archivePath: 'workspaces/abc', sessionIds: ['ws-src'], bytes: 0, files: 0, skipped: 0 }],
+      files: {
+        'workspaces/abc/.env': Buffer.from('SECRET=1'),
+        'workspaces/abc/.ssh/id_rsa': Buffer.from('KEY'),
+        'workspaces/abc/kept.txt': Buffer.from('kept'),
+      },
+    });
+    const deps = makeImportDeps({ persistence: makePersistence() });
+    const result = await importArchive({}, { buffer: archive, cwd: target, restoreWorkspaceFiles: true, deps });
+    assert.equal(result.restoredFiles, 1);
+    assert.equal(await exists(join(target, '.env')), false);
+    assert.equal(await exists(join(target, '.ssh')), false);
+    assert.equal(await readFile(join(target, 'kept.txt'), 'utf8'), 'kept');
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});
+
+test('restoreWorkspaceFiles rejects zip-slip entries before writing anything', async () => {
+  const target = await mkdtemp(join(tmpdir(), 'session-kit-target-'));
+  const parent = join(target, '..');
+  try {
+    for (const name of [
+      'workspaces/abc/../../evil.txt',
+      'workspaces/abc/C:/evil.txt',
+      'workspaces/abc//absolute.txt',
+    ]) {
+      const archive = pluginZipWithWorkspaces({
+        sessions: [{ header: makeHeader('slip-src'), events: [] }],
+        workspaces: [{ path: '/source/ws', archivePath: 'workspaces/abc', sessionIds: ['slip-src'], bytes: 0, files: 0, skipped: 0 }],
+        files: { [name]: Buffer.from('evil') },
+      });
+      const writes = { written: [] };
+      const deps = makeImportDeps({ persistence: makePersistence(), writes, workspaceFiles: makeRestoreSafety() });
+      await assert.rejects(
+        () => importArchive({}, { buffer: archive, cwd: target, restoreWorkspaceFiles: true, deps }),
+        (error) => error.code === 'zip-slip',
+        `entry ${name} must be rejected`,
+      );
+      assert.deepEqual(writes.written, [], 'no session is created for a rejected archive');
+    }
+    assert.equal(await exists(join(parent, 'evil.txt')), false);
+    assert.equal(await exists(join(target, 'C:', 'evil.txt')), false);
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});
+
+test('subagent transcripts are never imported', async () => {
+  const mainHeader = makeHeader('main-1');
+  const childHeader = { ...makeHeader('child-1'), origin: 'subagent', parentSession: 'main-1', delegationDepth: 1 };
+  const archive = pluginZipWithWorkspaces({
+    sessions: [{ header: mainHeader, events: [] }, { header: childHeader, events: [] }],
+  });
+  const deps = makeImportDeps({ persistence: makePersistence() });
+  const result = await importArchive({}, { buffer: archive, deps });
+  assert.equal(result.sessions.length, 1);
+  assert.ok(result.warnings.some((warning) => warning.includes('跳过 1 个子代理会话')));
+  assert.equal(deps.calls.written.length, 1);
+
+  const onlyChildArchive = pluginZipWithWorkspaces({ sessions: [{ header: childHeader, events: [] }] });
+  await assert.rejects(
+    () => importArchive({}, { buffer: onlyChildArchive, deps: makeImportDeps({ persistence: makePersistence() }) }),
+    (error) => error.code === 'no-session' && /子代理/u.test(error.message),
+  );
+});
+
+test('restoreWorkspaceFiles is off by default and leaves the target untouched', async () => {
+  const target = await mkdtemp(join(tmpdir(), 'session-kit-target-'));
+  try {
+    const archive = pluginZipWithWorkspaces({
+      sessions: [{ header: makeHeader('ws-src'), events: [] }],
+      workspaces: [{ path: '/source/ws', archivePath: 'workspaces/abc', sessionIds: ['ws-src'], bytes: 0, files: 0, skipped: 0 }],
+      files: { 'workspaces/abc/a.txt': Buffer.from('abc') },
+    });
+    const deps = makeImportDeps({ persistence: makePersistence(), workspaceFiles: makeRestoreSafety() });
+    const result = await importArchive({}, { buffer: archive, cwd: target, deps });
+    assert.equal(result.restoredFiles, 0);
+    assert.equal(result.restoredBytes, 0);
+    assert.ok(result.warnings.some((warning) => warning.includes('未选择恢复')));
+    assert.equal(await exists(join(target, 'a.txt')), false);
+    assert.equal(result.sessions.length, 1);
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});
+
+test('restore uses the real lib/workspace-files.js exclusion rules (guarded)', async (t) => {
+  let workspaceFiles;
+  try {
+    workspaceFiles = await import('../lib/workspace-files.js');
+  } catch {
+    t.skip('lib/workspace-files.js is not available yet');
+    return;
+  }
+  const target = await mkdtemp(join(tmpdir(), 'session-kit-target-'));
+  try {
+    const archive = pluginZipWithWorkspaces({
+      sessions: [{ header: makeHeader('real-ws'), events: [] }],
+      workspaces: [{ path: '/source/ws', archivePath: 'workspaces/rk', sessionIds: ['real-ws'], bytes: 0, files: 0, skipped: 0 }],
+      files: {
+        'workspaces/rk/ok.txt': Buffer.from('ok'),
+        'workspaces/rk/.env': Buffer.from('SECRET=1'),
+        'workspaces/rk/node_modules/dep.js': Buffer.from('x'),
+      },
+    });
+    const deps = makeImportDeps({ persistence: makePersistence(), workspaceFiles });
+    const result = await importArchive({}, { buffer: archive, cwd: target, restoreWorkspaceFiles: true, deps });
+    assert.equal(result.restoredFiles, 1);
+    assert.equal(await readFile(join(target, 'ok.txt'), 'utf8'), 'ok');
+    assert.equal(await exists(join(target, '.env')), false);
+    assert.equal(await exists(join(target, 'node_modules')), false);
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});
+

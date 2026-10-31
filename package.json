@@ -1,7 +1,7 @@
 {
   "name": "dsh-session-kit",
-  "version": "0.1.0",
-  "description": "DeepSeek Harness session manager: browse, select, compact-export and re-import conversations.",
+  "version": "0.2.0",
+  "description": "DeepSeek Harness session manager: browse sessions, compact/full export with workspace files, and import as new sessions.",
   "type": "module",
   "main": "index.js",
   "exports": {
@@ -17,7 +17,9 @@
     "locale/*.json",
     "cordis.patch.yml",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE",
+    "docs"
   ],
   "dsh": {
     "bundle": {
@@ -43,7 +45,9 @@
     "session",
     "export",
     "compact",
-    "backup"
+    "backup",
+    "migration",
+    "workspace"
   ],
   "license": "MIT",
   "scripts": {

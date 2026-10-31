@@ -8,6 +8,9 @@
 
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 
 import { buildArchive, defaultExportDirectory } from '../lib/export.js';
@@ -338,3 +341,207 @@ test('buildArchive works through the real lib/sessions.js helper module (guarded
   assert.equal(manifest.sessions[0].eventCount, events.length);
   assert.equal(Buffer.from(entryMap(built.data).get(manifest.sessions[0].log)).toString('utf8'), serializeSessionLog(header, events));
 });
+
+// ---------------------------------------------------------------------------
+// Workspace files + subagent filtering (task-11)
+// ---------------------------------------------------------------------------
+
+/** Create a throwaway workspace tree with two safe files. */
+async function makeWorkspaceTree() {
+  const root = await mkdtemp(join(tmpdir(), 'session-kit-ws-'));
+  await writeFile(join(root, 'a.txt'), Buffer.from('abc'));
+  await mkdir(join(root, 'sub'), { recursive: true });
+  await writeFile(join(root, 'sub/b.txt'), Buffer.from('de'));
+  return root;
+}
+
+/** Mock `lib/workspace-files.js` collector used by the export tests. */
+function makeWorkspaceFiles({ root, calls = [], files, warnings = ['跳过符号链接 link'], skipped = [{ path: 'link', reason: 'symlink' }] } = {}) {
+  return {
+    calls,
+    workspaceArchiveKey() {
+      return 'workspaces/ws-key';
+    },
+    deriveTouchedFiles() {
+      return {
+        paths: new Set([join(root, 'a.txt'), join(root, 'sub/b.txt'), join(root, '..', 'outside.txt')]),
+        presented: new Set([join(root, 'sub/b.txt')]),
+        toolTargets: new Set(),
+        cwdHints: new Set(),
+      };
+    },
+    async collectWorkspaceTree(collectRoot, options) {
+      calls.push({ root: collectRoot, options });
+      return {
+        files: files ?? [
+          { absPath: join(root, 'a.txt'), relPath: 'a.txt', size: 3, archivePath: 'workspaces/ws-key/a.txt' },
+          { absPath: join(root, 'sub/b.txt'), relPath: 'sub/b.txt', size: 2, archivePath: 'workspaces/ws-key/sub/b.txt' },
+        ],
+        totalBytes: 5,
+        warnings: [...warnings],
+        skipped: [...skipped],
+      };
+    },
+  };
+}
+
+/** Export helper module mock plus the workspace pieces. */
+function workspaceDeps({ docs, indexEntries = [], workspaceFiles, workspaces = [] }) {
+  return {
+    ...makeDeps({ docs, indexEntries }),
+    listWorkspaceEntries: async () => workspaces,
+    workspaceFiles,
+  };
+}
+
+test('includeWorkspaceFiles packs the workspace tree and records touched paths', async () => {
+  const root = await makeWorkspaceTree();
+  try {
+    const workspaceFiles = makeWorkspaceFiles({ root });
+    const deps = workspaceDeps({
+      docs: { s1: makeDoc('s1') },
+      indexEntries: [{ id: 's1', title: 'T', cwd: root, workspaceId: 'ws1', createdAt: 1, updatedAt: 2, formatVersion: 4, eventCount: 4 }],
+      workspaceFiles,
+      workspaces: [{ workspaceId: 'ws1', title: 'W', path: root, sessionIds: ['s1'] }],
+    });
+    const built = await buildArchive({}, {
+      sessionIds: ['s1'],
+      includeWorkspaceFiles: true,
+      workspaceExclude: ['*.log'],
+      deps,
+      now: 1730000000000,
+    });
+    assert.equal(built.workspaceCount, 1);
+    assert.equal(built.workspaceFileCount, 2);
+    assert.equal(built.workspaceBytes, 5);
+    assert.equal(workspaceFiles.calls.length, 1);
+    assert.equal(workspaceFiles.calls[0].root, root);
+    assert.deepEqual(workspaceFiles.calls[0].options.excludePatterns, ['*.log']);
+
+    const entries = entryMap(built.data);
+    assert.equal(Buffer.from(entries.get('workspaces/ws-key/a.txt')).toString('utf8'), 'abc');
+    assert.equal(Buffer.from(entries.get('workspaces/ws-key/sub/b.txt')).toString('utf8'), 'de');
+    const manifest = JSON.parse(Buffer.from(entries.get('manifest.json')).toString('utf8'));
+    assert.deepEqual(manifest.workspaces, [{
+      path: root,
+      archivePath: 'workspaces/ws-key',
+      sessionIds: ['s1'],
+      bytes: 5,
+      files: 2,
+      skipped: 1,
+    }]);
+    assert.deepEqual(
+      [...manifest.sessions[0].touchedFiles].sort(),
+      ['a.txt', 'sub/b.txt', join(root, '..', 'outside.txt')].sort(),
+    );
+    assert.deepEqual(manifest.sessions[0].presentedFiles, ['sub/b.txt']);
+    assert.ok(built.warnings.some((warning) => warning.includes('跳过符号链接 link')));
+    assert.match(Buffer.from(entries.get('README.md')).toString('utf8'), /workspaces\//u);
+    assert.ok(manifest.checksums.files['workspaces/ws-key/a.txt']);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('workspaceMaxBytes over-budget trees are dropped with an explicit warning', async () => {
+  const root = await makeWorkspaceTree();
+  try {
+    const workspaceFiles = makeWorkspaceFiles({
+      root,
+      warnings: [],
+      skipped: [],
+      files: [
+        { absPath: join(root, 'a.txt'), relPath: 'a.txt', size: 3, archivePath: 'workspaces/ws-key/a.txt' },
+        { absPath: join(root, 'sub/b.txt'), relPath: 'sub/b.txt', size: 2, archivePath: 'workspaces/ws-key/sub/b.txt' },
+      ],
+    });
+    const deps = workspaceDeps({
+      docs: { s1: makeDoc('s1') },
+      workspaceFiles,
+      workspaces: [{ workspaceId: 'ws1', path: root, sessionIds: ['s1'] }],
+    });
+    const built = await buildArchive({}, {
+      sessionIds: ['s1'],
+      includeWorkspaceFiles: true,
+      workspaceMaxBytes: 3,
+      deps,
+      now: 1730000000000,
+    });
+    assert.equal(built.workspaceFileCount, 1);
+    assert.equal(built.workspaceBytes, 3);
+    assert.ok(built.warnings.some((warning) => /超过上限 \d+ 字节/u.test(warning)));
+    const manifest = JSON.parse(Buffer.from(entryMap(built.data).get('manifest.json')).toString('utf8'));
+    assert.equal(manifest.workspaces[0].files, 1);
+    assert.equal(manifest.workspaces[0].bytes, 3);
+    assert.equal(built.manifest.sessions[0].touchedFiles.length > 0, true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('subagent transcripts are skipped unless includeSubagents is true', async () => {
+  const main = makeDoc('main');
+  const child = makeDoc('child');
+  child.header = { ...child.header, origin: 'subagent', parentSession: 'main' };
+  const deps = makeDeps({ docs: { main, child } });
+  const skipped = await buildArchive({}, {
+    sessionIds: ['main', 'child'],
+    deps,
+    includeAttachments: false,
+    now: 1730000000000,
+  });
+  assert.equal(skipped.sessionCount, 1);
+  assert.deepEqual(skipped.manifest.sessions.map((session) => session.id), ['main']);
+  assert.ok(skipped.warnings.some((warning) => warning.includes('子代理会话 child')));
+
+  const kept = await buildArchive({}, {
+    sessionIds: ['main', 'child'],
+    includeSubagents: true,
+    deps,
+    includeAttachments: false,
+    now: 1730000000000,
+  });
+  assert.equal(kept.sessionCount, 2);
+  assert.deepEqual(kept.manifest.sessions.map((session) => session.id).sort(), ['child', 'main']);
+
+  await assert.rejects(
+    () => buildArchive({}, { sessionIds: ['child'], deps }),
+    (error) => error.code === 'missing-sessions' && /子代理会话默认不导出/u.test(error.message),
+  );
+});
+
+test('workspace export uses the real lib/workspace-files.js collector (guarded)', async (t) => {
+  let workspaceFiles;
+  try {
+    workspaceFiles = await import('../lib/workspace-files.js');
+  } catch {
+    t.skip('lib/workspace-files.js is not available yet');
+    return;
+  }
+  const root = await mkdtemp(join(tmpdir(), 'session-kit-ws-real-'));
+  try {
+    await writeFile(join(root, 'notes.txt'), Buffer.from('hello'));
+    await writeFile(join(root, '.env'), Buffer.from('SECRET=1'));
+    await mkdir(join(root, 'node_modules'), { recursive: true });
+    await writeFile(join(root, 'node_modules/x.js'), Buffer.from('x'));
+    const deps = workspaceDeps({
+      docs: { s1: makeDoc('s1') },
+      indexEntries: [{ id: 's1', cwd: root, workspaceId: 'ws1', createdAt: 1, updatedAt: 1, formatVersion: 4, eventCount: 4 }],
+      workspaceFiles,
+      workspaces: [{ workspaceId: 'ws1', path: root, sessionIds: ['s1'] }],
+    });
+    const built = await buildArchive({}, {
+      sessionIds: ['s1'],
+      includeWorkspaceFiles: true,
+      deps,
+      now: 1730000000000,
+    });
+    const names = [...entryMap(built.data).keys()].filter((name) => name.startsWith('workspaces/'));
+    assert.ok(names.some((name) => name.endsWith('/notes.txt')), 'safe file must be packed');
+    assert.ok(!names.some((name) => name.endsWith('/.env')), 'sensitive file must not be packed');
+    assert.ok(!names.some((name) => name.includes('node_modules')), 'excluded dir must not be packed');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+

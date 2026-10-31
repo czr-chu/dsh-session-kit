@@ -228,3 +228,70 @@ Keep no @deepseek-ai/* runtime imports.
   imports is NOT available from a standalone plugin; tests may instead import
   '@deepseek-ai/dsh-session-persistence-jsonl' only when run from the repo
   (node --import tsx/esm). If that import fails, skip with a message.
+## Workspace file support (0.2.0)
+
+### lib/workspace-files.js (NEW)
+
+```js
+export const DEFAULT_EXCLUDED_DIRS        // .git, node_modules, .venv, dist, build, ...
+export const DEFAULT_SENSITIVE_PATTERNS    // .env*, *.pem, *.key, .npmrc, .ssh, ...
+export function isSensitivePath(relPath)   // -> boolean
+export function isExcludedDir(relPath)     // -> boolean
+export function deriveTouchedFiles(events, sessionCwd)
+// -> { paths: Set<string> (absolute), presented: Set<string>,
+//      toolTargets: Set<string>, cwdHints: Set<string> }
+export function workspaceArchiveKey(rootPath)
+// -> 'workspaces/<safe-encoded-path>' (stable, one folder per workspace root)
+export async function collectWorkspaceTree(rootPath, {
+  excludeDirs, excludePatterns, maxFiles, maxFileBytes, maxTotalBytes,
+})
+// -> { files: [{ absPath, relPath, size, archivePath }],
+//      totalBytes, warnings: string[], skipped: [{ path, reason }] }
+// Never follows symlinks; skips excluded/sensitive/oversized files with a warning.
+```
+
+### Export options (lib/export.js buildArchive)
+
+```js
+buildArchive(ctx, {
+  sessionIds, mode, includeAttachments,
+  includeSubagents = false,        // skip subagent transcript sessions by default
+  includeWorkspaceFiles = false,   // add the whole workspace tree(s)
+  workspaceExclude = [],           // extra dir/name globs
+  workspaceMaxBytes,                // optional cap for the workspace part
+  maxExportBytes, signal,
+})
+// archive adds:
+//   workspaces/<workspaceArchiveKey>/<relPath...>
+// manifest adds:
+//   workspaces: [{ path, archivePath, sessionIds, bytes, files, skipped }]
+//   sessions[].touchedFiles / presentedFiles / workspaceKey?
+// Sensitive files are never read into the archive; skips are reported as warnings.
+```
+
+### Import options (lib/import.js importArchive)
+
+```js
+importArchive(ctx, {
+  buffer, cwd, workspaceId, restoreWorkspaceFiles = false,
+  maxImportBytes, signal,
+})
+// Subagent-origin sessions are never imported (reported as warnings).
+// restoreWorkspaceFiles=true extracts manifest workspaces under cwd with
+// path-traversal, absolute-path and symlink rejection; existing files are
+// skipped with a warning. Imported sessions then record cwd as their cwd.
+```
+
+### Routes / tool additions
+
+- POST /session-kit/export body additionally accepts
+  `includeWorkspaceFiles`, `includeSubagents`, `workspaceExclude`.
+- POST /session-kit/import query additionally accepts `restoreWorkspaceFiles=1`.
+- session_kit tool: export accepts `includeWorkspaceFiles`/`includeSubagents`;
+  import accepts `restoreWorkspaceFiles` (boolean).
+### Additional helper
+
+`collectTouchedFiles(paths, { rootPath, ...collectOptions })` collects only the
+given absolute paths through the same exclusions/budget rules as
+`collectWorkspaceTree`; the current export uses whole workspace trees, this
+helper is available for a future per-session touched-files mode.

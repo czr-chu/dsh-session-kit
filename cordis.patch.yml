@@ -1,8 +1,8 @@
 # dsh-session-kit bundle layer: sessions management + compact export/import.
 #
 # Host half:  /session-kit/{info,list,export,import} routes + session_kit agent tool.
-# Client half: sidebar row "会话管理" opening a session browser with selection,
-#              compact/full export and archive import.
+# Client half: sidebar row "Session manager" with selection, compact/full export
+#              (workspace files on by default), archive import and file restore.
 - insert:
     - id: session-kit
       name: dsh-session-kit
@@ -10,4 +10,7 @@
         maxImportBytes: 536870912
         maxExportBytes: 1073741824
         includeAttachments: true
+        includeWorkspaceFiles: true
+        includeSubagents: false
+        restoreWorkspaceFiles: true
         defaultMode: compact

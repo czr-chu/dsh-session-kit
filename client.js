@@ -51,13 +51,26 @@ window.__ModuleLoader__.load({
       'panel.events': '{count} 条事件',
       'panel.empty': '还没有可管理的会话。',
       'panel.emptyFilter': '没有匹配搜索条件的会话。',
-      'panel.mode': '导出模式',
       'panel.modeCompact': '精简',
       'panel.modeCompactHint': '仅保留主对话（用户消息与最终回答），体积更小。',
       'panel.modeFull': '全量',
       'panel.modeFullHint': '完整事件日志，可完整恢复工具调用与过程。',
       'panel.attachments': '包含附件',
       'panel.attachmentsHint': '导出图片与文件附件。',
+      'panel.exportOptions': '导出选项',
+      'panel.importOptions': '导入选项',
+      'panel.workspaceFiles': '包含工作区文件（整个工作区）',
+      'panel.workspaceFilesHint': '打包所选会话对应工作区的文件树；自动跳过敏感文件与依赖/构建目录。',
+      'panel.subagents': '包含子代理会话',
+      'panel.subagentsHint': '一并打包所选会话的子代理日志（仅备份；导入时默认跳过）。',
+      'panel.restoreWorkspaceFiles': '恢复工作区文件到当前工作区',
+      'panel.restoreWorkspaceFilesHint': '解压到当前工作区；同名文件不覆盖，冲突会列在结果提示里。',
+      'panel.workspaceRestored': '已恢复工作区文件 {count} 个（{size}）',
+      'panel.workspaceSkipped': '跳过 {count} 个工作区文件',
+      'panel.workspaceSkipLine': '跳过 {path}：{reason}',
+      'panel.unknownPath': '未知路径',
+      'panel.unknownReason': '已存在或不允许',
+      'panel.moreLines': '…另有 {count} 条提示',
       'panel.export': '导出所选',
       'panel.exporting': '正在导出…',
       'panel.exportFailed': '导出失败',
@@ -97,13 +110,26 @@ window.__ModuleLoader__.load({
       'panel.events': '{count} events',
       'panel.empty': 'No sessions to manage yet.',
       'panel.emptyFilter': 'No sessions match this search.',
-      'panel.mode': 'Export mode',
       'panel.modeCompact': 'Compact',
       'panel.modeCompactHint': 'Main conversation only (user messages and final answers); smaller archives.',
       'panel.modeFull': 'Full',
       'panel.modeFullHint': 'Complete event log; keeps tool calls and process history.',
       'panel.attachments': 'Include attachments',
       'panel.attachmentsHint': 'Pack referenced images and files.',
+      'panel.exportOptions': 'Export options',
+      'panel.importOptions': 'Import options',
+      'panel.workspaceFiles': 'Include workspace files (whole workspace)',
+      'panel.workspaceFilesHint': 'Pack the file tree of the selected sessions\' workspaces; sensitive files and dependency/build directories are skipped.',
+      'panel.subagents': 'Include subagent sessions',
+      'panel.subagentsHint': 'Pack subagent logs of the selected sessions (backup only; import skips them).',
+      'panel.restoreWorkspaceFiles': 'Restore workspace files into the current workspace',
+      'panel.restoreWorkspaceFilesHint': 'Extract into the current workspace; existing files are never overwritten and conflicts are listed.',
+      'panel.workspaceRestored': 'Restored {count} workspace files ({size})',
+      'panel.workspaceSkipped': 'Skipped {count} workspace files',
+      'panel.workspaceSkipLine': 'Skipped {path}: {reason}',
+      'panel.unknownPath': 'unknown path',
+      'panel.unknownReason': 'exists or not allowed',
+      'panel.moreLines': '…and {count} more notes',
       'panel.export': 'Export selected',
       'panel.exporting': 'Exporting…',
       'panel.exportFailed': 'Export failed',
@@ -300,6 +326,34 @@ window.__ModuleLoader__.load({
       };
     }
 
+    /** Normalize the optional workspace-file restore summary of one import result. */
+    function normalizeWorkspaceRestore(data) {
+      const record = data !== null && typeof data === 'object' ? data : {};
+      let source = {};
+      for (const candidate of [record.workspaceFiles, record.workspaceRestore, record.workspace]) {
+        if (candidate !== null && typeof candidate === 'object' && !Array.isArray(candidate)) {
+          source = candidate;
+          break;
+        }
+      }
+      const restoredFiles = pickNumber(source.restoredFiles ?? source.restored ?? record.restoredFiles ?? record.restored);
+      const restoredBytes = pickNumber(source.restoredBytes ?? source.bytes ?? record.restoredBytes);
+      const rawSkipped = source.skipped ?? record.skipped;
+      const skippedCountRaw = typeof source.skippedFiles === 'number'
+        ? source.skippedFiles
+        : typeof record.skippedFiles === 'number' ? record.skippedFiles : undefined;
+      const skipped = (Array.isArray(rawSkipped) ? rawSkipped : []).map((entry) => {
+        if (typeof entry === 'string') return { path: entry, reason: '' };
+        const item = entry !== null && typeof entry === 'object' ? entry : {};
+        return { path: pickString(item.path ?? item.relPath ?? item.name), reason: pickString(item.reason) };
+      }).filter((entry) => entry.path !== '' || entry.reason !== '');
+      const skippedCount = skippedCountRaw !== undefined
+        ? pickNumber(skippedCountRaw)
+        : typeof rawSkipped === 'number' ? pickNumber(rawSkipped) : skipped.length;
+      const warnings = Array.isArray(source.warnings) ? source.warnings.filter((line) => typeof line === 'string') : [];
+      return { restoredFiles, restoredBytes, skipped, skippedCount: Math.max(skippedCount, skipped.length), warnings };
+    }
+
     /** Normalize the import route payload. */
     function normalizeImportPayload(payload) {
       const root = payload !== null && typeof payload === 'object' ? payload : {};
@@ -316,8 +370,12 @@ window.__ModuleLoader__.load({
           warnings: Array.isArray(record.warnings) ? record.warnings.filter((line) => typeof line === 'string') : [],
         };
       });
-      const warnings = Array.isArray(data.warnings) ? data.warnings.filter((line) => typeof line === 'string') : [];
-      return { sessions, warnings };
+      const workspace = normalizeWorkspaceRestore(data);
+      const warnings = [
+        ...(Array.isArray(data.warnings) ? data.warnings.filter((line) => typeof line === 'string') : []),
+        ...workspace.warnings,
+      ];
+      return { sessions, warnings, workspace };
     }
     // #endregion
 
@@ -424,6 +482,35 @@ window.__ModuleLoader__.load({
       }
       if (error instanceof TypeError) return tr('error.network');
       return tr('error.unknown');
+    }
+
+    /** Human-readable byte count with binary units. */
+    function formatBytes(value) {
+      const bytes = typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+      if (bytes < 1024) return `${Math.round(bytes)} B`;
+      const units = ['KiB', 'MiB', 'GiB', 'TiB'];
+      let amount = bytes;
+      let unit = -1;
+      while (amount >= 1024 && unit < units.length - 1) {
+        amount /= 1024;
+        unit += 1;
+      }
+      return `${amount >= 100 ? Math.round(amount) : amount.toFixed(1)} ${units[unit]}`;
+    }
+
+    /** Deduplicate one notice line list and cap it so a noisy archive stays readable. */
+    function capNoticeLines(lines, tr) {
+      const unique = [];
+      const seen = new Set();
+      for (const line of lines) {
+        if (typeof line !== 'string') continue;
+        const text = line.trim();
+        if (text === '' || seen.has(text)) continue;
+        seen.add(text);
+        unique.push(text);
+      }
+      if (unique.length <= 24) return unique;
+      return [...unique.slice(0, 24), tr('panel.moreLines', { count: unique.length - 24 })];
     }
     // #endregion
 
@@ -591,6 +678,9 @@ window.__ModuleLoader__.load({
       const [selected, setSelected] = React.useState(() => new Set());
       const [mode, setMode] = React.useState('compact');
       const [includeAttachments, setIncludeAttachments] = React.useState(true);
+      const [includeWorkspaceFiles, setIncludeWorkspaceFiles] = React.useState(true);
+      const [includeSubagents, setIncludeSubagents] = React.useState(false);
+      const [restoreWorkspaceFiles, setRestoreWorkspaceFiles] = React.useState(true);
       const [busy, setBusy] = React.useState('');
       const [notice, setNotice] = React.useState(null);
       const fileInputRef = React.useRef(null);
@@ -665,9 +755,15 @@ window.__ModuleLoader__.load({
         setBusy('export');
         setNotice(null);
         try {
-          const result = await props.exportSelection({ sessionIds: ids, mode, includeAttachments });
+          const result = await props.exportSelection({
+            sessionIds: ids,
+            mode,
+            includeAttachments,
+            includeWorkspaceFiles,
+            includeSubagents,
+          });
           downloadBlob(result.blob, result.filename);
-          setNotice({ tone: 'success', title: tr('panel.exportDone', { count: ids.length }), lines: result.warnings });
+          setNotice({ tone: 'success', title: tr('panel.exportDone', { count: ids.length }), lines: capNoticeLines(result.warnings, tr) });
         } catch (error) {
           setNotice({ tone: 'error', title: tr('panel.exportFailed'), lines: [errorMessageOf(error, tr)] });
         } finally {
@@ -687,6 +783,7 @@ window.__ModuleLoader__.load({
           const target = props.targetOf();
           const result = await props.importSelection(file, {
             filename: typeof file.name === 'string' ? file.name : 'session-kit.zip',
+            restoreWorkspaceFiles,
             ...target,
           });
           await props.refreshSessions();
@@ -698,11 +795,29 @@ window.__ModuleLoader__.load({
           const ids = result.sessions.map((session) => session.sessionId).filter((id) => id !== '');
           const lines = [];
           if (ids.length > 0) lines.push(tr('panel.importSessionIds', { ids: ids.join(', ') }));
+          const workspace = result.workspace !== undefined && result.workspace !== null
+            ? result.workspace
+            : { restoredFiles: 0, restoredBytes: 0, skipped: [], skippedCount: 0, warnings: [] };
+          if (workspace.restoredFiles > 0) {
+            lines.push(tr('panel.workspaceRestored', {
+              count: workspace.restoredFiles,
+              size: formatBytes(workspace.restoredBytes),
+            }));
+          }
+          if (workspace.skippedCount > 0) {
+            lines.push(tr('panel.workspaceSkipped', { count: workspace.skippedCount }));
+            for (const detail of workspace.skipped.slice(0, 8)) {
+              lines.push(tr('panel.workspaceSkipLine', {
+                path: detail.path === '' ? tr('panel.unknownPath') : detail.path,
+                reason: detail.reason === '' ? tr('panel.unknownReason') : detail.reason,
+              }));
+            }
+          }
           for (const warning of result.warnings) lines.push(warning);
           for (const session of result.sessions) for (const warning of session.warnings) lines.push(warning);
           if (result.sessions.some((session) => session.verified === false)) lines.push(tr('panel.importUnverified'));
           lines.push(tr('panel.openHint'));
-          setNotice({ tone: 'success', title: tr('panel.importDone', { count: ids.length }), lines });
+          setNotice({ tone: 'success', title: tr('panel.importDone', { count: ids.length }), lines: capNoticeLines(lines, tr) });
           const alive = new Set(next.sessions.map((session) => session.id));
           setSelected((previous) => new Set([...previous].filter((id) => alive.has(id))));
         } catch (error) {
@@ -765,7 +880,7 @@ window.__ModuleLoader__.load({
 
       const modeRow = h(
         'div',
-        { style: STYLES.modeRow, role: 'radiogroup', 'aria-label': tr('panel.mode') },
+        { style: STYLES.modeRow, role: 'group', 'aria-label': tr('panel.exportOptions') },
         h(
           'label',
           { style: STYLES.modeLabel },
@@ -818,6 +933,38 @@ window.__ModuleLoader__.load({
             h('span', { style: STYLES.modeHint }, tr('panel.attachmentsHint')),
           ),
         ),
+        h(
+          'label',
+          { style: STYLES.modeLabel },
+          h('input', {
+            type: 'checkbox',
+            checked: includeWorkspaceFiles,
+            disabled: busy !== '',
+            onChange: (event) => setIncludeWorkspaceFiles(event.target.checked),
+          }),
+          h(
+            'span',
+            null,
+            tr('panel.workspaceFiles'),
+            h('span', { style: STYLES.modeHint }, tr('panel.workspaceFilesHint')),
+          ),
+        ),
+        h(
+          'label',
+          { style: STYLES.modeLabel },
+          h('input', {
+            type: 'checkbox',
+            checked: includeSubagents,
+            disabled: busy !== '',
+            onChange: (event) => setIncludeSubagents(event.target.checked),
+          }),
+          h(
+            'span',
+            null,
+            tr('panel.subagents'),
+            h('span', { style: STYLES.modeHint }, tr('panel.subagentsHint')),
+          ),
+        ),
       );
 
       const actions = h(
@@ -842,6 +989,27 @@ window.__ModuleLoader__.load({
           'aria-hidden': 'true',
           tabIndex: -1,
         }),
+      );
+
+      const importOptions = h(
+        'div',
+        { style: STYLES.modeRow, role: 'group', 'aria-label': tr('panel.importOptions') },
+        h(
+          'label',
+          { style: STYLES.modeLabel },
+          h('input', {
+            type: 'checkbox',
+            checked: restoreWorkspaceFiles,
+            disabled: busy !== '',
+            onChange: (event) => setRestoreWorkspaceFiles(event.target.checked),
+          }),
+          h(
+            'span',
+            null,
+            tr('panel.restoreWorkspaceFiles'),
+            h('span', { style: STYLES.modeHint }, tr('panel.restoreWorkspaceFilesHint')),
+          ),
+        ),
       );
 
       let body;
@@ -948,6 +1116,7 @@ window.__ModuleLoader__.load({
           searchRow,
           modeRow,
           actions,
+          importOptions,
           noticeCard,
           body,
           h('p', { style: STYLES.footnote }, tr('panel.importHint')),
@@ -970,9 +1139,11 @@ window.__ModuleLoader__.load({
       const filename = hints !== null && typeof hints === 'object' ? pickString(hints.filename) : '';
       const cwd = hints !== null && typeof hints === 'object' ? pickString(hints.cwd) : '';
       const workspaceId = hints !== null && typeof hints === 'object' ? pickString(hints.workspaceId) : '';
+      const restoreWorkspaceFiles = hints !== null && typeof hints === 'object' && hints.restoreWorkspaceFiles === true;
       if (filename !== '') params.set('filename', filename);
       if (cwd !== '') params.set('cwd', cwd);
       if (workspaceId !== '') params.set('workspaceId', workspaceId);
+      params.set('restoreWorkspaceFiles', restoreWorkspaceFiles ? '1' : '0');
       const query = params.toString();
       const response = await fetch(hostUrl(query === '' ? '/import' : `/import?${query}`), {
         method: 'POST',
@@ -995,6 +1166,8 @@ window.__ModuleLoader__.load({
           sessionIds: request.sessionIds,
           mode: request.mode,
           includeAttachments: request.includeAttachments === true,
+          includeWorkspaceFiles: request.includeWorkspaceFiles === true,
+          includeSubagents: request.includeSubagents === true,
         }),
       });
       if (!response.ok) {
