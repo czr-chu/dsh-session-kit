@@ -71,6 +71,18 @@ not part of the lineage closure and survive. Workspace membership, pins and the
 archive flag are cleaned afterwards; cleanup failures are logged, not reported
 as a failed delete.
 
+## Format migration model
+
+DSH keeps released generations immutable and migrates lazily: reading an old
+session transforms it in memory, and the current generation is published only by
+`SessionPersistence.open(id, 'write')` (the same path a normal continued
+conversation takes). This plugin's migrate action calls only that seam, closes
+the handle immediately, and verifies the result with a second `stat`; it never
+decompresses or re-encodes a log itself. The old generation stays on disk, and a
+refusal from the official migration leaves the source unchanged and is reported
+per session. `/session-kit/list` exposes `formatStatus` / `legacy` so the panel
+can badge and batch-migrate old rows.
+
 ## Import model
 
 Import always creates new sessions (never mutates or deletes existing ones).

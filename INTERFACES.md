@@ -350,3 +350,60 @@ Rows show an "archived" badge and a dimmed style; toolbar/filter:
   confirmation dialog that names the sessions and says they move to
   `session-kit-trash`,
 - after each action refresh the list and show per-session failures.
+## Session format migration (0.4.0)
+
+DSH reads released historical generations through its own migration chain and
+publishes the current generation lazily: `SessionPersistence.open(id, 'write')`
+runs the official `prepareStoredMigration` + `publishStoredMigration` path before
+granting the write handle. Released generations are never deleted.
+
+### lib/migrate.js (NEW)
+
+```js
+export async function listLegacySessionIds(ctx)
+// -> Promise<string[]> from persistence.list() snapshots whose
+//    formatStatus === 'migration-required' (current logs are skipped).
+
+export async function migrateSession(ctx, id)
+// -> { sessionId, status: 'migrated' | 'current', fromVersion?: number,
+//      toVersion: number }
+// Refuses live/running sessions (code 'active'); missing -> 'not-found'.
+// Reads persistence.stat(id); a current snapshot resolves without writing.
+// A historical snapshot is migrated ONLY through
+// persistence.open(id, 'write') + close(), then verified with a second stat
+// (formatStatus must be current). The source generation is left untouched.
+// Failures throw code 'migration-failed' with the official refusal message;
+// the original log remains readable.
+```
+
+### List entries
+
+`listSessionEntries` adds `formatStatus` (`'current' | 'migration-required'`,
+when reported) and `legacy: boolean` (true exactly for `migration-required`).
+Archived-merged snapshots expose their stat formatStatus too.
+
+### Routes
+
+- POST /session-kit/migrate body `{ "sessionIds": string[] | "all", "confirm"?: true }`
+  -> `{ ok: true, results: [{ sessionId, ok, status, error? }], migratedCount,
+       legacyRemaining }`; batch cap 100; `all` expands the legacy ids and
+  requires `confirm: true`. Per-id failures stay in results; a total failure
+  follows the same status mapping as the other management routes.
+- GET /session-kit/list sessions include `formatStatus` / `legacy`.
+- /info capabilities add `migrate`; expose `legacyCount` in /list or /info
+  diagnostics is optional.
+
+### Agent tool
+
+`session_kit` action `migrate`:
+- `sessionIds` explicit ids, or `'all'` (requires `confirm: true`).
+- Returns a text summary with per-session success/failure.
+
+### Client
+
+- Legacy rows show a "旧格式 vN" / "Legacy format" badge (from `legacy`).
+- Toolbar shows "旧格式 N" and a batch "升级旧格式" button; each legacy row has
+  an "升级格式" action.
+- Confirmation explains it uses DSH's official migration, keeps the old
+  generation, and never changes a failed session.
+- After running, refresh the list and show per-id success/failure.

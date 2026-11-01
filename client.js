@@ -5,9 +5,11 @@
  * column. The panel lists sessions grouped by workspace with an active/archived
  * badge per row, filters them by status and a search box, selects any subset
  * with checkboxes (plus per-group and global select all/none), and exposes both
- * per-row and batch archive / restore / trash-delete actions. It also exports
- * the selection as one ZIP through `POST /session-kit/export` and imports an
- * archive through `POST /session-kit/import`.
+ * per-row and batch archive / restore / trash-delete actions. Legacy-format
+ * sessions additionally carry a version badge and a per-row or batch upgrade
+ * action that runs DSH's official migration chain. It also exports the selection
+ * as one ZIP through `POST /session-kit/export` and imports an archive through
+ * `POST /session-kit/import`.
  *
  * Hand-written ModuleLoader factory: no bundler, no JSX, no TypeScript, and the
  * only runtime import is `react`. Every Host string (titles, warnings,
@@ -72,6 +74,30 @@ window.__ModuleLoader__.load({
       'panel.unknownPath': '未知路径',
       'panel.unknownReason': '已存在或不允许',
       'panel.moreLines': '…另有 {count} 条提示',
+      'panel.legacyBadge': '旧格式 v{version}',
+      'panel.legacyBadgePlain': '旧格式',
+      'panel.legacyCount': '旧格式 {count}',
+      'panel.upgradeLegacy': '升级旧格式',
+      'panel.upgradeFormat': '升级格式',
+      'panel.upgradeHint': '使用 DSH 官方迁移工具升级旧格式会话；旧代际保留。',
+      'panel.migrating': '正在升级…',
+      'panel.migrateFailed': '升级失败',
+      'panel.migrateDone': '已升级 {count} 个旧格式会话',
+      'panel.migratePartialFailed': '有 {count} 个会话升级失败',
+      'panel.migrateFailureLine': '{id}：{reason}',
+      'panel.migrateSuccessLine': '{id} 已升级',
+      'panel.migrateCurrentLine': '{id} 已是当前格式',
+      'panel.migrateAlreadyCurrent': '所选会话已是当前格式（{count} 个）',
+      'panel.legacyRemaining': '仍有 {count} 个旧格式会话',
+      'panel.migrateNoTarget': '当前没有旧格式会话。',
+      'panel.tooManyMigrate': '一次最多升级 {max} 个会话。',
+      'panel.confirmMigrateTitle': '升级旧格式会话',
+      'panel.confirmMigrateBody': '将使用 DSH 官方迁移工具升级以下 {count} 个会话到当前格式；旧代际会保留，升级失败的会话保持原样。',
+      'panel.migrateNote': '迁移由 DSH 官方迁移链执行，不会删除旧日志。',
+      'panel.migrateItem': '{title}（v{version}）',
+      'panel.migrateItemPlain': '{title}（旧格式）',
+      'panel.confirmMigrate': '确认升级',
+      'panel.confirmMore': '…另有 {count} 个会话',
       'panel.statusFilter': '状态筛选',
       'panel.statusAll': '全部',
       'panel.statusActive': '未归档',
@@ -99,7 +125,6 @@ window.__ModuleLoader__.load({
       'panel.deleting': '正在删除…',
       'panel.confirmDeleteTitle': '删除会话',
       'panel.confirmDeleteBody': '将把以下 {count} 个会话移到 session-kit-trash 回收站，并从工作区列表中移除；这不是永久删除。',
-      'panel.confirmDeleteMore': '…另有 {count} 个会话',
       'panel.confirmDelete': '确认删除',
       'panel.cancel': '取消',
       'panel.deleteNote': '删除只会移动到 session-kit-trash，可稍后手动找回。',
@@ -163,6 +188,30 @@ window.__ModuleLoader__.load({
       'panel.unknownPath': 'unknown path',
       'panel.unknownReason': 'exists or not allowed',
       'panel.moreLines': '…and {count} more notes',
+      'panel.legacyBadge': 'Legacy format v{version}',
+      'panel.legacyBadgePlain': 'Legacy format',
+      'panel.legacyCount': '{count} legacy',
+      'panel.upgradeLegacy': 'Upgrade legacy',
+      'panel.upgradeFormat': 'Upgrade format',
+      'panel.upgradeHint': 'Upgrade legacy sessions with DSH\'s official migration; the old generation is preserved.',
+      'panel.migrating': 'Upgrading…',
+      'panel.migrateFailed': 'Upgrade failed',
+      'panel.migrateDone': 'Upgraded {count} legacy sessions',
+      'panel.migratePartialFailed': '{count} sessions failed to upgrade',
+      'panel.migrateFailureLine': '{id}: {reason}',
+      'panel.migrateSuccessLine': '{id} upgraded',
+      'panel.migrateCurrentLine': '{id} is already current',
+      'panel.migrateAlreadyCurrent': 'Selected sessions are already current ({count})',
+      'panel.legacyRemaining': '{count} legacy sessions remain',
+      'panel.migrateNoTarget': 'No legacy sessions to upgrade.',
+      'panel.tooManyMigrate': 'At most {max} sessions can be upgraded at once.',
+      'panel.confirmMigrateTitle': 'Upgrade legacy sessions',
+      'panel.confirmMigrateBody': 'Upgrade {count} session(s) to the current format with DSH\'s official migration; the old generation is preserved and failed sessions stay unchanged.',
+      'panel.migrateNote': 'Migration runs through DSH\'s official migration chain and never deletes the old logs.',
+      'panel.migrateItem': '{title} (v{version})',
+      'panel.migrateItemPlain': '{title} (legacy format)',
+      'panel.confirmMigrate': 'Upgrade',
+      'panel.confirmMore': '…and {count} more sessions',
       'panel.statusFilter': 'Status',
       'panel.statusAll': 'All',
       'panel.statusActive': 'Active',
@@ -190,7 +239,6 @@ window.__ModuleLoader__.load({
       'panel.deleting': 'Deleting…',
       'panel.confirmDeleteTitle': 'Delete sessions',
       'panel.confirmDeleteBody': 'Move {count} session(s) to the session-kit-trash folder and remove them from the workspace list; this is not a permanent erase.',
-      'panel.confirmDeleteMore': '…and {count} more sessions',
       'panel.confirmDelete': 'Delete',
       'panel.cancel': 'Cancel',
       'panel.deleteNote': 'Deletion only moves files to session-kit-trash; recover them there later.',
@@ -366,7 +414,10 @@ window.__ModuleLoader__.load({
         workspaceTitle: pickString(record.workspaceTitle),
         running: record.running === true,
         archived: record.archived === true,
+        legacy: record.legacy === true,
+        formatStatus: pickString(record.formatStatus),
         formatVersion: pickNumber(record.formatVersion),
+        storedVersion: pickNumber(record.storedVersion),
         eventCount: pickNumber(record.eventCount),
         createdAt: pickNumber(record.createdAt),
         updatedAt: pickNumber(record.updatedAt),
@@ -461,6 +512,35 @@ window.__ModuleLoader__.load({
         return { results: requestedIds.map((id) => ({ sessionId: id, ok: true, error: '' })) };
       }
       return { results };
+    }
+
+    /** Normalize the `POST /session-kit/migrate` payload. */
+    function normalizeMigratePayload(payload, requestedIds) {
+      const root = payload !== null && typeof payload === 'object' ? payload : {};
+      const data = root.data !== null && typeof root.data === 'object' && !Array.isArray(root.data) ? root.data : root;
+      const rawResults = Array.isArray(data.results) ? data.results : [];
+      const results = rawResults.map((raw) => {
+        const record = raw !== null && typeof raw === 'object' ? raw : {};
+        return {
+          sessionId: pickString(record.sessionId ?? record.id),
+          ok: record.ok !== false,
+          status: pickString(record.status),
+          error: pickString(record.error ?? record.message),
+        };
+      });
+      const migratedCount = pickNumber(data.migratedCount ?? root.migratedCount);
+      const legacyRemainingRaw = data.legacyRemaining ?? root.legacyRemaining;
+      const legacyRemaining = typeof legacyRemainingRaw === 'number' && Number.isFinite(legacyRemainingRaw) && legacyRemainingRaw >= 0
+        ? legacyRemainingRaw
+        : -1;
+      if (results.length === 0) {
+        return {
+          results: requestedIds.map((id) => ({ sessionId: id, ok: true, status: '', error: '' })),
+          migratedCount,
+          legacyRemaining,
+        };
+      }
+      return { results, migratedCount, legacyRemaining };
     }
     // #endregion
 
@@ -713,6 +793,7 @@ window.__ModuleLoader__.load({
       badge: { display: 'inline-block', marginLeft: 8, padding: '0 6px', borderRadius: '999px', font: `11px/16px ${T.font}`, verticalAlign: 'middle', flex: 'none' },
       badgeArchived: { background: T.bgLayer2, color: T.warn, border: `1px solid ${T.border}` },
       badgeActive: { background: 'transparent', color: T.labelTertiary, border: `1px solid ${T.border}` },
+      badgeLegacy: { background: 'transparent', color: T.brand, border: `1px solid ${T.brand}` },
       runningDot: { display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: T.success, marginRight: 6 },
       input: { margin: '2px 0 0', flex: 'none' },
       modeRow: { display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center' },
@@ -831,16 +912,64 @@ window.__ModuleLoader__.load({
         fontWeight: active ? 600 : 500,
       };
     }
+
+    /** One modal confirmation surface shared by destructive and migration actions. */
+    function confirmDialogNode(options) {
+      const { tr, title, body, items, note, confirmRole, confirmLabel, busyLabel, busy, busyAction, onCancel, onConfirm } = options;
+      return h(
+        'div',
+        { style: STYLES.overlay },
+        h(
+          'div',
+          {
+            style: STYLES.dialog,
+            role: 'dialog',
+            'aria-modal': 'true',
+            'aria-label': title,
+            onKeyDown: (event) => {
+              if (event.key === 'Escape' && !busy) onCancel();
+            },
+          },
+          h('h2', { style: STYLES.dialogTitle }, title),
+          h('p', { style: STYLES.dialogBody }, body),
+          h(
+            'div',
+            { style: STYLES.dialogList },
+            items.slice(0, 8).map((item, index) => h('div', { key: `${index}-${item.slice(0, 12)}`, style: STYLES.dialogItem }, item)),
+            items.length > 8
+              ? h('div', { key: 'more', style: STYLES.dialogItem }, tr('panel.confirmMore', { count: items.length - 8 }))
+              : null,
+          ),
+          note === '' ? null : h('p', { style: STYLES.dialogNote }, note),
+          h(
+            'div',
+            { style: STYLES.dialogActions },
+            h(
+              'button',
+              { type: 'button', style: buttonStyle('secondary', busy), disabled: busy, autoFocus: true, onClick: onCancel },
+              tr('panel.cancel'),
+            ),
+            h(
+              'button',
+              { type: 'button', style: buttonStyle(confirmRole, busy), disabled: busy, onClick: onConfirm },
+              busyAction ? busyLabel : confirmLabel,
+            ),
+          ),
+        ),
+      );
+    }
     // #endregion
 
     // #region panel component
 
     /**
-     * Session-management page: workspace groups, search, checkboxes, export
-     * mode switch, export download, and archive import.
+     * Session-management page: workspace groups, status filter and search,
+     * checkboxes, archive / restore / trash-delete actions, legacy-format
+     * upgrade, export mode switch, export download, and archive import.
      * @param {{t: Function, loadCatalog: Function, exportSelection: Function,
      *          importSelection: Function, manageSessions: Function,
-     *          refreshSessions: Function, targetOf: Function}} props
+     *          migrateSessions: Function, refreshSessions: Function,
+     *          targetOf: Function}} props
      *   slot translator and the Host operations injected by `apply`.
      */
     function SessionKitPanel(props) {
@@ -857,6 +986,7 @@ window.__ModuleLoader__.load({
       const [restoreWorkspaceFiles, setRestoreWorkspaceFiles] = React.useState(true);
       const [statusFilter, setStatusFilter] = React.useState('all');
       const [confirmDelete, setConfirmDelete] = React.useState(null);
+      const [confirmMigrate, setConfirmMigrate] = React.useState(null);
       const [busy, setBusy] = React.useState('');
       const [notice, setNotice] = React.useState(null);
       const fileInputRef = React.useRef(null);
@@ -899,10 +1029,12 @@ window.__ModuleLoader__.load({
       const groups = React.useMemo(() => buildGroups(catalog, query, statusFilter, tr), [catalog, query, statusFilter, props.t]);
       const allVisible = React.useMemo(() => visibleIds(groups), [groups]);
       const counts = React.useMemo(() => statusCounts(catalog), [catalog]);
+      const legacyCount = React.useMemo(() => catalog.sessions.filter((session) => session.legacy === true).length, [catalog]);
       const total = catalog.sessions.length;
       const matchedCount = allVisible.length;
       const selectedCount = selected.size;
       const BATCH_LIMIT = 500;
+      const MIGRATE_LIMIT = 100;
 
       function toggleSession(id) {
         setSelected((previous) => {
@@ -1104,6 +1236,81 @@ window.__ModuleLoader__.load({
         requestDeleteConfirm(ids);
       }
 
+      /** Open the format-migration confirmation for the given legacy session ids. */
+      function requestMigrateConfirm(sessionIds) {
+        if (sessionIds.length === 0) {
+          setNotice({ tone: 'warn', title: tr('panel.upgradeLegacy'), lines: [tr('panel.migrateNoTarget')] });
+          return;
+        }
+        if (sessionIds.length > MIGRATE_LIMIT) {
+          setNotice({ tone: 'error', title: tr('panel.migrateFailed'), lines: [tr('panel.tooManyMigrate', { max: MIGRATE_LIMIT })] });
+          return;
+        }
+        const byId = new Map(catalog.sessions.map((session) => [session.id, session]));
+        const items = sessionIds.map((id) => {
+          const session = byId.get(id);
+          const title = session !== undefined && session.title !== '' ? session.title : id;
+          const version = session !== undefined && session.storedVersion > 0 ? String(session.storedVersion) : '';
+          return version === ''
+            ? tr('panel.migrateItemPlain', { title })
+            : tr('panel.migrateItem', { title, version });
+        });
+        setConfirmMigrate({ sessionIds: [...sessionIds], items });
+      }
+
+      /** Upgrade legacy sessions, refresh the list, and report per-id results. */
+      async function runMigrate(sessionIds) {
+        if (busy !== '') return;
+        if (sessionIds.length === 0) return;
+        setBusy('migrate');
+        setNotice(null);
+        try {
+          const result = await props.migrateSessions(sessionIds);
+          const succeeded = result.results.filter((entry) => entry.ok);
+          const failed = result.results.filter((entry) => !entry.ok);
+          const alreadyCurrent = succeeded.filter((entry) => entry.status === 'current');
+          const migrated = succeeded.filter((entry) => entry.status !== 'current');
+          await reload({ quiet: true });
+          await props.refreshSessions();
+          const lines = [];
+          for (const failure of failed) {
+            lines.push(tr('panel.migrateFailureLine', {
+              id: failure.sessionId === '' ? tr('panel.unknownPath') : failure.sessionId,
+              reason: failure.error === '' ? tr('panel.actionUnknownReason') : failure.error,
+            }));
+          }
+          for (const success of migrated) lines.push(tr('panel.migrateSuccessLine', { id: success.sessionId }));
+          for (const current of alreadyCurrent) lines.push(tr('panel.migrateCurrentLine', { id: current.sessionId }));
+          if (result.legacyRemaining >= 0) lines.push(tr('panel.legacyRemaining', { count: result.legacyRemaining }));
+          const migratedCount = result.migratedCount > 0 ? result.migratedCount : migrated.length;
+          setNotice({
+            tone: failed.length > 0 ? 'warn' : 'success',
+            title: failed.length > 0
+              ? tr('panel.migratePartialFailed', { count: failed.length })
+              : migrated.length === 0 && alreadyCurrent.length > 0
+                ? tr('panel.migrateAlreadyCurrent', { count: alreadyCurrent.length })
+                : tr('panel.migrateDone', { count: migratedCount }),
+            lines: capNoticeLines(lines, tr),
+          });
+        } catch (error) {
+          setNotice({ tone: 'error', title: tr('panel.migrateFailed'), lines: [errorMessageOf(error, tr)] });
+        } finally {
+          if (mountedRef.current) {
+            setBusy('');
+            setConfirmMigrate(null);
+          }
+        }
+      }
+
+      function batchMigrate() {
+        const ids = catalog.sessions.filter((session) => session.legacy === true).map((session) => session.id);
+        if (ids.length === 0) {
+          setNotice({ tone: 'warn', title: tr('panel.upgradeLegacy'), lines: [tr('panel.migrateNoTarget')] });
+          return;
+        }
+        requestMigrateConfirm(ids);
+      }
+
       const busyExport = busy === 'export';
       const busyImport = busy === 'import';
 
@@ -1148,6 +1355,18 @@ window.__ModuleLoader__.load({
           { type: 'button', style: filterButtonStyle(statusFilter === 'archived'), 'aria-pressed': statusFilter === 'archived', onClick: () => setStatusFilter('archived') },
           tr('panel.statusArchived'),
           h('span', { style: { marginLeft: 6, color: T.labelSecondary } }, String(counts.archived)),
+        ),
+        h('span', { style: { ...STYLES.counter, marginLeft: 10 } }, tr('panel.legacyCount', { count: legacyCount })),
+        h(
+          'button',
+          {
+            type: 'button',
+            style: buttonStyle('secondary', legacyCount === 0 || busy !== ''),
+            disabled: legacyCount === 0 || busy !== '',
+            onClick: batchMigrate,
+            title: tr('panel.upgradeHint'),
+          },
+          tr('panel.upgradeLegacy'),
         ),
       );
 
@@ -1400,6 +1619,15 @@ window.__ModuleLoader__.load({
                         { style: { ...STYLES.badge, ...(archived ? STYLES.badgeArchived : STYLES.badgeActive) } },
                         archived ? tr('panel.statusBadgeArchived') : tr('panel.statusBadgeActive'),
                       ),
+                      session.legacy
+                        ? h(
+                            'span',
+                            { style: { ...STYLES.badge, ...STYLES.badgeLegacy } },
+                            session.storedVersion > 0
+                              ? tr('panel.legacyBadge', { version: session.storedVersion })
+                              : tr('panel.legacyBadgePlain'),
+                          )
+                        : null,
                     ),
                     h('span', { style: STYLES.rowMeta, title: session.id }, metaText),
                   ),
@@ -1407,6 +1635,13 @@ window.__ModuleLoader__.load({
                 h(
                   'span',
                   { style: STYLES.rowActions },
+                  session.legacy
+                    ? h(
+                        'button',
+                        { type: 'button', style: rowButtonStyle('secondary', rowBusy), disabled: rowBusy, onClick: () => requestMigrateConfirm([session.id]) },
+                        tr('panel.upgradeFormat'),
+                      )
+                    : null,
                   archived
                     ? h(
                         'button',
@@ -1446,47 +1681,35 @@ window.__ModuleLoader__.load({
         notice.lines.map((line, index) => h('span', { key: `${index}-${line.slice(0, 12)}`, style: STYLES.noticeLine }, line)),
       );
 
-      const confirmDialog = confirmDelete === null ? null : h(
-        'div',
-        { style: STYLES.overlay },
-        h(
-          'div',
-          {
-            style: STYLES.dialog,
-            role: 'dialog',
-            'aria-modal': 'true',
-            'aria-label': tr('panel.confirmDeleteTitle'),
-            onKeyDown: (event) => {
-              if (event.key === 'Escape' && busy === '') setConfirmDelete(null);
-            },
-          },
-          h('h2', { style: STYLES.dialogTitle }, tr('panel.confirmDeleteTitle')),
-          h('p', { style: STYLES.dialogBody }, tr('panel.confirmDeleteBody', { count: confirmDelete.sessionIds.length })),
-          h(
-            'div',
-            { style: STYLES.dialogList },
-            confirmDelete.titles.slice(0, 8).map((title, index) => h('div', { key: `${index}-${title.slice(0, 12)}`, style: STYLES.dialogItem }, title)),
-            confirmDelete.titles.length > 8
-              ? h('div', { key: 'more', style: STYLES.dialogItem }, tr('panel.confirmDeleteMore', { count: confirmDelete.titles.length - 8 }))
-              : null,
-          ),
-          h('p', { style: STYLES.dialogNote }, tr('panel.deleteNote')),
-          h(
-            'div',
-            { style: STYLES.dialogActions },
-            h(
-              'button',
-              { type: 'button', style: buttonStyle('secondary', busy !== ''), disabled: busy !== '', autoFocus: true, onClick: () => setConfirmDelete(null) },
-              tr('panel.cancel'),
-            ),
-            h(
-              'button',
-              { type: 'button', style: buttonStyle('danger', busy !== ''), disabled: busy !== '', onClick: () => { void runAction('delete', confirmDelete.sessionIds); } },
-              busy === 'delete' ? tr('panel.deleting') : tr('panel.confirmDelete'),
-            ),
-          ),
-        ),
-      );
+      const confirmDialog = confirmDelete === null ? null : confirmDialogNode({
+        tr,
+        title: tr('panel.confirmDeleteTitle'),
+        body: tr('panel.confirmDeleteBody', { count: confirmDelete.sessionIds.length }),
+        items: confirmDelete.titles,
+        note: tr('panel.deleteNote'),
+        confirmRole: 'danger',
+        confirmLabel: tr('panel.confirmDelete'),
+        busyLabel: tr('panel.deleting'),
+        busy: busy !== '',
+        busyAction: busy === 'delete',
+        onCancel: () => setConfirmDelete(null),
+        onConfirm: () => { void runAction('delete', confirmDelete.sessionIds); },
+      });
+
+      const migrateDialog = confirmMigrate === null ? null : confirmDialogNode({
+        tr,
+        title: tr('panel.confirmMigrateTitle'),
+        body: tr('panel.confirmMigrateBody', { count: confirmMigrate.sessionIds.length }),
+        items: confirmMigrate.items,
+        note: tr('panel.migrateNote'),
+        confirmRole: 'primary',
+        confirmLabel: tr('panel.confirmMigrate'),
+        busyLabel: tr('panel.migrating'),
+        busy: busy !== '',
+        busyAction: busy === 'migrate',
+        onCancel: () => setConfirmMigrate(null),
+        onConfirm: () => { void runMigrate(confirmMigrate.sessionIds); },
+      });
 
       return h(
         'div',
@@ -1505,6 +1728,7 @@ window.__ModuleLoader__.load({
           h('p', { style: STYLES.footnote }, tr('panel.importHint')),
         ),
         confirmDialog,
+        migrateDialog,
       );
     }
     // #endregion
@@ -1591,6 +1815,27 @@ window.__ModuleLoader__.load({
       return normalizeManagePayload(payload, sessionIds);
     }
 
+    /** Upgrade legacy sessions through the Host's official migration route. */
+    async function migrateSelection(sessionIds) {
+      const response = await fetch(hostUrl('/migrate'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ sessionIds, confirm: true }),
+      });
+      const payload = await jsonBody(response);
+      const data = payload !== null && typeof payload === 'object' && payload.data !== null && typeof payload.data === 'object' && !Array.isArray(payload.data)
+        ? payload.data
+        : payload;
+      if (data !== null && typeof data === 'object' && Array.isArray(data.results)) {
+        // A fully failed batch answers non-2xx; keep its per-session results.
+        return normalizeMigratePayload(payload, sessionIds);
+      }
+      if (!response.ok || payload === null || typeof payload !== 'object' || payload.ok !== true) {
+        throw requestFailure(payload, response.status);
+      }
+      return normalizeMigratePayload(payload, sessionIds);
+    }
+
     /** Refresh the client session catalog after an import. */
     async function refreshSessionList(ctx) {
       try {
@@ -1654,6 +1899,7 @@ window.__ModuleLoader__.load({
               exportSelection: (request) => exportSelection(request),
               importSelection: (file, hints) => importSelection(file, hints),
               manageSessions: (action, sessionIds) => manageSelection(action, sessionIds),
+              migrateSessions: (sessionIds) => migrateSelection(sessionIds),
               refreshSessions: () => refreshSessionList(ctx),
               targetOf: () => importTargetOf(ctx),
             }),

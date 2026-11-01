@@ -187,6 +187,7 @@ test('listSessionEntries decorates cheap records without opening logs', async ()
       running: true,
       archived: false,
       pinned: false,
+      legacy: false,
       formatVersion: 4,
       eventCount: 0,
     },
@@ -200,6 +201,7 @@ test('listSessionEntries decorates cheap records without opening logs', async ()
       running: false,
       archived: false,
       pinned: false,
+      legacy: false,
       formatVersion: 4,
       eventCount: 12,
     },
@@ -211,6 +213,7 @@ test('listSessionEntries decorates cheap records without opening logs', async ()
       running: false,
       archived: false,
       pinned: false,
+      legacy: false,
       formatVersion: 4,
       eventCount: 0,
     },
@@ -273,6 +276,73 @@ test('listSessionEntries marks archived and pinned sessions without hiding them'
     (await listSessionEntries(throwing)).map((entry) => [entry.archived, entry.pinned]),
     [[false, false], [false, false], [false, false]],
   );
+});
+
+test('listSessionEntries marks legacy formats and merges archived stat snapshots', async () => {
+  const records = [
+    { header: headerFixture({ id: 'session-legacy' }), formatStatus: 'migration-required' },
+    { header: headerFixture({ id: 'session-current' }), formatStatus: 'current' },
+    { header: headerFixture({ id: 'session-plain' }) },
+  ];
+  const snapshots = new Map([
+    ['session-legacy', {
+      header: headerFixture({ id: 'session-legacy' }),
+      formatStatus: 'migration-required',
+      location: { kind: 'jsonl', path: '/sessions/--p--/session-legacy/session.v3.jsonl' },
+    }],
+    ['session-archived', {
+      header: headerFixture({ id: 'session-archived' }),
+      formatStatus: 'migration-required',
+      location: { kind: 'jsonl', path: '/sessions/--p--/session-archived/session.v2.jsonl' },
+    }],
+  ]);
+  const statCalls = [];
+  const ctx = fakeContext({
+    sessionQuery: {
+      async listSessions() { return records; },
+      async readTitle() { return undefined; },
+    },
+    sessionPersistence: {
+      async stat(id) { statCalls.push(id); return snapshots.get(id); },
+    },
+    workspaceRegistry: {
+      async list() { return []; },
+      archivedSessionIds: ['session-archived'],
+    },
+  });
+  const entries = await listSessionEntries(ctx);
+  const byId = new Map(entries.map((entry) => [entry.id, entry]));
+  // A normal query record carries no backend location, so the fast listing does
+  // not stat it: the legacy flag is set and the version badge stays version-less.
+  assert.deepEqual(
+    [byId.get('session-legacy').formatStatus, byId.get('session-legacy').legacy, byId.get('session-legacy').storedVersion],
+    ['migration-required', true, undefined],
+  );
+  // Only the archived id missing from the query corpus is stat'ed.
+  assert.deepEqual(statCalls, ['session-archived']);
+  assert.equal(byId.get('session-current').formatStatus, 'current');
+  assert.equal(byId.get('session-current').legacy, false);
+  assert.equal(byId.get('session-current').storedVersion, undefined);
+  assert.equal('formatStatus' in byId.get('session-plain'), false);
+  assert.equal(byId.get('session-plain').legacy, false);
+  // An archived session absent from the query corpus is merged from stat and
+  // keeps its own format status plus stored generation.
+  assert.equal(byId.get('session-archived').archived, true);
+  assert.equal(byId.get('session-archived').formatStatus, 'migration-required');
+  assert.equal(byId.get('session-archived').legacy, true);
+  assert.equal(byId.get('session-archived').storedVersion, 2);
+  // Without a persistence service the legacy row is still marked; only the
+  // stored generation is unavailable.
+  const withoutStat = fakeContext({
+    sessionQuery: {
+      async listSessions() { return [{ header: headerFixture({ id: 'session-legacy' }), formatStatus: 'migration-required' }]; },
+      async readTitle() { return undefined; },
+    },
+    workspaceRegistry: { async list() { return []; } },
+  });
+  const legacyOnly = await listSessionEntries(withoutStat);
+  assert.equal(legacyOnly[0].legacy, true);
+  assert.equal(legacyOnly[0].storedVersion, undefined);
 });
 
 test('resolveTargetDirectory prefers requested, then source, then the deployment default', async (t) => {

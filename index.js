@@ -55,28 +55,32 @@ const ROUTE_PREFIX = '/session-kit';
 const MAX_JSON_BODY_BYTES = 1024 * 1024;
 /** Upper bound on one archive/unarchive/delete batch. */
 export const MAX_MANAGE_BATCH = 500;
+/** Upper bound on one session-format migration batch. */
+export const MAX_MIGRATE_BATCH = 100;
 /** Directory name under DSH_HOME that receives deleted session folders. */
 const TRASH_DIR_NAME = 'session-kit-trash';
 
 /** Cached helper modules; a failed import is retried on the next call. */
 let sessionsModule;
 let manageModule;
+let migrateModule;
 
 /**
  * Normalize the test-only module injection seam.
  *
  * A Loader YAML cannot express object values, so `modules` is inert in
  * production and exists so tests can drive the routes without a real
- * `lib/manage.js` / `lib/sessions.js` (and so a composition can substitute
- * them). When present, a missing member means "that helper is unavailable".
+ * `lib/manage.js` / `lib/migrate.js` / `lib/sessions.js` (and so a
+ * composition can substitute them). When present, a missing member means
+ * "that helper is unavailable".
  * @param {unknown} config - raw Loader row config.
- * @returns {{sessions?: object, manage?: object} | undefined} override set.
+ * @returns {{sessions?: object, manage?: object, migrate?: object} | undefined} override set.
  */
 function moduleOverrides(config) {
   const raw = config !== null && typeof config === 'object' ? config : {};
   const modules = raw.modules;
   if (modules === null || typeof modules !== 'object' || Array.isArray(modules)) return undefined;
-  return { sessions: modules.sessions, manage: modules.manage };
+  return { sessions: modules.sessions, manage: modules.manage, migrate: modules.migrate };
 }
 
 /**
@@ -122,6 +126,28 @@ async function loadManage(overrides) {
     }
   }
   return manageModule;
+}
+
+/**
+ * Resolve the session-format migration module lazily (official DSH migration).
+ * @param {{migrate?: object} | undefined} overrides - module injection seam.
+ * @returns {Promise<object>} migration module namespace.
+ */
+async function loadMigrate(overrides) {
+  if (overrides !== undefined) {
+    if (overrides.migrate === undefined || overrides.migrate === null) {
+      throw new SessionPortFormatError('unavailable', '会话迁移模块不可用');
+    }
+    return overrides.migrate;
+  }
+  if (migrateModule === undefined) {
+    try {
+      migrateModule = await import('./lib/migrate.js');
+    } catch (error) {
+      throw new SessionPortFormatError('unavailable', `会话迁移模块不可用：${errorText(error)}`);
+    }
+  }
+  return migrateModule;
 }
 
 /**
@@ -268,6 +294,7 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
           archive: true,
           unarchive: true,
           delete: true,
+          migrate: true,
           attachments: helpers.servicesOf(ctx).attachments !== undefined,
           tool: 'session_kit',
         },
@@ -275,6 +302,11 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
           directory: trashDirectory(settings.trashDir),
           mode: 'move',
           batchLimit: MAX_MANAGE_BATCH,
+        },
+        migration: {
+          official: true,
+          batchLimit: MAX_MIGRATE_BATCH,
+          note: '旧格式会话通过 DSH 官方迁移链升级（persistence.open(id, "write") 触发 prepare/publish），旧代日志保留，失败的会话保持原样',
         },
         defaults: {
           mode: settings.defaultMode,
@@ -317,6 +349,10 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
       await handleManage(ctx, settings, overrides, req, res, 'delete');
       return;
     }
+    if (path === `${ROUTE_PREFIX}/migrate` && method === 'POST') {
+      await handleMigrate(ctx, settings, overrides, req, res);
+      return;
+    }
     sendJson(res, 404, { ok: false, code: 'not-found', message: `没有这个接口：${method} ${path}` });
   } catch (error) {
     sendJson(res, statusOf(error), { ok: false, code: codeOf(error), message: errorText(error) });
@@ -331,11 +367,11 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
  * {@link MAX_MANAGE_BATCH}; delete/unarchive refusals keep the destructive
  * operations explicit.
  * @param {unknown} value - raw `sessionIds` value.
- * @param {{allowAll?: boolean}} [options] - whether `'all'` is meaningful.
+ * @param {{allowAll?: boolean, maxBatch?: number}} [options] - whether `'all'` is meaningful and the batch cap.
  * @returns {string[] | 'all' | undefined} normalized list, `'all'`, or undefined when absent.
  * @throws {SessionPortFormatError} `invalid-sessionIds`, `too-many-sessions`.
  */
-function parseSessionIdList(value, { allowAll = false } = {}) {
+function parseSessionIdList(value, { allowAll = false, maxBatch = MAX_MANAGE_BATCH } = {}) {
   if (value === undefined || value === null) return undefined;
   if (value === 'all') {
     if (allowAll) return 'all';
@@ -362,8 +398,8 @@ function parseSessionIdList(value, { allowAll = false } = {}) {
     ids.push(id);
   }
   if (ids.length === 0) throw new SessionPortFormatError('invalid-sessionIds', 'sessionIds 不能为空');
-  if (ids.length > MAX_MANAGE_BATCH) {
-    throw new SessionPortFormatError('too-many-sessions', `一次最多处理 ${MAX_MANAGE_BATCH} 个会话（本次 ${ids.length} 个）`);
+  if (ids.length > maxBatch) {
+    throw new SessionPortFormatError('too-many-sessions', `一次最多处理 ${maxBatch} 个会话（本次 ${ids.length} 个）`);
   }
   return ids;
 }
@@ -484,6 +520,124 @@ async function handleManage(ctx, settings, overrides, req, res, action) {
   const outcome = await runManageBatch(ctx, settings, overrides, action, sessionIds, {
     stopActivity: payload.stopActivity === true,
   });
+  const failed = outcome.results.filter((result) => !result.ok);
+  const status = failed.length > 0 && failed.length === outcome.results.length
+    ? statusForManageCode(failed[0].code)
+    : 200;
+  sendJson(res, status, { ok: failed.length === 0, ...outcome });
+}
+
+/**
+ * The ids a migration would still need to upgrade, when the list is readable.
+ * @param {object} ctx - the plugin context.
+ * @param {object | undefined} overrides - module injection seam.
+ * @returns {Promise<number | undefined>} remaining legacy count, or undefined.
+ */
+async function legacyRemainingOf(ctx, overrides) {
+  try {
+    const migrate = await loadMigrate(overrides);
+    const ids = await migrate.listLegacySessionIds(ctx);
+    return Array.isArray(ids) ? ids.length : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Run one DSH-official migration over a batch, one result per requested id.
+ *
+ * Each id goes through `lib/migrate.js` (which delegates to the official
+ * `SessionPersistence.open(id, 'write')` prepare/publish path). The source
+ * generation is never deleted; a refusal (live session, unreadable log) stays a
+ * per-id failure. After the batch the legacy list is re-read for the remaining
+ * count.
+ * @param {object} ctx - the plugin context.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {string[]} sessionIds - explicit ids (already expanded and capped).
+ * @returns {Promise<{results: Array<object>, migratedCount: number, legacyRemaining?: number}>} batch outcome.
+ * @throws {SessionPortFormatError} `unavailable` when the migration module is absent.
+ */
+async function runMigrateBatch(ctx, overrides, sessionIds) {
+  const migrate = await loadMigrate(overrides);
+  const results = [];
+  let migratedCount = 0;
+  for (const sessionId of sessionIds) {
+    try {
+      const outcome = await migrate.migrateSession(ctx, sessionId);
+      const status = outcome !== null && typeof outcome === 'object' && typeof outcome.status === 'string'
+        ? outcome.status
+        : 'migrated';
+      if (status === 'migrated') migratedCount += 1;
+      results.push({ sessionId, ok: true, status });
+    } catch (error) {
+      const code = typeof error?.code === 'string' && error.code !== '' ? error.code : undefined;
+      results.push({
+        sessionId,
+        ok: false,
+        status: 'failed',
+        error: errorText(error),
+        ...(code !== undefined ? { code } : {}),
+      });
+    }
+  }
+  const legacyRemaining = await legacyRemainingOf(ctx, overrides);
+  return {
+    results,
+    migratedCount,
+    ...(legacyRemaining !== undefined ? { legacyRemaining } : {}),
+  };
+}
+
+/**
+ * `POST /session-kit/migrate` — upgrade legacy session logs through DSH's own
+ * migration chain.
+ *
+ * Body: `{ sessionIds: string[] | 'all', confirm?: true }`. Explicit ids are
+ * trimmed, de-duplicated and capped at {@link MAX_MIGRATE_BATCH}; `'all'`
+ * expands the legacy ids from `lib/migrate.js` and requires `confirm: true`
+ * (`400 confirm-required` otherwise). With no legacy sessions `'all'` answers
+ * 200 with empty results. Per-id failures stay in `results`; a fully failed
+ * batch maps its first code to 404/409/500.
+ * @param {object} ctx - the plugin context.
+ * @param {object} settings - resolved settings.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {import('node:http').IncomingMessage} req - request.
+ * @param {import('node:http').ServerResponse} res - response.
+ */
+async function handleMigrate(ctx, settings, overrides, req, res) {
+  const payload = await readJsonBody(req, MAX_JSON_BODY_BYTES);
+  const requested = payload.sessionIds;
+  let sessionIds;
+  if (requested === 'all') {
+    if (payload.confirm !== true) {
+      throw new SessionPortFormatError(
+        'confirm-required',
+        '迁移全部旧格式会话需要 confirm:true（只执行 DSH 官方迁移，旧代日志保留）',
+      );
+    }
+    const migrate = await loadMigrate(overrides);
+    let legacy;
+    try {
+      legacy = await migrate.listLegacySessionIds(ctx);
+    } catch (error) {
+      throw new SessionPortFormatError('migration-failed', `读取旧格式会话失败：${errorText(error)}`);
+    }
+    const ids = Array.isArray(legacy) ? legacy.map((id) => String(id)) : [];
+    if (ids.length > MAX_MIGRATE_BATCH) {
+      throw new SessionPortFormatError(
+        'too-many-sessions',
+        `一次最多迁移 ${MAX_MIGRATE_BATCH} 个会话（当前旧格式 ${ids.length} 个）；请分批迁移`,
+      );
+    }
+    sessionIds = ids;
+  } else {
+    const parsed = parseSessionIdList(requested, { allowAll: false, maxBatch: MAX_MIGRATE_BATCH });
+    if (parsed === undefined) {
+      throw new SessionPortFormatError('invalid-sessionIds', '请求缺少 sessionIds（会话 id 数组，或 "all"）');
+    }
+    sessionIds = parsed;
+  }
+  const outcome = await runMigrateBatch(ctx, overrides, sessionIds);
   const failed = outcome.results.filter((result) => !result.ok);
   const status = failed.length > 0 && failed.length === outcome.results.length
     ? statusForManageCode(failed[0].code)
@@ -648,7 +802,7 @@ function statusOf(error) {
   if (code === 'not-found' || code === 'file-missing') return 404;
   if (code === 'too-large') return 413;
   if (code === 'active') return 409;
-  if (code === 'unsafe-location' || code === 'delete-failed' || code === 'internal') return 500;
+  if (code === 'unsafe-location' || code === 'delete-failed' || code === 'migration-failed' || code === 'internal') return 500;
   return 400;
 }
 
@@ -678,14 +832,15 @@ function registerTool(ctx, settings, overrides) {
           'Export can optionally pack whole workspace trees (includeWorkspaceFiles) while excluding VCS/build caches and secret files, and can include subagent transcripts (includeSubagents, default false).',
           'action=import creates NEW sessions from an archive produced by this plugin or by DSH\'s built-in session-log export; it never modifies or deletes an existing session, never imports subagent transcripts, and can restore the archive\'s workspace files into the target directory (restoreWorkspaceFiles).',
           'action=archive / action=unarchive toggle a session\'s archived state; action=delete moves sessions into <DSH_HOME>/session-kit-trash (never a permanent erase) and requires confirm:true plus explicit session ids.',
+          'action=migrate upgrades legacy session logs through DSH\'s official migration chain; sessionIds are explicit ids, or "all" (which requires confirm:true). The old generation is kept and a failed session stays unchanged.',
         ].join(' '),
         parameters: {
           type: 'object',
           properties: {
             action: {
               type: 'string',
-              enum: ['list', 'export', 'import', 'archive', 'unarchive', 'delete'],
-              description: 'list: summarize sessions. export: save sessions as one ZIP. import: create new sessions from a ZIP or JSONL archive. archive/unarchive: toggle archived state. delete: move sessions to the trash directory.',
+              enum: ['list', 'export', 'import', 'archive', 'unarchive', 'delete', 'migrate'],
+              description: 'list: summarize sessions. export: save sessions as one ZIP. import: create new sessions from a ZIP or JSONL archive. archive/unarchive: toggle archived state. delete: move sessions to the trash directory. migrate: upgrade legacy session logs through DSH\'s official migration chain.',
             },
             mode: {
               type: 'string',
@@ -697,7 +852,7 @@ function registerTool(ctx, settings, overrides) {
                 { type: 'array', items: { type: 'string' } },
                 { type: 'string', enum: ['all'] },
               ],
-              description: 'export/archive: session ids, or "all" (archive only). unarchive/delete: explicit session ids ("all" is refused for safety).',
+              description: 'export/archive: session ids, or "all" (archive only). unarchive/delete: explicit session ids ("all" is refused for safety). migrate: explicit ids, or "all" (requires confirm:true).',
             },
             includeSubagents: {
               type: 'boolean',
@@ -718,7 +873,7 @@ function registerTool(ctx, settings, overrides) {
             },
             confirm: {
               type: 'boolean',
-              description: 'delete only: must be true; deletion moves sessions into the trash directory instead of erasing them.',
+              description: 'delete: must be true (moves sessions into the trash directory instead of erasing them). migrate with sessionIds="all": must be true.',
             },
             stopActivity: {
               type: 'boolean',
@@ -795,7 +950,10 @@ function registerTool(ctx, settings, overrides) {
           if (action === 'archive' || action === 'unarchive' || action === 'delete') {
             return runManageTool(ctx, settings, overrides, helpers, action, args);
           }
-          throw new Error('session_kit: action 必须是 "list"、"export"、"import"、"archive"、"unarchive" 或 "delete"');
+          if (action === 'migrate') {
+            return runMigrateTool(ctx, overrides, args);
+          }
+          throw new Error('session_kit: action 必须是 "list"、"export"、"import"、"archive"、"unarchive"、"delete" 或 "migrate"');
         },
       }),
     'session-kit: agent tool',
@@ -832,6 +990,55 @@ async function runManageTool(ctx, settings, overrides, helpers, action, args) {
     stopActivity: args.stopActivity === true,
   });
   return manageToolText(action, outcome);
+}
+
+/**
+ * Run the migrate tool action (parse -> confirm/expand -> batch -> summary).
+ * @param {object} ctx - the plugin context.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {object} args - model arguments.
+ * @returns {Promise<string>} summary text.
+ */
+async function runMigrateTool(ctx, overrides, args) {
+  let sessionIds = parseSessionIdList(args.sessionIds, { allowAll: true, maxBatch: MAX_MIGRATE_BATCH });
+  if (sessionIds === undefined) {
+    throw new Error('session_kit: migrate 需要 sessionIds 参数（会话 id 数组，或 "all"）');
+  }
+  if (sessionIds === 'all') {
+    if (args.confirm !== true) {
+      throw new Error('session_kit: migrate "all" 需要 confirm:true（只执行 DSH 官方迁移，旧代日志保留）');
+    }
+    const migrate = await loadMigrate(overrides);
+    let legacy;
+    try {
+      legacy = await migrate.listLegacySessionIds(ctx);
+    } catch (error) {
+      throw new Error(`session_kit: 读取旧格式会话失败：${errorText(error)}`);
+    }
+    sessionIds = (Array.isArray(legacy) ? legacy : []).map((id) => String(id));
+    if (sessionIds.length === 0) return '没有需要升级的旧格式会话';
+    if (sessionIds.length > MAX_MIGRATE_BATCH) {
+      throw new Error(`session_kit: 一次最多迁移 ${MAX_MIGRATE_BATCH} 个会话（当前旧格式 ${sessionIds.length} 个）`);
+    }
+  }
+  const outcome = await runMigrateBatch(ctx, overrides, sessionIds);
+  return migrateToolText(outcome);
+}
+
+/**
+ * Tool result text for the migrate action.
+ * @param {{results: Array<object>, migratedCount: number, legacyRemaining?: number}} outcome - batch outcome.
+ * @returns {string} summary text.
+ */
+function migrateToolText(outcome) {
+  const failed = outcome.results.filter((result) => !result.ok);
+  const current = outcome.results.filter((result) => result.ok && result.status === 'current').length;
+  const lines = [
+    `升级格式：成功 ${outcome.results.length - failed.length} 个（实际迁移 ${outcome.migratedCount} 个${current > 0 ? `，已是当前格式 ${current} 个` : ''}），失败 ${failed.length} 个`,
+  ];
+  if (outcome.legacyRemaining !== undefined) lines.push(`剩余旧格式会话：${outcome.legacyRemaining} 个`);
+  for (const result of failed) lines.push(`- ${result.sessionId}：${result.error ?? '失败'}`);
+  return lines.join('\n');
 }
 
 /**

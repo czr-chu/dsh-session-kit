@@ -56,3 +56,12 @@ sessions and verifies that every backend location is a real session directory
 named after the encoded session id under a canonical project directory, without
 following symlinks. A move failure rolls back already-moved directories. Users
 who want permanent erasure delete the trash folder themselves.
+## Format migration
+
+Migration is delegated to DSH's official persistence seam. The plugin never
+decodes, re-encodes, or rewrites a session artifact; it opens the session for
+write only to trigger the official prepare/publish path, closes it, and verifies
+the published generation with `stat`. Released generations are retained. When
+the official migration refuses an old log (unresolved tool calls, unsupported
+historical subagent descriptor, corruption), the source stays byte-identical and
+the failure is reported to the user rather than forced.

@@ -23,6 +23,9 @@ DeepSeek Harness 会话管理与迁移插件：浏览/选择会话，按“精�
 - **全导出 / 选择导出 / 子代理开关**：导出全部主对话或只勾选几个；子代理会话默认不导出。
 - **导入**：本插件或 DSH 内置导出的 ZIP/JSONL → 新会话；可选把 `workspaces/` 安全解压到
   目标工作区（拒绝路径穿越/绝对路径/符号链接，已存在文件不覆盖），导入后会话 cwd 指向该目录。
+- **旧格式升级（基于 DSH 官方迁移）**：列表标记“旧格式”会话，可单条或批量升级到当前格式；
+  升级走官方 `persistence.open(id,'write')` 迁移链（与继续对话时的升级完全相同），旧代际文件保留，
+  迁移失败的会话保持原样并在结果里给出官方原因。
 - **Agent 工具**：`session_kit` 支持 list/export/import/archive/unarchive/delete（delete 必须显式确认，且只移入回收站）。
 
 ## 安装
@@ -71,17 +74,21 @@ session-kit-<yyyymmdd-hhmmss>.zip
 - 工作区文件目前默认同步“整个工作区树”（已排除敏感/构建目录），暂不支持只挑 touched files；
   超大工作区受 1 GiB 导出上限约束，可调配置。
 - 子代理会话默认隐藏；`includeSubagents: true` 可显式包含（但仍不会在导入时恢复血缘）。
+- 旧格式升级不是“强制转换”：DSH 的官方迁移会拒绝少数无法安全转换的旧日志（例如未闭合的 tool call、
+  旧 subagent descriptor 版本），此时源文件不动、面板显示失败；这不是插件能绕过的。
 - 删除不是永久擦除：会话目录被移到 `session-kit-trash`，需要彻底清理时手动删除该目录；用户 fork 出来的子会话不会被连带删除。
 - 归档运行中的会话默认会被拒绝；agent 工具可用 `stopActivity` 先停止再归档。
 
 ## 实测（2026-10-31/11-01，DSH 0.2.1-rc.3）
 
-- 测试：`node --import tsx/esm --test dsh-session-kit/test/*.test.mjs` → **116/116 通过**
+- 测试：`node --import tsx/esm --test dsh-session-kit/test/*.test.mjs` → **143/143 通过**
   （含真实 JSONL 持久化后端、产品 replay、工作区文件/敏感排除/zip-slip/恢复、归档/删除/回收站、子代理血缘）。
 - 真实数据（49 个主对话）：精简日志文本为原日志的 **0.4%–1.2%**；7 个主对话归档
   **22.7 MB → 0.35 MB**，全部导入 `verified: true`。
 - 列表性能（真实 DSH 数据）：`/session-kit/list` **约 0.02–0.04 s**（3 个真实归档会话）/ 全量 58 个主对话仍在百毫秒级；
   旧实现每个会话都要读完整日志折叠标题，已移除。
+- 官方迁移实测：38 个 v3-only 真实会话 36 个成功（约 95%，平均 0.29 s），2 个被官方以
+  “step/end leaves unresolved tool call”拒绝且源文件不变；v0 样本中较多被旧 subagent descriptor 版本拒绝。
 - 隔离 `DSH_HOME` 中真实 `dsh web` + 浏览器：导出/导入、工作区文件恢复、归档/恢复/删除
   （删除确认框、状态徽标、筛选、搜索计数）全部通过；无 console 错误。
 

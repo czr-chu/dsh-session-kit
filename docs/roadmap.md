@@ -10,6 +10,7 @@ Done:
 
 Next:
 - session search, status filter, archived badge,
+- official-format migration for legacy sessions (badge, single/batch upgrade),
 - archive/unarchive and delete-to-trash (single and batch),
 - move session to another workspace and reorder,
 - optional LLM-summarized compact mode (summary per turn) on top of the
