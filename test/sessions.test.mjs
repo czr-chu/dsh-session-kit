@@ -455,3 +455,58 @@ test('writeNewSession reports failures without masking them', async () => {
     'the original write failure wins over a teardown failure',
   );
 });
+test('listSessionEntries reads titles from the projection cache without opening a long log', async () => {
+  const titleReads = [];
+  const ctx = fakeContext({
+    sessionQuery: {
+      async listSessions() {
+        return [
+          { header: headerFixture({ id: 'session-a' }) },
+          { header: headerFixture({ id: 'session-b', createdAt: 5 }) },
+        ];
+      },
+      async readTitle(id) {
+        titleReads.push(id);
+        throw new Error('the listing must not read a full log for a title');
+      },
+    },
+    sessionProjectionCache: {
+      cachedSnapshot(header) {
+        return header.id === 'session-a' ? { values: { title: '缓存标题' } } : { values: { title: null } };
+      },
+    },
+  });
+  const entries = await listSessionEntries(ctx);
+  assert.equal(entries[0].title, '缓存标题');
+  assert.equal(entries[1].title, undefined);
+  assert.deepEqual(titleReads, []);
+});
+
+test('listSessionEntries includes an archived session missing from the query corpus', async () => {
+  const archivedHeader = headerFixture({ id: 'session-archived', createdAt: 5 });
+  const ctx = fakeContext({
+    sessionQuery: {
+      async listSessions() { return [{ header: headerFixture({ id: 'session-live' }) }]; },
+    },
+    sessionPersistence: {
+      async stat(id) {
+        assert.equal(id, 'session-archived');
+        return { header: archivedHeader, revision: 'r1' };
+      },
+    },
+    workspaceRegistry: {
+      async list() { return []; },
+      get archivedSessionIds() { return ['session-archived']; },
+      get pinnedSessionIds() { return []; },
+    },
+    sessionProjectionCache: {
+      cachedSnapshot() { return { values: { title: '归档会话标题' } }; },
+    },
+  });
+  const entries = await listSessionEntries(ctx);
+  const archived = entries.find((entry) => entry.id === 'session-archived');
+  assert.ok(archived, 'the archived session is listed');
+  assert.equal(archived.archived, true);
+  assert.equal(archived.title, '归档会话标题');
+  assert.equal(entries.filter((entry) => entry.id === 'session-live').length, 1);
+});

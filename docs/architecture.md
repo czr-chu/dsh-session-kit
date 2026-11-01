@@ -48,6 +48,16 @@ stream chunks, jobs, subagent events and workspace events are dropped. Event
 `seq` values are renumbered and the title's `messageSeqs` are remapped so the
 result is a valid v4 log that DSH can replay and continue.
 
+## Listing model
+
+`/session-kit/list` never opens a cold session log. Titles come from the
+projection cache (`sessionProjectionCache.cachedSnapshot`), including the
+predecessor-title hint for checkpoints written before a format-generation
+migration; live sessions use the title service's in-memory fold. Archived ids
+from the registry are merged into the listing even when the session-query
+corpus does not return them, so an archived conversation is always visible and
+marked. The list endpoint is O(one persistence scan + rows), not O(rows × log).
+
 ## Management model
 
 Archive state is the registry-global set (`workspaceRegistry.archiveSession` /
