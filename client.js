@@ -2,11 +2,12 @@
  * dsh-session-kit — Client half.
  *
  * One sidebar row ("会话管理") opens a session-management panel in the main
- * column. The panel lists sessions grouped by workspace, filters them with a
- * search box, selects any subset with checkboxes (plus per-group and global
- * select all/none), then exports the selection as one ZIP through
- * `POST /session-kit/export` or imports an archive through
- * `POST /session-kit/import`.
+ * column. The panel lists sessions grouped by workspace with an active/archived
+ * badge per row, filters them by status and a search box, selects any subset
+ * with checkboxes (plus per-group and global select all/none), and exposes both
+ * per-row and batch archive / restore / trash-delete actions. It also exports
+ * the selection as one ZIP through `POST /session-kit/export` and imports an
+ * archive through `POST /session-kit/import`.
  *
  * Hand-written ModuleLoader factory: no bundler, no JSX, no TypeScript, and the
  * only runtime import is `react`. Every Host string (titles, warnings,
@@ -71,6 +72,38 @@ window.__ModuleLoader__.load({
       'panel.unknownPath': '未知路径',
       'panel.unknownReason': '已存在或不允许',
       'panel.moreLines': '…另有 {count} 条提示',
+      'panel.statusFilter': '状态筛选',
+      'panel.statusAll': '全部',
+      'panel.statusActive': '未归档',
+      'panel.statusArchived': '已归档',
+      'panel.statusBadgeArchived': '已归档',
+      'panel.statusBadgeActive': '未归档',
+      'panel.searchCount': '匹配 {matched} / 共 {total}',
+      'panel.selectSession': '选择会话 {title}',
+      'panel.archive': '归档',
+      'panel.unarchive': '恢复',
+      'panel.delete': '删除',
+      'panel.archiveSelected': '归档选中',
+      'panel.unarchiveSelected': '恢复选中',
+      'panel.deleteSelected': '删除选中',
+      'panel.archiveDone': '已归档 {count} 个会话',
+      'panel.unarchiveDone': '已恢复 {count} 个会话',
+      'panel.deleteDone': '已删除 {count} 个会话（已移到 session-kit-trash）',
+      'panel.actionFailed': '操作失败',
+      'panel.actionPartialFailed': '有 {count} 个会话操作失败',
+      'panel.actionFailureLine': '{id}：{reason}',
+      'panel.actionUnknownReason': '未知错误',
+      'panel.noArchivable': '选中的会话中没有未归档的会话。',
+      'panel.noUnarchivable': '选中的会话中没有已归档的会话。',
+      'panel.tooManySelected': '一次最多操作 {max} 个会话。',
+      'panel.deleting': '正在删除…',
+      'panel.confirmDeleteTitle': '删除会话',
+      'panel.confirmDeleteBody': '将把以下 {count} 个会话移到 session-kit-trash 回收站，并从工作区列表中移除；这不是永久删除。',
+      'panel.confirmDeleteMore': '…另有 {count} 个会话',
+      'panel.confirmDelete': '确认删除',
+      'panel.cancel': '取消',
+      'panel.deleteNote': '删除只会移动到 session-kit-trash，可稍后手动找回。',
+      'panel.emptyStatusFilter': '当前状态下没有会话。',
       'panel.export': '导出所选',
       'panel.exporting': '正在导出…',
       'panel.exportFailed': '导出失败',
@@ -130,6 +163,38 @@ window.__ModuleLoader__.load({
       'panel.unknownPath': 'unknown path',
       'panel.unknownReason': 'exists or not allowed',
       'panel.moreLines': '…and {count} more notes',
+      'panel.statusFilter': 'Status',
+      'panel.statusAll': 'All',
+      'panel.statusActive': 'Active',
+      'panel.statusArchived': 'Archived',
+      'panel.statusBadgeArchived': 'Archived',
+      'panel.statusBadgeActive': 'Active',
+      'panel.searchCount': '{matched} matched of {total}',
+      'panel.selectSession': 'Select session {title}',
+      'panel.archive': 'Archive',
+      'panel.unarchive': 'Restore',
+      'panel.delete': 'Delete',
+      'panel.archiveSelected': 'Archive selected',
+      'panel.unarchiveSelected': 'Restore selected',
+      'panel.deleteSelected': 'Delete selected',
+      'panel.archiveDone': 'Archived {count} sessions',
+      'panel.unarchiveDone': 'Restored {count} sessions',
+      'panel.deleteDone': 'Deleted {count} sessions (moved to session-kit-trash)',
+      'panel.actionFailed': 'Action failed',
+      'panel.actionPartialFailed': '{count} sessions failed',
+      'panel.actionFailureLine': '{id}: {reason}',
+      'panel.actionUnknownReason': 'unknown error',
+      'panel.noArchivable': 'No selected session is active.',
+      'panel.noUnarchivable': 'No selected session is archived.',
+      'panel.tooManySelected': 'At most {max} sessions can be handled at once.',
+      'panel.deleting': 'Deleting…',
+      'panel.confirmDeleteTitle': 'Delete sessions',
+      'panel.confirmDeleteBody': 'Move {count} session(s) to the session-kit-trash folder and remove them from the workspace list; this is not a permanent erase.',
+      'panel.confirmDeleteMore': '…and {count} more sessions',
+      'panel.confirmDelete': 'Delete',
+      'panel.cancel': 'Cancel',
+      'panel.deleteNote': 'Deletion only moves files to session-kit-trash; recover them there later.',
+      'panel.emptyStatusFilter': 'No sessions in this status.',
       'panel.export': 'Export selected',
       'panel.exporting': 'Exporting…',
       'panel.exportFailed': 'Export failed',
@@ -300,6 +365,7 @@ window.__ModuleLoader__.load({
         workspaceId: pickString(record.workspaceId),
         workspaceTitle: pickString(record.workspaceTitle),
         running: record.running === true,
+        archived: record.archived === true,
         formatVersion: pickNumber(record.formatVersion),
         eventCount: pickNumber(record.eventCount),
         createdAt: pickNumber(record.createdAt),
@@ -377,6 +443,25 @@ window.__ModuleLoader__.load({
       ];
       return { sessions, warnings, workspace };
     }
+
+    /** Normalize the archive/unarchive/delete route payload. */
+    function normalizeManagePayload(payload, requestedIds) {
+      const root = payload !== null && typeof payload === 'object' ? payload : {};
+      const data = root.data !== null && typeof root.data === 'object' && !Array.isArray(root.data) ? root.data : root;
+      const rawResults = Array.isArray(data.results) ? data.results : [];
+      const results = rawResults.map((raw) => {
+        const record = raw !== null && typeof raw === 'object' ? raw : {};
+        return {
+          sessionId: pickString(record.sessionId ?? record.id),
+          ok: record.ok !== false,
+          error: pickString(record.error ?? record.message),
+        };
+      });
+      if (results.length === 0) {
+        return { results: requestedIds.map((id) => ({ sessionId: id, ok: true, error: '' })) };
+      }
+      return { results };
+    }
     // #endregion
 
     // #region grouping and selection helpers
@@ -393,8 +478,22 @@ window.__ModuleLoader__.load({
       return haystack.includes(needle);
     }
 
+    /** Does one session pass the status filter? */
+    function matchesStatus(session, statusFilter) {
+      if (statusFilter === 'archived') return session.archived === true;
+      if (statusFilter === 'active') return session.archived !== true;
+      return true;
+    }
+
+    /** Counts per status filter, computed over the whole catalog. */
+    function statusCounts(catalog) {
+      let archived = 0;
+      for (const session of catalog.sessions) if (session.archived === true) archived += 1;
+      return { all: catalog.sessions.length, active: catalog.sessions.length - archived, archived };
+    }
+
     /** Group sessions by workspace for rendering; empty groups are dropped. */
-    function buildGroups(catalog, query, tr) {
+    function buildGroups(catalog, query, statusFilter, tr) {
       const needle = query.trim().toLowerCase();
       const groups = [];
       const byKey = new Map();
@@ -430,6 +529,7 @@ window.__ModuleLoader__.load({
             groups.push(group);
           }
         }
+        if (!matchesStatus(session, statusFilter)) continue;
         if (!matchesQuery(session, needle)) continue;
         group.sessions.push(session);
       }
@@ -598,8 +698,9 @@ window.__ModuleLoader__.load({
         border: `1px solid ${T.border}`,
         borderRadius: T.radius,
         background: T.bgLayer1,
-        cursor: 'pointer',
       },
+      rowMain: { display: 'flex', alignItems: 'flex-start', gap: 10, flex: '1 1 auto', minWidth: 0, cursor: 'pointer' },
+      rowActions: { display: 'flex', alignItems: 'center', gap: 6, flex: 'none' },
       rowText: { display: 'flex', flexDirection: 'column', gap: 2, flex: '1 1 auto', minWidth: 0 },
       rowTitle: { font: `13px/20px ${T.font}`, color: T.labelPrimary, wordBreak: 'break-word' },
       rowMeta: {
@@ -609,6 +710,9 @@ window.__ModuleLoader__.load({
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap',
       },
+      badge: { display: 'inline-block', marginLeft: 8, padding: '0 6px', borderRadius: '999px', font: `11px/16px ${T.font}`, verticalAlign: 'middle', flex: 'none' },
+      badgeArchived: { background: T.bgLayer2, color: T.warn, border: `1px solid ${T.border}` },
+      badgeActive: { background: 'transparent', color: T.labelTertiary, border: `1px solid ${T.border}` },
       runningDot: { display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: T.success, marginRight: 6 },
       input: { margin: '2px 0 0', flex: 'none' },
       modeRow: { display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center' },
@@ -636,6 +740,55 @@ window.__ModuleLoader__.load({
         color: T.labelSecondary,
       },
       footnote: { margin: 0, font: `12px/18px ${T.font}`, color: T.labelSecondary },
+      overlay: {
+        position: 'fixed',
+        inset: 0,
+        zIndex: 2147483200,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 20,
+        background: 'rgba(0, 0, 0, 0.38)',
+      },
+      dialog: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        width: '100%',
+        maxWidth: 480,
+        maxHeight: '72vh',
+        overflowY: 'auto',
+        padding: '18px 18px 16px',
+        boxSizing: 'border-box',
+        background: T.bgLayer1,
+        border: `1px solid ${T.border}`,
+        borderRadius: T.radiusLg,
+        boxShadow: 'var(--dsw-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.18))',
+        color: T.labelPrimary,
+        font: `13px/20px ${T.font}`,
+      },
+      dialogTitle: { margin: 0, font: `600 16px/24px ${T.font}` },
+      dialogBody: { margin: 0, font: `13px/20px ${T.font}`, color: T.labelSecondary },
+      dialogList: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+        maxHeight: 160,
+        overflowY: 'auto',
+        padding: '6px 8px',
+        border: `1px solid ${T.border}`,
+        borderRadius: T.radius,
+        background: T.bgLayer2,
+      },
+      dialogItem: {
+        font: `12px/18px ${T.mono}`,
+        color: T.labelPrimary,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      },
+      dialogNote: { margin: 0, font: `12px/18px ${T.font}`, color: T.labelSecondary },
+      dialogActions: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 },
     };
 
     /** Button style for one visual role. */
@@ -656,7 +809,27 @@ window.__ModuleLoader__.load({
       };
       if (role === 'primary') return { ...base, background: T.brand, color: T.bgBase };
       if (role === 'ghost') return { ...base, background: 'transparent', color: T.labelSecondary, border: `1px solid ${T.border}` };
+      if (role === 'danger') return { ...base, background: T.error, color: T.bgBase };
+      if (role === 'dangerGhost') return { ...base, background: 'transparent', color: T.error, border: `1px solid ${T.border}` };
       return { ...base, background: T.bgLayer2, color: T.labelPrimary, border: `1px solid ${T.border}` };
+    }
+
+    /** Compact button style for row-level actions. */
+    function rowButtonStyle(role, disabled) {
+      return { ...buttonStyle(role, disabled), height: 26, padding: '0 8px', font: `12px/18px ${T.font}` };
+    }
+
+    /** Segmented status-filter button style. */
+    function filterButtonStyle(active) {
+      return {
+        ...buttonStyle('secondary', false),
+        height: 28,
+        padding: '0 10px',
+        background: active ? T.bgLayer2 : 'transparent',
+        color: active ? T.labelPrimary : T.labelSecondary,
+        border: active ? `1px solid ${T.brand}` : `1px solid ${T.border}`,
+        fontWeight: active ? 600 : 500,
+      };
     }
     // #endregion
 
@@ -666,7 +839,8 @@ window.__ModuleLoader__.load({
      * Session-management page: workspace groups, search, checkboxes, export
      * mode switch, export download, and archive import.
      * @param {{t: Function, loadCatalog: Function, exportSelection: Function,
-     *          importSelection: Function, refreshSessions: Function, targetOf: Function}} props
+     *          importSelection: Function, manageSessions: Function,
+     *          refreshSessions: Function, targetOf: Function}} props
      *   slot translator and the Host operations injected by `apply`.
      */
     function SessionKitPanel(props) {
@@ -681,6 +855,8 @@ window.__ModuleLoader__.load({
       const [includeWorkspaceFiles, setIncludeWorkspaceFiles] = React.useState(true);
       const [includeSubagents, setIncludeSubagents] = React.useState(false);
       const [restoreWorkspaceFiles, setRestoreWorkspaceFiles] = React.useState(true);
+      const [statusFilter, setStatusFilter] = React.useState('all');
+      const [confirmDelete, setConfirmDelete] = React.useState(null);
       const [busy, setBusy] = React.useState('');
       const [notice, setNotice] = React.useState(null);
       const fileInputRef = React.useRef(null);
@@ -720,10 +896,13 @@ window.__ModuleLoader__.load({
         void reload();
       }, []);
 
-      const groups = React.useMemo(() => buildGroups(catalog, query, tr), [catalog, query, props.t]);
+      const groups = React.useMemo(() => buildGroups(catalog, query, statusFilter, tr), [catalog, query, statusFilter, props.t]);
       const allVisible = React.useMemo(() => visibleIds(groups), [groups]);
+      const counts = React.useMemo(() => statusCounts(catalog), [catalog]);
       const total = catalog.sessions.length;
+      const matchedCount = allVisible.length;
       const selectedCount = selected.size;
+      const BATCH_LIMIT = 500;
 
       function toggleSession(id) {
         setSelected((previous) => {
@@ -839,6 +1018,92 @@ window.__ModuleLoader__.load({
         if (file !== undefined) void runImport(file);
       }
 
+      /** Open the delete confirmation for the given session ids. */
+      function requestDeleteConfirm(sessionIds) {
+        const byId = new Map(catalog.sessions.map((session) => [session.id, session]));
+        const titles = sessionIds.map((id) => {
+          const session = byId.get(id);
+          return session !== undefined && session.title !== '' ? session.title : id;
+        });
+        setConfirmDelete({ sessionIds: [...sessionIds], titles });
+      }
+
+      /** Selected ids that the given management action can apply to. */
+      function selectedForAction(action) {
+        const byId = new Map(catalog.sessions.map((session) => [session.id, session]));
+        return [...selected].filter((id) => {
+          const session = byId.get(id);
+          if (session === undefined) return false;
+          if (action === 'archive') return session.archived !== true;
+          if (action === 'unarchive') return session.archived === true;
+          return true;
+        });
+      }
+
+      /** Run one archive/unarchive/delete batch, refresh the list, report failures. */
+      async function runAction(action, sessionIds) {
+        if (busy !== '') return;
+        if (sessionIds.length === 0) return;
+        if (sessionIds.length > BATCH_LIMIT) {
+          setNotice({ tone: 'error', title: tr('panel.actionFailed'), lines: [tr('panel.tooManySelected', { max: BATCH_LIMIT })] });
+          return;
+        }
+        setBusy(action);
+        setNotice(null);
+        try {
+          const result = await props.manageSessions(action, sessionIds);
+          const succeeded = result.results.filter((entry) => entry.ok).length;
+          const failed = result.results.filter((entry) => !entry.ok);
+          await reload({ quiet: true });
+          await props.refreshSessions();
+          if (failed.length === 0) {
+            const doneKey = action === 'archive' ? 'panel.archiveDone'
+              : action === 'unarchive' ? 'panel.unarchiveDone' : 'panel.deleteDone';
+            setNotice({ tone: 'success', title: tr(doneKey, { count: succeeded === 0 ? sessionIds.length : succeeded }), lines: [] });
+          } else {
+            const lines = failed.map((failure) => tr('panel.actionFailureLine', {
+              id: failure.sessionId === '' ? tr('panel.unknownPath') : failure.sessionId,
+              reason: failure.error === '' ? tr('panel.actionUnknownReason') : failure.error,
+            }));
+            setNotice({ tone: 'warn', title: tr('panel.actionPartialFailed', { count: failed.length }), lines: capNoticeLines(lines, tr) });
+          }
+        } catch (error) {
+          setNotice({ tone: 'error', title: tr('panel.actionFailed'), lines: [errorMessageOf(error, tr)] });
+        } finally {
+          if (mountedRef.current) {
+            setBusy('');
+            setConfirmDelete(null);
+          }
+        }
+      }
+
+      function batchArchive() {
+        const ids = selectedForAction('archive');
+        if (ids.length === 0) {
+          setNotice({ tone: 'warn', title: tr('panel.archiveSelected'), lines: [tr('panel.noArchivable')] });
+          return;
+        }
+        void runAction('archive', ids);
+      }
+
+      function batchUnarchive() {
+        const ids = selectedForAction('unarchive');
+        if (ids.length === 0) {
+          setNotice({ tone: 'warn', title: tr('panel.unarchiveSelected'), lines: [tr('panel.noUnarchivable')] });
+          return;
+        }
+        void runAction('unarchive', ids);
+      }
+
+      function batchDelete() {
+        const ids = selectedForAction('delete');
+        if (ids.length === 0) {
+          setNotice({ tone: 'error', title: tr('panel.actionFailed'), lines: [tr('panel.noSelection')] });
+          return;
+        }
+        requestDeleteConfirm(ids);
+      }
+
       const busyExport = busy === 'export';
       const busyImport = busy === 'import';
 
@@ -862,6 +1127,30 @@ window.__ModuleLoader__.load({
         ),
       );
 
+      const statusFilterRow = h(
+        'div',
+        { style: STYLES.toolbar, role: 'group', 'aria-label': tr('panel.statusFilter') },
+        h('span', { style: STYLES.counter }, tr('panel.statusFilter')),
+        h(
+          'button',
+          { type: 'button', style: filterButtonStyle(statusFilter === 'all'), 'aria-pressed': statusFilter === 'all', onClick: () => setStatusFilter('all') },
+          tr('panel.statusAll'),
+          h('span', { style: { marginLeft: 6, color: T.labelSecondary } }, String(counts.all)),
+        ),
+        h(
+          'button',
+          { type: 'button', style: filterButtonStyle(statusFilter === 'active'), 'aria-pressed': statusFilter === 'active', onClick: () => setStatusFilter('active') },
+          tr('panel.statusActive'),
+          h('span', { style: { marginLeft: 6, color: T.labelSecondary } }, String(counts.active)),
+        ),
+        h(
+          'button',
+          { type: 'button', style: filterButtonStyle(statusFilter === 'archived'), 'aria-pressed': statusFilter === 'archived', onClick: () => setStatusFilter('archived') },
+          tr('panel.statusArchived'),
+          h('span', { style: { marginLeft: 6, color: T.labelSecondary } }, String(counts.archived)),
+        ),
+      );
+
       const searchRow = h(
         'div',
         { style: STYLES.toolbar },
@@ -876,6 +1165,22 @@ window.__ModuleLoader__.load({
         h('button', { type: 'button', style: buttonStyle('secondary', allVisible.length === 0), disabled: allVisible.length === 0, onClick: () => setMany(allVisible, true) }, tr('panel.selectAll')),
         h('button', { type: 'button', style: buttonStyle('secondary', allVisible.length === 0), disabled: allVisible.length === 0, onClick: () => setMany(allVisible, false) }, tr('panel.selectNone')),
         h('span', { style: STYLES.counter }, tr('panel.selectedCount', { selected: selectedCount, total })),
+        h('span', { style: STYLES.counter }, tr('panel.searchCount', { matched: matchedCount, total })),
+        h(
+          'button',
+          { type: 'button', style: buttonStyle('secondary', selectedCount === 0 || busy !== ''), disabled: selectedCount === 0 || busy !== '', onClick: batchArchive },
+          tr('panel.archiveSelected'),
+        ),
+        h(
+          'button',
+          { type: 'button', style: buttonStyle('secondary', selectedCount === 0 || busy !== ''), disabled: selectedCount === 0 || busy !== '', onClick: batchUnarchive },
+          tr('panel.unarchiveSelected'),
+        ),
+        h(
+          'button',
+          { type: 'button', style: buttonStyle('dangerGhost', selectedCount === 0 || busy !== ''), disabled: selectedCount === 0 || busy !== '', onClick: batchDelete },
+          tr('panel.deleteSelected'),
+        ),
       );
 
       const modeRow = h(
@@ -1030,7 +1335,9 @@ window.__ModuleLoader__.load({
       } else if (catalog.sessions.length === 0) {
         body = h('div', { style: STYLES.emptyCard }, tr('panel.empty'));
       } else if (groups.length === 0) {
-        body = h('div', { style: STYLES.emptyCard }, tr('panel.emptyFilter'));
+        body = h('div', { style: STYLES.emptyCard }, query.trim() !== ''
+          ? tr('panel.emptyFilter')
+          : statusFilter !== 'all' ? tr('panel.emptyStatusFilter') : tr('panel.emptyFilter'));
       } else {
         body = groups.map((group) => {
           const state = groupSelection(group, selected);
@@ -1057,32 +1364,65 @@ window.__ModuleLoader__.load({
             ),
             group.sessions.map((session) => {
               const checked = selected.has(session.id);
+              const archived = session.archived === true;
+              const rowBusy = busy !== '';
               const meta = [];
               if (session.eventCount > 0) meta.push(tr('panel.events', { count: session.eventCount }));
               if (session.cwd !== '') meta.push(session.cwd);
               meta.push(session.id);
               const shortId = session.id.length > 26 ? `${session.id.slice(0, 12)}…${session.id.slice(-8)}` : session.id;
               const metaText = meta.length === 0 ? shortId : meta.join(' · ');
+              const displayTitle = session.title !== '' ? session.title : tr('panel.untitled');
               return h(
-                'label',
-                { key: session.id, style: STYLES.row },
-                h('input', {
-                  type: 'checkbox',
-                  checked,
-                  style: STYLES.input,
-                  onChange: () => toggleSession(session.id),
-                }),
+                'div',
+                { key: session.id, style: { ...STYLES.row, opacity: archived ? 0.66 : 1 } },
                 h(
-                  'span',
-                  { style: STYLES.rowText },
+                  'label',
+                  { style: STYLES.rowMain },
+                  h('input', {
+                    type: 'checkbox',
+                    checked,
+                    style: STYLES.input,
+                    onChange: () => toggleSession(session.id),
+                    'aria-label': tr('panel.selectSession', { title: displayTitle }),
+                  }),
                   h(
                     'span',
-                    { style: STYLES.rowTitle },
-                    session.running ? h('span', { style: STYLES.runningDot, 'aria-hidden': 'true' }) : null,
-                    session.title !== '' ? session.title : tr('panel.untitled'),
-                    session.running ? ` (${tr('panel.running')})` : '',
+                    { style: STYLES.rowText },
+                    h(
+                      'span',
+                      { style: STYLES.rowTitle },
+                      session.running ? h('span', { style: STYLES.runningDot, 'aria-hidden': 'true' }) : null,
+                      displayTitle,
+                      session.running ? ` (${tr('panel.running')})` : '',
+                      h(
+                        'span',
+                        { style: { ...STYLES.badge, ...(archived ? STYLES.badgeArchived : STYLES.badgeActive) } },
+                        archived ? tr('panel.statusBadgeArchived') : tr('panel.statusBadgeActive'),
+                      ),
+                    ),
+                    h('span', { style: STYLES.rowMeta, title: session.id }, metaText),
                   ),
-                  h('span', { style: STYLES.rowMeta, title: session.id }, metaText),
+                ),
+                h(
+                  'span',
+                  { style: STYLES.rowActions },
+                  archived
+                    ? h(
+                        'button',
+                        { type: 'button', style: rowButtonStyle('ghost', rowBusy), disabled: rowBusy, onClick: () => { void runAction('unarchive', [session.id]); } },
+                        tr('panel.unarchive'),
+                      )
+                    : h(
+                        'button',
+                        { type: 'button', style: rowButtonStyle('ghost', rowBusy), disabled: rowBusy, onClick: () => { void runAction('archive', [session.id]); } },
+                        tr('panel.archive'),
+                      ),
+                  h(
+                    'button',
+                    { type: 'button', style: rowButtonStyle('dangerGhost', rowBusy), disabled: rowBusy, onClick: () => requestDeleteConfirm([session.id]) },
+                    tr('panel.delete'),
+                  ),
                 ),
               );
             }),
@@ -1106,6 +1446,48 @@ window.__ModuleLoader__.load({
         notice.lines.map((line, index) => h('span', { key: `${index}-${line.slice(0, 12)}`, style: STYLES.noticeLine }, line)),
       );
 
+      const confirmDialog = confirmDelete === null ? null : h(
+        'div',
+        { style: STYLES.overlay },
+        h(
+          'div',
+          {
+            style: STYLES.dialog,
+            role: 'dialog',
+            'aria-modal': 'true',
+            'aria-label': tr('panel.confirmDeleteTitle'),
+            onKeyDown: (event) => {
+              if (event.key === 'Escape' && busy === '') setConfirmDelete(null);
+            },
+          },
+          h('h2', { style: STYLES.dialogTitle }, tr('panel.confirmDeleteTitle')),
+          h('p', { style: STYLES.dialogBody }, tr('panel.confirmDeleteBody', { count: confirmDelete.sessionIds.length })),
+          h(
+            'div',
+            { style: STYLES.dialogList },
+            confirmDelete.titles.slice(0, 8).map((title, index) => h('div', { key: `${index}-${title.slice(0, 12)}`, style: STYLES.dialogItem }, title)),
+            confirmDelete.titles.length > 8
+              ? h('div', { key: 'more', style: STYLES.dialogItem }, tr('panel.confirmDeleteMore', { count: confirmDelete.titles.length - 8 }))
+              : null,
+          ),
+          h('p', { style: STYLES.dialogNote }, tr('panel.deleteNote')),
+          h(
+            'div',
+            { style: STYLES.dialogActions },
+            h(
+              'button',
+              { type: 'button', style: buttonStyle('secondary', busy !== ''), disabled: busy !== '', autoFocus: true, onClick: () => setConfirmDelete(null) },
+              tr('panel.cancel'),
+            ),
+            h(
+              'button',
+              { type: 'button', style: buttonStyle('danger', busy !== ''), disabled: busy !== '', onClick: () => { void runAction('delete', confirmDelete.sessionIds); } },
+              busy === 'delete' ? tr('panel.deleting') : tr('panel.confirmDelete'),
+            ),
+          ),
+        ),
+      );
+
       return h(
         'div',
         { style: STYLES.page },
@@ -1113,6 +1495,7 @@ window.__ModuleLoader__.load({
           'div',
           { style: STYLES.content },
           header,
+          statusFilterRow,
           searchRow,
           modeRow,
           actions,
@@ -1121,6 +1504,7 @@ window.__ModuleLoader__.load({
           body,
           h('p', { style: STYLES.footnote }, tr('panel.importHint')),
         ),
+        confirmDialog,
       );
     }
     // #endregion
@@ -1181,6 +1565,30 @@ window.__ModuleLoader__.load({
         filename: filename === '' ? 'session-kit-export.zip' : filename,
         warnings: warningsOf(response),
       };
+    }
+
+    /** Run one archive/unarchive/delete batch against the Host. */
+    async function manageSelection(action, sessionIds) {
+      if (action !== 'archive' && action !== 'unarchive' && action !== 'delete') {
+        throw new Error(`session-kit: unsupported action ${String(action)}`);
+      }
+      const response = await fetch(hostUrl(`/${action}`), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ sessionIds }),
+      });
+      const payload = await jsonBody(response);
+      const data = payload !== null && typeof payload === 'object' && payload.data !== null && typeof payload.data === 'object' && !Array.isArray(payload.data)
+        ? payload.data
+        : payload;
+      if (data !== null && typeof data === 'object' && Array.isArray(data.results)) {
+        // A fully failed batch answers non-2xx; keep its per-session results.
+        return normalizeManagePayload(payload, sessionIds);
+      }
+      if (!response.ok || payload === null || typeof payload !== 'object' || payload.ok !== true) {
+        throw requestFailure(payload, response.status);
+      }
+      return normalizeManagePayload(payload, sessionIds);
     }
 
     /** Refresh the client session catalog after an import. */
@@ -1245,6 +1653,7 @@ window.__ModuleLoader__.load({
               loadCatalog: () => loadCatalog(),
               exportSelection: (request) => exportSelection(request),
               importSelection: (file, hints) => importSelection(file, hints),
+              manageSessions: (action, sessionIds) => manageSelection(action, sessionIds),
               refreshSessions: () => refreshSessionList(ctx),
               targetOf: () => importTargetOf(ctx),
             }),

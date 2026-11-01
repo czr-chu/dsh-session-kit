@@ -47,3 +47,12 @@ The manifest records the source workspace absolute paths so a user can map an
 archive back to the machine it came from, plus workspace-relative touched and
 presented file paths. It never records credential values, and generated
 archives are excluded from this repository (`.gitignore`).
+## Session deletion
+
+Delete is a move, not an erase: the session directory (plus `origin: 'subagent'`
+descendants) is moved under `$DSH_HOME/session-kit-trash/<timestamp>/` and the
+workspace registry is cleaned. Before moving, the plugin refuses live/running
+sessions and verifies that every backend location is a real session directory
+named after the encoded session id under a canonical project directory, without
+following symlinks. A move failure rolls back already-moved directories. Users
+who want permanent erasure delete the trash folder themselves.

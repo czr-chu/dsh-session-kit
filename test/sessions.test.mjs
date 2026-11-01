@@ -185,6 +185,8 @@ test('listSessionEntries decorates cheap records without opening logs', async ()
       createdAt: 1_700_000_000_000,
       updatedAt: 999,
       running: true,
+      archived: false,
+      pinned: false,
       formatVersion: 4,
       eventCount: 0,
     },
@@ -196,6 +198,8 @@ test('listSessionEntries decorates cheap records without opening logs', async ()
       createdAt: 5,
       updatedAt: 5,
       running: false,
+      archived: false,
+      pinned: false,
       formatVersion: 4,
       eventCount: 12,
     },
@@ -205,6 +209,8 @@ test('listSessionEntries decorates cheap records without opening logs', async ()
       createdAt: 1_700_000_000_000,
       updatedAt: 1_700_000_000_000,
       running: false,
+      archived: false,
+      pinned: false,
       formatVersion: 4,
       eventCount: 0,
     },
@@ -220,6 +226,53 @@ test('listSessionEntries decorates cheap records without opening logs', async ()
   await assert.rejects(listSessionEntries(fakeContext(), {}), /会话查询服务不可用/);
   const failing = fakeContext({ sessionQuery: { async listSessions() { throw new Error('list failed'); } } });
   await assert.rejects(listSessionEntries(failing), /读取会话列表失败：list failed/);
+});
+
+test('listSessionEntries marks archived and pinned sessions without hiding them', async () => {
+  const records = [
+    { header: headerFixture({ id: 'session-a' }) },
+    { header: headerFixture({ id: 'session-b' }) },
+    { header: headerFixture({ id: 'session-c' }) },
+    { header: headerFixture({ id: 'session-sub', origin: 'subagent', parentSession: 'session-a' }) },
+  ];
+  const ctx = fakeContext({
+    sessionQuery: {
+      async listSessions() { return records; },
+      async readTitle() { return undefined; },
+    },
+    workspaceRegistry: {
+      async list() { return []; },
+      archivedSessionIds: ['session-a'],
+      pinnedSessionIds: ['session-b', 'session-c'],
+    },
+  });
+  const entries = await listSessionEntries(ctx);
+  // Subagent transcripts stay out of the default human listing.
+  assert.deepEqual(entries.map((entry) => entry.id), ['session-a', 'session-b', 'session-c']);
+  assert.deepEqual(entries.map((entry) => [entry.id, entry.archived, entry.pinned]), [
+    ['session-a', true, false],
+    ['session-b', false, true],
+    ['session-c', false, true],
+  ]);
+  const withSubagents = await listSessionEntries(ctx, { includeSubagents: true });
+  assert.deepEqual(withSubagents.map((entry) => entry.id), ['session-a', 'session-b', 'session-c', 'session-sub']);
+  assert.deepEqual(withSubagents.find((entry) => entry.id === 'session-sub').origin, 'subagent');
+  // A registry whose archive/pin getters fail degrades to unmarked rows.
+  const throwing = fakeContext({
+    sessionQuery: {
+      async listSessions() { return records; },
+      async readTitle() { return undefined; },
+    },
+    workspaceRegistry: {
+      async list() { return []; },
+      get archivedSessionIds() { throw new Error('registry state unavailable'); },
+      get pinnedSessionIds() { throw new Error('registry state unavailable'); },
+    },
+  });
+  assert.deepEqual(
+    (await listSessionEntries(throwing)).map((entry) => [entry.archived, entry.pinned]),
+    [[false, false], [false, false], [false, false]],
+  );
 });
 
 test('resolveTargetDirectory prefers requested, then source, then the deployment default', async (t) => {

@@ -9,8 +9,9 @@ Done:
 - agent tool (`session_kit`).
 
 Next:
-- management actions: move session to another workspace, archive/unarchive,
-  delete with confirmation, reorder,
+- session search, status filter, archived badge,
+- archive/unarchive and delete-to-trash (single and batch),
+- move session to another workspace and reorder,
 - optional LLM-summarized compact mode (summary per turn) on top of the
   structural compact export,
 - per-session file selection (only touched/presented files instead of the whole

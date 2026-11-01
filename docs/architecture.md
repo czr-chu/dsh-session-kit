@@ -16,6 +16,7 @@ lib/compact.js           conversation-only ("compact") log synthesis
 lib/workspace-files.js   touched-file derivation + safe workspace tree walk
 lib/export.js            multi-session ZIP: manifest, session folders, attachments, workspaces
 lib/import.js            archive preflight, new-session creation, workspace restore
+lib/manage.js            archive/unarchive, delete-to-trash with lineage and registry cleanup
 lib/format.js            canonical session JSONL + attachment ref helpers
 lib/zip.js               dependency-free ZIP reader/writer
 lib/attachments.js       attachment packing/restore
@@ -46,6 +47,19 @@ model request context and one title event. Tool calls, tool results, reasoning,
 stream chunks, jobs, subagent events and workspace events are dropped. Event
 `seq` values are renumbered and the title's `messageSeqs` are remapped so the
 result is a valid v4 log that DSH can replay and continue.
+
+## Management model
+
+Archive state is the registry-global set (`workspaceRegistry.archiveSession` /
+`unarchiveSession`); the panel lists archived sessions with an `archived` flag
+instead of hiding them. Deleting a session never erases bytes: the session
+directory and its subagent descendants are moved to
+`<DSH_HOME>/session-kit-trash/<timestamp>/` after strict location validation
+(jsonl backend, directory name equals the encoded session id, canonical project
+directory, real non-symlink directory). User-visible fork/seeded children are
+not part of the lineage closure and survive. Workspace membership, pins and the
+archive flag are cleaned afterwards; cleanup failures are logged, not reported
+as a failed delete.
 
 ## Import model
 

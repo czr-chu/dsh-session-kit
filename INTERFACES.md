@@ -295,3 +295,58 @@ importArchive(ctx, {
 given absolute paths through the same exclusions/budget rules as
 `collectWorkspaceTree`; the current export uses whole workspace trees, this
 helper is available for a future per-session touched-files mode.
+## Session management (0.3.0)
+
+### lib/manage.js (NEW)
+
+```js
+export async function archiveSession(ctx, sessionId, { stopActivity = false } = {})
+// workspaceRegistry.archiveSession(sessionId, { stopActivity }); live/running
+// sessions reject with code 'active' unless stopActivity is true.
+
+export async function unarchiveSession(ctx, sessionId)
+// workspaceRegistry.unarchiveSession(sessionId); idempotent.
+
+export async function deleteSession(ctx, sessionId, { trashDir } = {})
+// -> { sessionIds: string[], trashedPath: string }
+// Refuses live sessions (ctx.sessions.get(id)) and running agents. Collects the
+// session and every subagent descendant (parentSession chain restricted to
+// origin='subagent'); user-visible fork/seeded children are preserved.
+// verifies each backend location is a session directory named encodeSegment(id)
+// under a '--project--' / '_no-cwd' directory, then moves all directories under
+// <DSH_HOME>/session-kit-trash/<ISO stamp>/ (rename, EXDEV copy+rm fallback).
+// Detaches each id from every workspace, unpins and unarchives it. Refuses the
+// whole operation before moving anything if any target is live.
+// Errors: 'not-found', 'active', 'unsafe-location', 'delete-failed'.
+```
+
+### list entries
+
+`listSessionEntries` adds `archived: boolean` and `pinned: boolean` from
+`workspaceRegistry.archivedSessionIds` / `pinnedSessionIds`; archived sessions
+remain in the list (marked), not hidden.
+
+### Routes
+
+- POST /session-kit/archive  body `{ "sessionIds": [..], "stopActivity"?: false }`
+- POST /session-kit/unarchive body `{ "sessionIds": [..] }`
+- POST /session-kit/delete    body `{ "sessionIds": [..] }`
+-> `{ ok: true, results: [{ sessionId, ok, error? }], archivedSessionIds? }`
+Delete is a trash move; nothing is permanently erased. Batch cap 500.
+GET /session-kit/list response sessions include the two new booleans.
+
+### Agent tool
+
+`session_kit` actions add:
+- `archive` / `unarchive`: `sessionIds` required;
+- `delete`: `sessionIds` required and `confirm: true` required (moves to trash).
+
+### Client
+
+Rows show an "archived" badge and a dimmed style; toolbar/filter:
+- search input matches title/id/cwd/workspace (already present; keep),
+- status filter: all / active / archived,
+- per-row and batch actions: archive, unarchive (only archived), delete with a
+  confirmation dialog that names the sessions and says they move to
+  `session-kit-trash`,
+- after each action refresh the list and show per-session failures.
