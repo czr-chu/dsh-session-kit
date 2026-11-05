@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Session manager",
-    "description": "Browse, search, and manage sessions by workspace (status filter, archive/restore, delete to session-kit-trash, legacy-format upgrade), export compact or full archives (optionally with workspace files and subagent logs), and import archives while restoring workspace files."
+    "description": "Browse, search, and manage sessions by workspace (status filter, archive/restore, delete to session-kit-trash with optional related-file move, legacy-format upgrade), export compact or full archives (optionally with workspace files and subagent logs), and import archives while restoring workspace files."
   }
 }

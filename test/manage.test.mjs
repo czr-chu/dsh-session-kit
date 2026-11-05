@@ -9,6 +9,8 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
+  readdirSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -144,6 +146,38 @@ function deleteFixture(t) {
     forkGrandchild,
     snapshots,
   };
+}
+
+/** Write one workspace file, creating parent directories. */
+function writeWorkspaceFile(root, relativePath, content = 'x') {
+  const absolute = join(root, relativePath);
+  mkdirSync(join(absolute, '..'), { recursive: true });
+  writeFileSync(absolute, content);
+  return absolute;
+}
+
+/** One related-file plan entry for an existing file under a workspace root. */
+function planEntry(root, relativePath, overrides = {}) {
+  const path = join(root, relativePath);
+  return {
+    path,
+    relative: relativePath,
+    root,
+    bytes: statSync(path).size,
+    evidence: ['deliverables/presented'],
+    weak: false,
+    sessionIds: ['session-a'],
+    ...overrides,
+  };
+}
+
+/** Every immediately created operation directory under a trash root. */
+function trashOperations(trashDir) {
+  try {
+    return readdirSync(trashDir).map((name) => join(trashDir, name));
+  } catch {
+    return [];
+  }
 }
 
 test('encodeSegment mirrors the JSONL backend safe-segment rules', () => {
@@ -605,3 +639,259 @@ test('deleteSession fails cleanly when the trash root cannot be created', async 
   );
   assert.equal(existsSync(fixture.root.sessionDir), true);
 });
+
+test('deleteSession removeFiles moves planned files first and writes a manifest', async (t) => {
+  const fixture = deleteFixture(t);
+  const workspaceRoot = tempDir(t, 'workspace');
+  const report = writeWorkspaceFile(workspaceRoot, 'report.md', 'report');
+  const data = writeWorkspaceFile(workspaceRoot, 'src/data.txt', 'data');
+  const workspaces = [{ id: 'workspace-1', title: 'demo', path: workspaceRoot, sessionIds: ['session-a', 'session-b', 'session-x'] }];
+  const registry = registryMock({ workspaces, pinned: ['session-a'], archived: ['session-a'] });
+  const persistence = { async list() { return fixture.snapshots; } };
+  const { ctx } = fakeContext({
+    sessionPersistence: persistence,
+    sessions: { get: () => undefined },
+    agents: { get: () => undefined },
+    workspaceRegistry: registry,
+  });
+  const plan = {
+    files: [
+      planEntry(workspaceRoot, 'report.md', { evidence: ['deliverables/presented'], weak: false }),
+      planEntry(workspaceRoot, 'src/data.txt', { evidence: ['tool/arguments'], weak: true, sessionIds: ['session-a', 'session-b'] }),
+    ],
+    skipped: [{ path: join(workspaceRoot, 'gone.txt'), reason: 'missing' }],
+    warnings: ['文件列表为尽力推导'],
+    totalBytes: 2,
+  };
+  const expectedBytes = statSync(report).size + statSync(data).size;
+  const result = await deleteSession(ctx, 'session-a', { trashDir: fixture.trashDir, removeFiles: true, filePlan: plan });
+  assert.equal(result.filesMoved, 2);
+  assert.equal(result.filesSkipped, 1);
+  assert.equal(result.filesBytes, expectedBytes);
+  assert.equal(result.filesTrashPath, join(result.trashedPath, 'files'));
+  assert.ok(result.fileWarnings.some((warning) => warning.includes('尽力推导')));
+  const encodedRoot = encodeSegment(workspaceRoot);
+  const trashedReport = join(result.filesTrashPath, encodedRoot, 'report.md');
+  const trashedData = join(result.filesTrashPath, encodedRoot, 'src/data.txt');
+  assert.equal(existsSync(trashedReport), true);
+  assert.equal(existsSync(trashedData), true);
+  assert.equal(existsSync(report), false);
+  assert.equal(existsSync(data), false);
+  const manifest = JSON.parse(readFileSync(join(result.trashedPath, 'files-manifest.json'), 'utf8'));
+  assert.equal(manifest.kind, 'dsh-session-kit-files');
+  assert.equal(manifest.files.length, 2);
+  const reportEntry = manifest.files.find((entry) => entry.relative === 'report.md');
+  assert.deepEqual(reportEntry.evidence, ['deliverables/presented']);
+  assert.equal(reportEntry.path, report);
+  assert.equal(reportEntry.trashedPath, trashedReport);
+  // Session directories still move and registry state is cleaned as before.
+  assert.equal(existsSync(join(result.trashedPath, 'session-a', 'session.v4.jsonl')), true);
+  assert.equal(existsSync(fixture.root.sessionDir), false);
+  assert.deepEqual(registry.archivedSessionIds, []);
+});
+
+test('deleteSession without removeFiles reports empty file stats and writes no manifest', async (t) => {
+  const fixture = deleteFixture(t);
+  const persistence = { async list() { return fixture.snapshots; } };
+  const { ctx } = fakeContext({ sessionPersistence: persistence, sessions: { get: () => undefined } });
+  const result = await deleteSession(ctx, 'session-a', { trashDir: fixture.trashDir });
+  assert.equal(result.filesMoved, 0);
+  assert.equal(result.filesSkipped, 0);
+  assert.equal(result.filesBytes, 0);
+  assert.deepEqual(result.fileWarnings, []);
+  assert.equal(result.filesTrashPath, undefined);
+  assert.equal(existsSync(join(result.trashedPath, 'files-manifest.json')), false);
+  assert.equal(existsSync(join(result.trashedPath, 'files')), false);
+});
+
+test('deleteSession derives the file plan when removeFiles has no filePlan', async (t) => {
+  const fixture = deleteFixture(t);
+  const workspaceRoot = tempDir(t, 'derived');
+  const derived = writeWorkspaceFile(workspaceRoot, 'derived.txt', 'derived');
+  const eventsById = new Map([
+    ['session-a', [{ type: 'deliverables/presented', data: { files: [{ path: derived }] } }]],
+    ['session-b', []],
+    ['session-c', []],
+  ]);
+  const persistence = {
+    async list() { return fixture.snapshots; },
+    async open(id, mode) {
+      if (mode !== 'read') throw new Error('unexpected write open');
+      const snapshot = fixture.snapshots.find((entry) => entry.header.id === id);
+      if (snapshot === undefined) throw new Error('missing session ' + id);
+      return {
+        header: snapshot.header,
+        async read() { return { events: eventsById.get(id) ?? [] }; },
+        async close() {},
+      };
+    },
+  };
+  const workspaces = [{ id: 'workspace-1', path: workspaceRoot, sessionIds: ['session-a', 'session-b', 'session-x'] }];
+  const registry = registryMock({ workspaces });
+  const { ctx } = fakeContext({
+    sessionPersistence: persistence,
+    workspaceRegistry: registry,
+    sessions: { get: () => undefined },
+  });
+  const result = await deleteSession(ctx, 'session-a', { trashDir: fixture.trashDir, removeFiles: true });
+  assert.equal(result.filesMoved, 1);
+  assert.ok(result.fileWarnings.some((warning) => warning.includes('尽力推导')));
+  assert.equal(existsSync(join(result.filesTrashPath, encodeSegment(workspaceRoot), 'derived.txt')), true);
+  assert.equal(existsSync(derived), false);
+  assert.equal(existsSync(join(result.trashedPath, 'session-a', 'session.v4.jsonl')), true);
+});
+
+test('deleteSession rolls moved files back when a later file move fails', async (t) => {
+  if (typeof process.getuid === 'function' && process.getuid() === 0) {
+    t.skip('running as root: directory permissions cannot force a rename failure');
+    return;
+  }
+  const fixture = deleteFixture(t);
+  const workspaceRoot = tempDir(t, 'file-rollback');
+  const first = writeWorkspaceFile(workspaceRoot, 'ok/first.txt', 'first');
+  const second = writeWorkspaceFile(workspaceRoot, 'locked/second.txt', 'second');
+  const workspaces = [{ id: 'workspace-1', path: workspaceRoot, sessionIds: ['session-a'] }];
+  const registry = registryMock({ workspaces });
+  const persistence = { async list() { return fixture.snapshots; } };
+  const { ctx } = fakeContext({
+    sessionPersistence: persistence,
+    workspaceRegistry: registry,
+    sessions: { get: () => undefined },
+  });
+  const plan = {
+    files: [planEntry(workspaceRoot, 'ok/first.txt'), planEntry(workspaceRoot, 'locked/second.txt')],
+    skipped: [],
+    warnings: [],
+    totalBytes: 2,
+  };
+  const locked = join(workspaceRoot, 'locked');
+  chmodSync(locked, 0o555);
+  try {
+    await assert.rejects(
+      deleteSession(ctx, 'session-a', { trashDir: fixture.trashDir, removeFiles: true, filePlan: plan }),
+      (error) => {
+        assert.equal(error.code, 'delete-failed');
+        assert.match(error.message, /移动会话相关文件到回收站失败/u);
+        return true;
+      },
+    );
+  } finally {
+    chmodSync(locked, 0o755);
+  }
+  assert.equal(existsSync(first), true, 'the moved file was restored');
+  assert.equal(existsSync(second), true, 'the failed file never moved');
+  assert.equal(existsSync(fixture.root.sessionDir), true, 'session directories were never touched');
+  for (const operation of trashOperations(fixture.trashDir)) {
+    const names = readdirSync(operation);
+    assert.equal(names.includes('session-a'), false);
+    assert.equal(names.includes('session-b'), false);
+    assert.equal(names.includes('session-c'), false);
+  }
+});
+
+test('deleteSession rolls files back when a later session move fails', async (t) => {
+  if (typeof process.getuid === 'function' && process.getuid() === 0) {
+    t.skip('running as root: directory permissions cannot force a rename failure');
+    return;
+  }
+  const home = tempDir(t, 'session-rollback');
+  const sessionsRoot = join(home, 'sessions');
+  const root = writeSessionDir(sessionsRoot, '--work-demo--', 'session-a');
+  const child = writeSessionDir(sessionsRoot, '--readonly--', 'session-b');
+  const projectB = join(sessionsRoot, '--readonly--');
+  const workspaceRoot = tempDir(t, 'session-rollback-workspace');
+  const file = writeWorkspaceFile(workspaceRoot, 'file.txt', 'file');
+  const snapshots = [
+    snapshotOf('session-a', root.logPath),
+    snapshotOf('session-b', child.logPath, { parentSession: 'session-a', origin: 'subagent' }),
+  ];
+  const persistence = { async list() { return snapshots; } };
+  const workspaces = [{ id: 'workspace-1', path: workspaceRoot, sessionIds: ['session-a'] }];
+  const registry = registryMock({ workspaces });
+  const { ctx } = fakeContext({
+    sessionPersistence: persistence,
+    workspaceRegistry: registry,
+    sessions: { get: () => undefined },
+  });
+  const trashDir = join(home, 'trash');
+  const plan = { files: [planEntry(workspaceRoot, 'file.txt')], skipped: [], warnings: [], totalBytes: 1 };
+  chmodSync(projectB, 0o555);
+  try {
+    await assert.rejects(
+      deleteSession(ctx, 'session-a', { trashDir, removeFiles: true, filePlan: plan }),
+      (error) => {
+        assert.equal(error.code, 'delete-failed');
+        assert.match(error.message, /移动会话目录到回收站失败/u);
+        return true;
+      },
+    );
+  } finally {
+    chmodSync(projectB, 0o755);
+  }
+  assert.equal(existsSync(file), true, 'the moved file was restored');
+  assert.equal(existsSync(root.sessionDir), true);
+  assert.equal(existsSync(child.sessionDir), true);
+  for (const operation of trashOperations(trashDir)) {
+    const names = readdirSync(operation);
+    assert.equal(names.includes('session-a'), false);
+    assert.equal(names.includes('session-b'), false);
+    assert.equal(names.includes('files-manifest.json'), false, 'the manifest of rolled-back files is removed');
+  }
+});
+
+test('deleteSession skips stale or unsafe plan entries but still deletes the session', async (t) => {
+  const fixture = deleteFixture(t);
+  const workspaceRoot = tempDir(t, 'stale');
+  const real = writeWorkspaceFile(workspaceRoot, 'real.txt', 'real');
+  const anchor = writeWorkspaceFile(workspaceRoot, 'anchor.txt', 'anchor');
+  const link = join(workspaceRoot, 'link.txt');
+  symlinkSync(anchor, link);
+  const missing = join(workspaceRoot, 'missing.txt');
+  const otherRoot = tempDir(t, 'other-root');
+  const other = writeWorkspaceFile(otherRoot, 'other.txt', 'other');
+  const workspaces = [{ id: 'workspace-1', path: workspaceRoot, sessionIds: ['session-a'] }];
+  const registry = registryMock({ workspaces });
+  const persistence = { async list() { return fixture.snapshots; } };
+  const { ctx } = fakeContext({
+    sessionPersistence: persistence,
+    workspaceRegistry: registry,
+    sessions: { get: () => undefined },
+  });
+  const plan = {
+    files: [
+      planEntry(workspaceRoot, 'real.txt'),
+      planEntry(workspaceRoot, 'real.txt'),
+      { path: link, root: workspaceRoot, relative: 'link.txt', bytes: 1, evidence: [], weak: true, sessionIds: ['session-a'] },
+      { path: missing, root: workspaceRoot, relative: 'missing.txt', bytes: 0, evidence: [], weak: true, sessionIds: ['session-a'] },
+      planEntry(otherRoot, 'other.txt'),
+    ],
+    skipped: [],
+    warnings: [],
+    totalBytes: 0,
+  };
+  const result = await deleteSession(ctx, 'session-a', { trashDir: fixture.trashDir, removeFiles: true, filePlan: plan });
+  assert.equal(result.filesMoved, 1);
+  assert.equal(result.filesSkipped, 4);
+  assert.ok(result.fileWarnings.some((warning) => warning.includes('同一回收站路径')));
+  assert.equal(existsSync(join(result.filesTrashPath, encodeSegment(workspaceRoot), 'real.txt')), true);
+  assert.equal(existsSync(link), true, 'a symlink is never moved');
+  assert.equal(existsSync(other), true, 'a path outside every allowed workspace root is never moved');
+  assert.equal(existsSync(fixture.root.sessionDir), false);
+});
+
+test('deleteSession rejects an invalid filePlan before moving anything', async (t) => {
+  const fixture = deleteFixture(t);
+  const persistence = { async list() { return fixture.snapshots; } };
+  const { ctx } = fakeContext({ sessionPersistence: persistence, sessions: { get: () => undefined } });
+  await assert.rejects(
+    deleteSession(ctx, 'session-a', { trashDir: fixture.trashDir, removeFiles: true, filePlan: { files: null } }),
+    (error) => error.code === 'invalid-argument',
+  );
+  await assert.rejects(
+    deleteSession(ctx, 'session-a', { trashDir: fixture.trashDir, removeFiles: true, filePlan: 'nonsense' }),
+    (error) => error.code === 'invalid-argument',
+  );
+  assert.equal(existsSync(fixture.root.sessionDir), true);
+  assert.equal(existsSync(fixture.child.sessionDir), true);
+});
+

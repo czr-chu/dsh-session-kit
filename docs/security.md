@@ -65,3 +65,13 @@ the published generation with `stat`. Released generations are retained. When
 the official migration refuses an old log (unresolved tool calls, unsupported
 historical subagent descriptor, corruption), the source stays byte-identical and
 the failure is reported to the user rather than forced.
+## Related-file deletion
+
+The optional delete-with-files flow moves only derived workspace files that
+currently exist as regular files under the owning workspace root. Symlinks,
+paths outside the root, the Harness home, session storage and the trash are
+never moved. Files go to `<trash>/files/...` with a manifest; nothing is
+erased, and a failed file move rolls back before session directories move. The
+derivation cannot see shell redirections, PTC/script outputs, or text-only
+mentions, and a file shared with other sessions is moved too; the UI states
+these risks and requires an explicit second confirmation.

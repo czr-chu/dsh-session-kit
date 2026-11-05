@@ -407,3 +407,69 @@ Archived-merged snapshots expose their stat formatStatus too.
 - Confirmation explains it uses DSH's official migration, keeps the old
   generation, and never changes a failed session.
 - After running, refresh the list and show per-id success/failure.
+## Delete with related workspace files (0.5.0)
+
+DSH does not keep a complete "files this session touched" index. The plugin can
+only derive a **best-effort** list from session events plus the workspace root:
+
+- `deliverables/presented.files[].path` (strong),
+- `tool/result.data.meta.{path,cwd,diffs[].path}` (strong),
+- `tool/*.data.arguments.{file_path,path,target,dest,files[].path}` (weak: the
+  model asked for it, the file may never have been written),
+- `working-directory/change.data.cwd` (context for relative paths).
+
+Derivation includes the selected session and its `origin:'subagent'` descendants
+(the same closure the delete already moves), resolves relative paths against the
+session cwd, keeps only existing regular files under that session's workspace
+root, rejects symlinks and paths outside the root, and de-duplicates across
+sessions. It is inherently approximate: shell redirections, PTC scripts, and
+files only mentioned in text are not discoverable. The UI must state this and
+require an explicit second confirmation.
+
+### lib/session-files.js (NEW)
+
+```js
+export async function deriveSessionFilePlan(ctx, sessionIds)
+// -> { files: [{ path, relative, root, bytes, evidence: string[],
+//                weak: boolean, sessionIds: string[] }],
+//      skipped: [{ path, reason }], warnings: string[], totalBytes }
+// Reads each session and its subagent descendants from persistence, runs
+// workspace-files.deriveTouchedFiles, filters to existing regular files under
+// the workspace root (or cwd when no workspace owns it), excludes DSH_HOME and
+// the trash root.
+```
+
+### deleteSession options and result
+
+```js
+deleteSession(ctx, sessionId, {
+  trashDir,
+  removeFiles = false,   // also move derived workspace files to trash
+  filePlan,              // optional precomputed plan from deriveSessionFilePlan
+})
+// -> { sessionIds, trashedPath,
+//      filesMoved, filesSkipped, filesBytes, filesTrashPath?, fileWarnings }
+// Files move first under <trashedPath>/files/<encoded-root>/<relative path>
+// with a files-manifest.json (original absolute paths + evidence). Any file
+// move failure rolls the moved files back and aborts before session directories
+// move; a later session move failure rolls both back. Files are never erased.
+```
+
+### Routes / tool
+
+- POST /session-kit/session-files body `{ sessionIds: string[] }`
+  -> `{ ok: true, files, skipped, warnings, totalBytes }` (preview; batch cap 100).
+- POST /session-kit/delete body `{ sessionIds, confirm: true, removeFiles?: boolean }`
+  -> adds the file-move stats above. Without `removeFiles` behavior is unchanged.
+- `session_kit` delete action accepts `removeFiles`; `confirm:true` still required.
+  A new `files` action previews the derived plan.
+
+### Client
+
+- Delete confirmation gains a checkbox "同时移走该会话涉及的文件（移到回收站）"
+  (default off). Checking it loads the preview and shows count/size plus a
+  warning that derivation is best-effort and shared files may be affected.
+- The final confirmation is a **second dialog** that lists the files (bounded)
+  and requires a separate confirm button before POST /delete with
+  `removeFiles:true`.
+- Result shows moved/skipped file counts and warnings.

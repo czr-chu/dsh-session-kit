@@ -83,6 +83,19 @@ refusal from the official migration leaves the source unchanged and is reported
 per session. `/session-kit/list` exposes `formatStatus` / `legacy` so the panel
 can badge and batch-migrate old rows.
 
+## Related-file deletion
+
+`lib/session-files.js` derives a best-effort set of workspace files from the
+selected session and its subagent descendants (presented deliverables, tool
+result metadata, tool arguments, working-directory hints). The plan keeps only
+existing regular files under the owning workspace root, rejects symlinks and
+paths outside it, and excludes the Harness home, session storage and trash.
+Delete moves those files first into the operation's
+`<trash>/files/<encoded-root>/<relative>` tree with a `files-manifest.json`,
+then moves the session directories; any failure rolls back the moved files and
+aborts before the sessions move. This is an approximation, never a complete
+touched-file index, and the UI requires a second confirmation.
+
 ## Import model
 
 Import always creates new sessions (never mutates or deletes existing ones).

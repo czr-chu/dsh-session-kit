@@ -57,6 +57,8 @@ const MAX_JSON_BODY_BYTES = 1024 * 1024;
 export const MAX_MANAGE_BATCH = 500;
 /** Upper bound on one session-format migration batch. */
 export const MAX_MIGRATE_BATCH = 100;
+/** Upper bound on one related-files preview batch. */
+export const MAX_FILE_BATCH = 100;
 /** Directory name under DSH_HOME that receives deleted session folders. */
 const TRASH_DIR_NAME = 'session-kit-trash';
 
@@ -64,23 +66,29 @@ const TRASH_DIR_NAME = 'session-kit-trash';
 let sessionsModule;
 let manageModule;
 let migrateModule;
+let filesModule;
 
 /**
  * Normalize the test-only module injection seam.
  *
  * A Loader YAML cannot express object values, so `modules` is inert in
  * production and exists so tests can drive the routes without a real
- * `lib/manage.js` / `lib/migrate.js` / `lib/sessions.js` (and so a
- * composition can substitute them). When present, a missing member means
- * "that helper is unavailable".
+ * `lib/manage.js` / `lib/migrate.js` / `lib/session-files.js` / `lib/sessions.js`
+ * (and so a composition can substitute them). When present, a missing member
+ * means "that helper is unavailable".
  * @param {unknown} config - raw Loader row config.
- * @returns {{sessions?: object, manage?: object, migrate?: object} | undefined} override set.
+ * @returns {{sessions?: object, manage?: object, migrate?: object, files?: object} | undefined} override set.
  */
 function moduleOverrides(config) {
   const raw = config !== null && typeof config === 'object' ? config : {};
   const modules = raw.modules;
   if (modules === null || typeof modules !== 'object' || Array.isArray(modules)) return undefined;
-  return { sessions: modules.sessions, manage: modules.manage, migrate: modules.migrate };
+  return {
+    sessions: modules.sessions,
+    manage: modules.manage,
+    migrate: modules.migrate,
+    files: modules.files,
+  };
 }
 
 /**
@@ -148,6 +156,28 @@ async function loadMigrate(overrides) {
     }
   }
   return migrateModule;
+}
+
+/**
+ * Resolve the related-files derivation module lazily (delete-with-files preview).
+ * @param {{files?: object} | undefined} overrides - module injection seam.
+ * @returns {Promise<object>} session-files module namespace.
+ */
+async function loadSessionFiles(overrides) {
+  if (overrides !== undefined) {
+    if (overrides.files === undefined || overrides.files === null) {
+      throw new SessionPortFormatError('unavailable', '会话文件推导模块不可用');
+    }
+    return overrides.files;
+  }
+  if (filesModule === undefined) {
+    try {
+      filesModule = await import('./lib/session-files.js');
+    } catch (error) {
+      throw new SessionPortFormatError('unavailable', `会话文件推导模块不可用：${errorText(error)}`);
+    }
+  }
+  return filesModule;
 }
 
 /**
@@ -295,6 +325,8 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
           unarchive: true,
           delete: true,
           migrate: true,
+          filePreview: true,
+          deleteFiles: true,
           attachments: helpers.servicesOf(ctx).attachments !== undefined,
           tool: 'session_kit',
         },
@@ -307,6 +339,11 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
           official: true,
           batchLimit: MAX_MIGRATE_BATCH,
           note: '旧格式会话通过 DSH 官方迁移链升级（persistence.open(id, "write") 触发 prepare/publish），旧代日志保留，失败的会话保持原样',
+        },
+        files: {
+          previewBatchLimit: MAX_FILE_BATCH,
+          mode: 'move',
+          note: '会话相关文件只能尽力推导（deliverables/工具参数/结果 meta/工作目录线索）：shell 重定向、PTC 脚本、仅文本提到的文件无法发现；共享文件可能被一并移走；删除前需要二次确认，文件只移入回收站',
         },
         defaults: {
           mode: settings.defaultMode,
@@ -351,6 +388,10 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
     }
     if (path === `${ROUTE_PREFIX}/migrate` && method === 'POST') {
       await handleMigrate(ctx, settings, overrides, req, res);
+      return;
+    }
+    if (path === `${ROUTE_PREFIX}/session-files` && method === 'POST') {
+      await handleSessionFiles(ctx, settings, overrides, req, res);
       return;
     }
     sendJson(res, 404, { ok: false, code: 'not-found', message: `没有这个接口：${method} ${path}` });
@@ -447,14 +488,27 @@ async function archivedSessionIdsOf(ctx, overrides) {
  * @param {object | undefined} overrides - module injection seam.
  * @param {'archive'|'unarchive'|'delete'} action - operation to run.
  * @param {string[]} sessionIds - explicit ids (already expanded and capped).
- * @param {{stopActivity?: boolean}} [options] - archive-only activity stop.
- * @returns {Promise<{results: Array<object>, archivedSessionIds?: string[], trashedPath?: string}>} batch outcome.
+ * @param {{stopActivity?: boolean, removeFiles?: boolean}} [options] - archive-only activity stop and delete-only related-file move.
+ * @returns {Promise<{results: Array<object>, archivedSessionIds?: string[], trashedPath?: string,
+ *   filesMoved?: number, filesSkipped?: number, filesBytes?: number, filesTrashPath?: string, fileWarnings?: string[]}>} batch outcome.
  * @throws {SessionPortFormatError} `unavailable` when the management module is absent.
  */
-async function runManageBatch(ctx, settings, overrides, action, sessionIds, { stopActivity = false } = {}) {
+async function runManageBatch(
+  ctx,
+  settings,
+  overrides,
+  action,
+  sessionIds,
+  { stopActivity = false, removeFiles = false } = {},
+) {
   const manage = await loadManage(overrides);
   const results = [];
   let trashedPath;
+  let filesMoved = 0;
+  let filesSkipped = 0;
+  let filesBytes = 0;
+  let filesTrashPath;
+  const fileWarnings = [];
   for (const sessionId of sessionIds) {
     try {
       if (action === 'archive') {
@@ -465,11 +519,45 @@ async function runManageBatch(ctx, settings, overrides, action, sessionIds, { st
         const outcome = await manage.deleteSession(
           ctx,
           sessionId,
-          settings.trashDir !== undefined ? { trashDir: settings.trashDir } : {},
+          {
+            ...(settings.trashDir !== undefined ? { trashDir: settings.trashDir } : {}),
+            ...(removeFiles ? { removeFiles: true } : {}),
+          },
         );
-        if (outcome !== null && typeof outcome === 'object'
-          && typeof outcome.trashedPath === 'string' && outcome.trashedPath !== '') {
-          trashedPath = outcome.trashedPath;
+        if (outcome !== null && typeof outcome === 'object') {
+          if (typeof outcome.trashedPath === 'string' && outcome.trashedPath !== '') {
+            trashedPath = outcome.trashedPath;
+          }
+          if (removeFiles) {
+            const moved = Number.isSafeInteger(outcome.filesMoved) ? outcome.filesMoved : 0;
+            const skipped = Number.isSafeInteger(outcome.filesSkipped) ? outcome.filesSkipped : 0;
+            const bytes = Number.isSafeInteger(outcome.filesBytes) ? outcome.filesBytes : 0;
+            filesMoved += moved;
+            filesSkipped += skipped;
+            filesBytes += bytes;
+            if (typeof outcome.filesTrashPath === 'string' && outcome.filesTrashPath !== '') {
+              filesTrashPath = outcome.filesTrashPath;
+            }
+            if (Array.isArray(outcome.fileWarnings)) {
+              for (const warning of outcome.fileWarnings) fileWarnings.push(String(warning));
+            }
+            results.push({
+              sessionId,
+              ok: true,
+              files: {
+                moved,
+                skipped,
+                bytes,
+                ...(typeof outcome.filesTrashPath === 'string' && outcome.filesTrashPath !== ''
+                  ? { trashPath: outcome.filesTrashPath }
+                  : {}),
+                ...(Array.isArray(outcome.fileWarnings) && outcome.fileWarnings.length > 0
+                  ? { warnings: outcome.fileWarnings.map(String) }
+                  : {}),
+              },
+            });
+            continue;
+          }
         }
       }
       results.push({ sessionId, ok: true });
@@ -488,6 +576,15 @@ async function runManageBatch(ctx, settings, overrides, action, sessionIds, { st
     results,
     ...(archivedSessionIds !== undefined ? { archivedSessionIds } : {}),
     ...(trashedPath !== undefined ? { trashedPath } : {}),
+    ...(removeFiles
+      ? {
+          filesMoved,
+          filesSkipped,
+          filesBytes,
+          ...(filesTrashPath !== undefined ? { filesTrashPath } : {}),
+          ...(fileWarnings.length > 0 ? { fileWarnings } : {}),
+        }
+      : {}),
   };
 }
 
@@ -517,14 +614,63 @@ async function handleManage(ctx, settings, overrides, req, res, action) {
   if (sessionIds === undefined) {
     throw new SessionPortFormatError('invalid-sessionIds', '请求缺少 sessionIds（会话 id 数组）');
   }
+  const removeFiles = action === 'delete' && payload.removeFiles === true;
+  if (removeFiles && payload.confirm !== true) {
+    throw new SessionPortFormatError(
+      'confirm-required',
+      '同时移走会话相关文件需要 confirm:true（文件推导是尽力而为的，删除前请先预览）',
+    );
+  }
   const outcome = await runManageBatch(ctx, settings, overrides, action, sessionIds, {
     stopActivity: payload.stopActivity === true,
+    removeFiles,
   });
   const failed = outcome.results.filter((result) => !result.ok);
   const status = failed.length > 0 && failed.length === outcome.results.length
     ? statusForManageCode(failed[0].code)
     : 200;
   sendJson(res, status, { ok: failed.length === 0, ...outcome });
+}
+
+/**
+ * `POST /session-kit/session-files` — preview the workspace files a delete
+ * would move alongside the selected sessions.
+ *
+ * Body: `{ sessionIds: string[] }` (explicit ids, trimmed/de-duplicated, capped
+ * at {@link MAX_FILE_BATCH}). The derivation is best effort by design: it reads
+ * the sessions (and their subagent descendants) and reports what it can prove,
+ * marking weak evidence. Nothing is moved here; the client shows this plan and
+ * asks for a second confirmation before calling `/delete` with `removeFiles`.
+ * @param {object} ctx - the plugin context.
+ * @param {object} settings - resolved settings.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {import('node:http').IncomingMessage} req - request.
+ * @param {import('node:http').ServerResponse} res - response.
+ */
+async function handleSessionFiles(ctx, settings, overrides, req, res) {
+  const payload = await readJsonBody(req, MAX_JSON_BODY_BYTES);
+  const sessionIds = parseSessionIdList(payload.sessionIds, { allowAll: false, maxBatch: MAX_FILE_BATCH });
+  if (sessionIds === undefined) {
+    throw new SessionPortFormatError('invalid-sessionIds', '请求缺少 sessionIds（会话 id 数组）');
+  }
+  const files = await loadSessionFiles(overrides);
+  if (typeof files.deriveSessionFilePlan !== 'function') {
+    throw new SessionPortFormatError('unavailable', '会话文件推导模块不可用');
+  }
+  let plan;
+  try {
+    plan = await files.deriveSessionFilePlan(ctx, sessionIds);
+  } catch (error) {
+    if (error instanceof SessionPortFormatError) throw error;
+    throw new SessionPortFormatError('files-failed', `推导会话相关文件失败：${errorText(error)}`);
+  }
+  const filesList = Array.isArray(plan?.files) ? plan.files : [];
+  const skipped = Array.isArray(plan?.skipped) ? plan.skipped : [];
+  const warnings = Array.isArray(plan?.warnings) ? plan.warnings.map((warning) => String(warning)) : [];
+  const totalBytes = Number.isSafeInteger(plan?.totalBytes)
+    ? plan.totalBytes
+    : filesList.reduce((sum, entry) => sum + (Number.isSafeInteger(entry?.bytes) ? entry.bytes : 0), 0);
+  sendJson(res, 200, { ok: true, files: filesList, skipped, warnings, totalBytes });
 }
 
 /**
@@ -802,7 +948,8 @@ function statusOf(error) {
   if (code === 'not-found' || code === 'file-missing') return 404;
   if (code === 'too-large') return 413;
   if (code === 'active') return 409;
-  if (code === 'unsafe-location' || code === 'delete-failed' || code === 'migration-failed' || code === 'internal') return 500;
+  if (code === 'unsafe-location' || code === 'delete-failed' || code === 'migration-failed'
+    || code === 'files-failed' || code === 'internal') return 500;
   return 400;
 }
 
@@ -833,14 +980,16 @@ function registerTool(ctx, settings, overrides) {
           'action=import creates NEW sessions from an archive produced by this plugin or by DSH\'s built-in session-log export; it never modifies or deletes an existing session, never imports subagent transcripts, and can restore the archive\'s workspace files into the target directory (restoreWorkspaceFiles).',
           'action=archive / action=unarchive toggle a session\'s archived state; action=delete moves sessions into <DSH_HOME>/session-kit-trash (never a permanent erase) and requires confirm:true plus explicit session ids.',
           'action=migrate upgrades legacy session logs through DSH\'s official migration chain; sessionIds are explicit ids, or "all" (which requires confirm:true). The old generation is kept and a failed session stays unchanged.',
+          'action=files previews the workspace files a deletion would move for the selected sessions; the derivation is best effort (shell redirections, PTC scripts and files only mentioned in text cannot be discovered) and shared workspace files may be affected.',
+          'action=delete with removeFiles:true also moves those derived files into <DSH_HOME>/session-kit-trash (never erased); preview with action=files first and keep confirm:true.',
         ].join(' '),
         parameters: {
           type: 'object',
           properties: {
             action: {
               type: 'string',
-              enum: ['list', 'export', 'import', 'archive', 'unarchive', 'delete', 'migrate'],
-              description: 'list: summarize sessions. export: save sessions as one ZIP. import: create new sessions from a ZIP or JSONL archive. archive/unarchive: toggle archived state. delete: move sessions to the trash directory. migrate: upgrade legacy session logs through DSH\'s official migration chain.',
+              enum: ['list', 'export', 'import', 'archive', 'unarchive', 'delete', 'migrate', 'files'],
+              description: 'list: summarize sessions. export: save sessions as one ZIP. import: create new sessions from a ZIP or JSONL archive. archive/unarchive: toggle archived state. delete: move sessions to the trash directory. migrate: upgrade legacy session logs through DSH\'s official migration chain. files: preview the workspace files a deletion would move.',
             },
             mode: {
               type: 'string',
@@ -852,7 +1001,7 @@ function registerTool(ctx, settings, overrides) {
                 { type: 'array', items: { type: 'string' } },
                 { type: 'string', enum: ['all'] },
               ],
-              description: 'export/archive: session ids, or "all" (archive only). unarchive/delete: explicit session ids ("all" is refused for safety). migrate: explicit ids, or "all" (requires confirm:true).',
+              description: 'export/archive: session ids, or "all" (archive only). unarchive/delete/files: explicit session ids ("all" is refused for safety). migrate: explicit ids, or "all" (requires confirm:true).',
             },
             includeSubagents: {
               type: 'boolean',
@@ -878,6 +1027,10 @@ function registerTool(ctx, settings, overrides) {
             stopActivity: {
               type: 'boolean',
               description: 'archive only: stop running activity before archiving (a live session is refused otherwise).',
+            },
+            removeFiles: {
+              type: 'boolean',
+              description: 'delete only: also move the derived session-related workspace files into the trash directory (best effort; preview with action=files first).',
             },
             path: {
               type: 'string',
@@ -953,7 +1106,10 @@ function registerTool(ctx, settings, overrides) {
           if (action === 'migrate') {
             return runMigrateTool(ctx, overrides, args);
           }
-          throw new Error('session_kit: action 必须是 "list"、"export"、"import"、"archive"、"unarchive"、"delete" 或 "migrate"');
+          if (action === 'files') {
+            return runFilesTool(ctx, overrides, args);
+          }
+          throw new Error('session_kit: action 必须是 "list"、"export"、"import"、"archive"、"unarchive"、"delete"、"migrate" 或 "files"');
         },
       }),
     'session-kit: agent tool',
@@ -988,6 +1144,7 @@ async function runManageTool(ctx, settings, overrides, helpers, action, args) {
   }
   const outcome = await runManageBatch(ctx, settings, overrides, action, sessionIds, {
     stopActivity: args.stopActivity === true,
+    removeFiles: action === 'delete' && args.removeFiles === true,
   });
   return manageToolText(action, outcome);
 }
@@ -1038,6 +1195,59 @@ function migrateToolText(outcome) {
   ];
   if (outcome.legacyRemaining !== undefined) lines.push(`剩余旧格式会话：${outcome.legacyRemaining} 个`);
   for (const result of failed) lines.push(`- ${result.sessionId}：${result.error ?? '失败'}`);
+  return lines.join('\n');
+}
+
+/**
+ * Run the files preview tool action (parse ids -> derive plan -> summary text).
+ * @param {object} ctx - the plugin context.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {object} args - model arguments.
+ * @returns {Promise<string>} summary text.
+ */
+async function runFilesTool(ctx, overrides, args) {
+  const sessionIds = parseSessionIdList(args.sessionIds, { allowAll: false, maxBatch: MAX_FILE_BATCH });
+  if (sessionIds === undefined) {
+    throw new Error('session_kit: files 需要 sessionIds 参数（会话 id 数组）');
+  }
+  const files = await loadSessionFiles(overrides);
+  if (typeof files.deriveSessionFilePlan !== 'function') {
+    throw new Error('session_kit: 会话文件推导模块不可用');
+  }
+  let plan;
+  try {
+    plan = await files.deriveSessionFilePlan(ctx, sessionIds);
+  } catch (error) {
+    throw new Error(`session_kit: 推导会话相关文件失败：${errorText(error)}`);
+  }
+  return filesToolText(plan);
+}
+
+/**
+ * Tool result text for a related-files preview.
+ * @param {{files?: Array<object>, skipped?: Array<object>, warnings?: string[], totalBytes?: number}} plan - derived plan.
+ * @returns {string} summary text.
+ */
+function filesToolText(plan) {
+  const files = Array.isArray(plan?.files) ? plan.files : [];
+  const skipped = Array.isArray(plan?.skipped) ? plan.skipped : [];
+  const warnings = Array.isArray(plan?.warnings) ? plan.warnings.map((warning) => String(warning)) : [];
+  const totalBytes = Number.isSafeInteger(plan?.totalBytes)
+    ? plan.totalBytes
+    : files.reduce((sum, entry) => sum + (Number.isSafeInteger(entry?.bytes) ? entry.bytes : 0), 0);
+  const lines = [
+    `会话相关文件：${files.length} 个（${totalBytes} 字节），跳过 ${skipped.length} 个`,
+    '风险提示：推导是尽力而为的（shell 重定向、PTC 脚本、仅文本提到的文件无法发现）；工作区共享文件可能被一并移走；文件只会移入 <DSH_HOME>/session-kit-trash；删除前必须二次确认。',
+  ];
+  for (const entry of files.slice(0, 20)) {
+    const relative = typeof entry?.relative === 'string' && entry.relative !== ''
+      ? entry.relative
+      : String(entry?.path ?? '');
+    const size = Number.isSafeInteger(entry?.bytes) ? `${entry.bytes} 字节` : '大小未知';
+    lines.push(`- ${relative}（${size}${entry?.weak === true ? '，弱证据' : ''}）`);
+  }
+  if (files.length > 20) lines.push(`…还有 ${files.length - 20} 个文件未列出`);
+  for (const warning of warnings) lines.push(`注意：${warning}`);
   return lines.join('\n');
 }
 
@@ -1122,5 +1332,10 @@ function manageToolText(action, outcome) {
   const lines = [`${label}：成功 ${outcome.results.length - failed.length} 个${failed.length > 0 ? `，失败 ${failed.length} 个` : ''}`];
   for (const result of failed) lines.push(`- ${result.sessionId}：${result.error ?? '失败'}`);
   if (outcome.trashedPath !== undefined) lines.push(`已移入回收站：${outcome.trashedPath}`);
+  if (Number.isSafeInteger(outcome.filesMoved)) {
+    lines.push(`同时移走文件 ${outcome.filesMoved} 个（${outcome.filesBytes ?? 0} 字节），跳过 ${outcome.filesSkipped ?? 0} 个`);
+    if (outcome.filesTrashPath !== undefined) lines.push(`文件回收站：${outcome.filesTrashPath}`);
+  }
+  for (const warning of outcome.fileWarnings ?? []) lines.push(`注意：${warning}`);
   return lines.join('\n');
 }
