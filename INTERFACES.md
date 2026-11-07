@@ -473,3 +473,58 @@ deleteSession(ctx, sessionId, {
   and requires a separate confirm button before POST /delete with
   `removeFiles:true`.
 - Result shows moved/skipped file counts and warnings.
+## Session detail, selectable related files, and permanent delete (0.6.0)
+
+### Session detail (size)
+
+```js
+// lib/sessions.js
+export async function sessionDetail(ctx, id)
+// -> { sessionId, sizeBytes, formatStatus?, legacy, archived }
+// sizeBytes is the sum of regular files in the session's storage directory
+// (all retained generations, excluding locks), read from the backend-resolved
+// location. Falls back to snapshot.sizeBytes when the directory is unavailable.
+```
+
+`POST /session-kit/session-detail` body `{ sessionIds: string[] }` ->
+`{ ok: true, sessions: [{ id, sizeBytes, formatStatus?, legacy, archived }] }`
+(batch cap 100). A click/selection in the panel loads this on demand; the list
+itself stays cheap and does not stat every message.
+
+### Related files are selectable per session
+
+The preview payload keeps `files[].sessionIds`; the client groups them by
+session and shows a checkbox per file. `POST /session-kit/delete` accepts:
+
+```json
+{
+  "sessionIds": ["..."],
+  "confirm": true,
+  "removeFiles": true,
+  "selectedFiles": ["/absolute/path/a", "/absolute/path/b"],
+  "permanent": false
+}
+```
+
+- `selectedFiles` is the explicit subset to handle; only paths present in the
+  freshly derived plan (same sessions) are accepted; anything else is skipped
+  with a warning. `removeFiles:true` without `selectedFiles` is refused
+  (`invalid-selection`) so no client can bulk-move every derived file silently.
+- `permanent: false` (default) moves selected files and session directories to
+  the trash as today.
+- `permanent: true` deletes the session directories and selected files
+  irreversibly (no trash); it requires `confirm:true` plus the UI's second
+  confirmation. Failures are reported; there is no rollback for erased data.
+- The derived-file feature is marked experimental in the UI: a first explicit
+  enablement checkbox with risk copy, plus the second confirmation dialog.
+
+### Client
+
+- Clicking/selecting a session row loads its detail: formatted storage size
+  (all retained generations), format status, archived state.
+- The delete dialog groups derived files by session; each file has a checkbox
+  (strong-evidence files preselected, weak/tool-argument-only files off),
+  showing evidence and size; the confirm step sends the explicit selected list.
+- A separate "permanent delete" control (off by default) opens a distinct red
+  second-confirmation dialog warning that data cannot be recovered.
+- The file-deletion option is labeled experimental with a risk notice.

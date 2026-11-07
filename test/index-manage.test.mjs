@@ -328,11 +328,11 @@ test('/delete moves sessions with the configured trash directory and returns tra
   assert.deepEqual(harness.state.deleteCalls, [['a', { trashDir: '/tmp/custom-trash' }]]);
 });
 
-test('/delete rejects a permanent flag and never calls the management module', async () => {
+test('/delete permanent:true requires confirm and never calls the management module unconfirmed', async () => {
   const harness = createHarness();
   const res = await harness.call(jsonRequest('/session-kit/delete', { sessionIds: ['a'], permanent: true }));
   assert.equal(res.statusCode, 400);
-  assert.equal(jsonBody(res).code, 'permanent-unsupported');
+  assert.equal(jsonBody(res).code, 'confirm-required');
   assert.deepEqual(harness.state.deleteCalls, []);
 });
 

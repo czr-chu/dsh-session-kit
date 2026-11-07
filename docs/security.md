@@ -75,3 +75,11 @@ erased, and a failed file move rolls back before session directories move. The
 derivation cannot see shell redirections, PTC/script outputs, or text-only
 mentions, and a file shared with other sessions is moved too; the UI states
 these risks and requires an explicit second confirmation.
+## Permanent delete
+
+Permanent erase is opt-in, default off, and requires a separate second
+confirmation. It validates every session directory and selected file with the
+same path rules as the trash path (regular files only, inside the owning
+workspace root, no symlinks, never under the Harness home/session storage/trash),
+then unlinks the selected files and removes the verified session directories.
+There is no trash copy and no rollback; failures report what was already erased.

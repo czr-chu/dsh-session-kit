@@ -4,7 +4,7 @@
  * real DSH home is touched.
  */
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -20,6 +20,7 @@ import {
   readSessionDoc,
   resolveTargetDirectory,
   servicesOf,
+  sessionDetail,
   sessionHeaderToSummary,
   writeNewSession,
 } from '../lib/sessions.js';
@@ -525,7 +526,7 @@ test('writeNewSession reports failures without masking them', async () => {
     'the original write failure wins over a teardown failure',
   );
 });
-test('listSessionEntries reads titles from the projection cache without opening a long log', async () => {
+test('listSessionEntries reads cached titles and fills only missing titles from the log', async () => {
   const titleReads = [];
   const ctx = fakeContext({
     sessionQuery: {
@@ -537,7 +538,7 @@ test('listSessionEntries reads titles from the projection cache without opening 
       },
       async readTitle(id) {
         titleReads.push(id);
-        throw new Error('the listing must not read a full log for a title');
+        return id === 'session-b' ? { title: '补读标题' } : undefined;
       },
     },
     sessionProjectionCache: {
@@ -548,8 +549,8 @@ test('listSessionEntries reads titles from the projection cache without opening 
   });
   const entries = await listSessionEntries(ctx);
   assert.equal(entries[0].title, '缓存标题');
-  assert.equal(entries[1].title, undefined);
-  assert.deepEqual(titleReads, []);
+  assert.equal(entries[1].title, '补读标题');
+  assert.deepEqual(titleReads, ['session-b'], 'only the cache miss is read');
 });
 
 test('listSessionEntries includes an archived session missing from the query corpus', async () => {
@@ -579,4 +580,112 @@ test('listSessionEntries includes an archived session missing from the query cor
   assert.equal(archived.archived, true);
   assert.equal(archived.title, '归档会话标题');
   assert.equal(entries.filter((entry) => entry.id === 'session-live').length, 1);
+});
+
+/** Write one file with exact byte length under a directory. */
+function writeSizedFile(directory, name, bytes) {
+  mkdirSync(directory, { recursive: true });
+  const path = join(directory, name);
+  writeFileSync(path, 'x'.repeat(bytes));
+  return path;
+}
+
+test('sessionDetail sums every retained generation and excludes locks', async (t) => {
+  const home = mkdtempSync(join(tmpdir(), 'dsk-detail-'));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  const sessionDir = join(home, '--work-demo--', 'session-a');
+  writeSizedFile(sessionDir, 'session.v3.jsonl', 10);
+  const currentLog = writeSizedFile(sessionDir, 'session.v4.jsonl', 20);
+  writeSizedFile(sessionDir, 'session.lock', 100);
+  writeSizedFile(join(sessionDir, 'artifacts'), 'nested.bin', 5);
+  const outside = writeSizedFile(join(home, 'outside'), 'large.bin', 500);
+  symlinkSync(outside, join(sessionDir, 'link.bin'));
+  const ctx = fakeContext({
+    sessionPersistence: {
+      async stat(id) {
+        assert.equal(id, 'session-a');
+        return {
+          header: { version: 4, id: 'session-a', createdAt: 1_700_000_000_000, cwd: '/work/demo', isSeeded: false, delegationDepth: 0 },
+          formatStatus: 'migration-required',
+          revision: 'r1',
+          sizeBytes: 999,
+          location: { kind: 'jsonl', path: currentLog },
+        };
+      },
+    },
+    workspaceRegistry: { get archivedSessionIds() { return ['session-a']; } },
+  });
+  const detail = await sessionDetail(ctx, 'session-a');
+  assert.deepEqual(detail, {
+    sessionId: 'session-a',
+    sizeBytes: 35,
+    formatStatus: 'migration-required',
+    legacy: true,
+    archived: true,
+  });
+});
+
+test('sessionDetail falls back to the recorded artifact size and reports states', async (t) => {
+  const home = mkdtempSync(join(tmpdir(), 'dsk-detail-fallback-'));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  const missingLog = join(home, 'gone', 'session.v4.jsonl');
+  const ctx = fakeContext({
+    sessionPersistence: {
+      async stat() {
+        return {
+          header: { version: 4, id: 'session-a', createdAt: 1, isSeeded: false, delegationDepth: 0 },
+          formatStatus: 'current',
+          revision: 'r1',
+          sizeBytes: 1234,
+          location: { kind: 'jsonl', path: missingLog },
+        };
+      },
+    },
+    workspaceRegistry: { get archivedSessionIds() { throw new Error('registry unavailable'); } },
+  });
+  assert.deepEqual(await sessionDetail(ctx, 'session-a'), {
+    sessionId: 'session-a',
+    sizeBytes: 1234,
+    formatStatus: 'current',
+    legacy: false,
+    archived: false,
+  });
+  // Neither the directory nor a recorded size resolves: the detail reports zero.
+  const zeroCtx = fakeContext({
+    sessionPersistence: {
+      async stat() {
+        return {
+          header: { version: 4, id: 'session-b', createdAt: 1, isSeeded: false, delegationDepth: 0 },
+          revision: 'r1',
+          location: { kind: 'jsonl', path: join(home, 'gone-b', 'session.v4.jsonl') },
+        };
+      },
+    },
+  });
+  assert.deepEqual(await sessionDetail(zeroCtx, 'session-b'), {
+    sessionId: 'session-b',
+    sizeBytes: 0,
+    legacy: false,
+    archived: false,
+  });
+});
+
+test('sessionDetail reports missing sessions and service failures', async () => {
+  await assert.rejects(sessionDetail(fakeContext(), 'session-a'), (error) => error.code === 'unavailable');
+  await assert.rejects(
+    sessionDetail(fakeContext({ sessionPersistence: { async stat() { return undefined; } } }), 'session-a'),
+    (error) => error.code === 'not-found',
+  );
+  await assert.rejects(
+    sessionDetail(fakeContext({ sessionPersistence: { async stat() { return { rev: 'r1' }; } } }), 'session-a'),
+    (error) => error.code === 'not-found',
+  );
+  await assert.rejects(
+    sessionDetail(fakeContext({ sessionPersistence: { async stat() { throw new Error('storage offline'); } } }), 'session-a'),
+    (error) => error.code === 'detail-failed' && /storage offline/u.test(error.message),
+  );
+  await assert.rejects(
+    sessionDetail(fakeContext({ sessionPersistence: { async stat() { return undefined; } } }), '  '),
+    (error) => error.code === 'invalid-argument',
+  );
 });

@@ -275,11 +275,16 @@ test('/delete removeFiles:true passes the flag, needs confirm, and returns file 
   const res = await harness.call(jsonRequest('/session-kit/delete', {
     sessionIds: ['s1'],
     removeFiles: true,
+    selectedFiles: ['/ws/a.txt', '/ws/sub/b.txt'],
     confirm: true,
   }));
   assert.equal(res.statusCode, 200);
   assert.deepEqual(harness.state.deleteCalls, [
-    ['s1', { trashDir: '/tmp/custom-trash', removeFiles: true }],
+    ['s1', {
+      trashDir: '/tmp/custom-trash',
+      removeFiles: true,
+      selectedFiles: ['/ws/a.txt', '/ws/sub/b.txt'],
+    }],
   ]);
   const body = jsonBody(res);
   assert.equal(body.ok, true);
@@ -317,6 +322,7 @@ test('/delete removeFiles keeps per-id failures and does not invent file stats',
   const res = await harness.call(jsonRequest('/session-kit/delete', {
     sessionIds: ['a', 'b'],
     removeFiles: true,
+    selectedFiles: ['/ws/a.txt'],
     confirm: true,
   }));
   assert.equal(res.statusCode, 200);
@@ -369,8 +375,14 @@ test('the delete tool accepts removeFiles and still requires confirm:true', asyn
     /confirm/u,
   );
   assert.deepEqual(harness.state.deleteCalls, []);
-  const text = await harness.state.tool.execute({ action: 'delete', sessionIds: ['s1'], removeFiles: true, confirm: true }, {});
-  assert.deepEqual(harness.state.deleteCalls, [['s1', { removeFiles: true }]]);
+  const text = await harness.state.tool.execute({
+    action: 'delete',
+    sessionIds: ['s1'],
+    removeFiles: true,
+    selectedFiles: ['/ws/a.txt'],
+    confirm: true,
+  }, {});
+  assert.deepEqual(harness.state.deleteCalls, [['s1', { removeFiles: true, selectedFiles: ['/ws/a.txt'] }]]);
   assert.match(text, /同时移走文件 2 个（30 字节），跳过 1 个/u);
   assert.match(text, /文件回收站/u);
   assert.match(text, /共享文件 a\.txt/u);

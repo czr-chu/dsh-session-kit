@@ -36,7 +36,7 @@
 
 import { homedir } from 'node:os';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 
 import { errorText } from './lib/attachments.js';
 import { buildArchive, defaultExportDirectory } from './lib/export.js';
@@ -59,6 +59,10 @@ export const MAX_MANAGE_BATCH = 500;
 export const MAX_MIGRATE_BATCH = 100;
 /** Upper bound on one related-files preview batch. */
 export const MAX_FILE_BATCH = 100;
+/** Upper bound on one session-detail batch. */
+export const MAX_DETAIL_BATCH = 100;
+/** Upper bound on one explicit selected-files list. */
+export const MAX_SELECTED_FILES = 5000;
 /** Directory name under DSH_HOME that receives deleted session folders. */
 const TRASH_DIR_NAME = 'session-kit-trash';
 
@@ -327,6 +331,9 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
           migrate: true,
           filePreview: true,
           deleteFiles: true,
+          detail: true,
+          deletePermanent: true,
+          deleteSelectedFiles: true,
           attachments: helpers.servicesOf(ctx).attachments !== undefined,
           tool: 'session_kit',
         },
@@ -342,8 +349,12 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
         },
         files: {
           previewBatchLimit: MAX_FILE_BATCH,
+          detailBatchLimit: MAX_DETAIL_BATCH,
+          selectedFilesLimit: MAX_SELECTED_FILES,
           mode: 'move',
-          note: '会话相关文件只能尽力推导（deliverables/工具参数/结果 meta/工作目录线索）：shell 重定向、PTC 脚本、仅文本提到的文件无法发现；共享文件可能被一并移走；删除前需要二次确认，文件只移入回收站',
+          experimental: true,
+          permanent: true,
+          note: '会话相关文件只能尽力推导（deliverables/工具参数/结果 meta/工作目录线索）：shell 重定向、PTC 脚本、仅文本提到的文件无法发现；共享文件可能被一并移走；删除前需要二次确认；默认只移入回收站，permanent:true 才会永久删除且不可恢复',
         },
         defaults: {
           mode: settings.defaultMode,
@@ -392,6 +403,10 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
     }
     if (path === `${ROUTE_PREFIX}/session-files` && method === 'POST') {
       await handleSessionFiles(ctx, settings, overrides, req, res);
+      return;
+    }
+    if (path === `${ROUTE_PREFIX}/session-detail` && method === 'POST') {
+      await handleSessionDetail(ctx, settings, overrides, req, res);
       return;
     }
     sendJson(res, 404, { ok: false, code: 'not-found', message: `没有这个接口：${method} ${path}` });
@@ -488,9 +503,11 @@ async function archivedSessionIdsOf(ctx, overrides) {
  * @param {object | undefined} overrides - module injection seam.
  * @param {'archive'|'unarchive'|'delete'} action - operation to run.
  * @param {string[]} sessionIds - explicit ids (already expanded and capped).
- * @param {{stopActivity?: boolean, removeFiles?: boolean}} [options] - archive-only activity stop and delete-only related-file move.
- * @returns {Promise<{results: Array<object>, archivedSessionIds?: string[], trashedPath?: string,
- *   filesMoved?: number, filesSkipped?: number, filesBytes?: number, filesTrashPath?: string, fileWarnings?: string[]}>} batch outcome.
+ * @param {{stopActivity?: boolean, removeFiles?: boolean, selectedFiles?: string[], permanent?: boolean}} [options] -
+ *   archive-only activity stop plus delete-only related-file selection and permanent erase.
+ * @returns {Promise<{results: Array<object>, archivedSessionIds?: string[], trashedPath?: string, permanent?: boolean,
+ *   filesMoved?: number, filesRemoved?: number, filesSkipped?: number, filesBytes?: number,
+ *   filesTrashPath?: string, fileWarnings?: string[]}>} batch outcome.
  * @throws {SessionPortFormatError} `unavailable` when the management module is absent.
  */
 async function runManageBatch(
@@ -499,12 +516,13 @@ async function runManageBatch(
   overrides,
   action,
   sessionIds,
-  { stopActivity = false, removeFiles = false } = {},
+  { stopActivity = false, removeFiles = false, selectedFiles, permanent = false } = {},
 ) {
   const manage = await loadManage(overrides);
   const results = [];
   let trashedPath;
   let filesMoved = 0;
+  let filesRemoved = 0;
   let filesSkipped = 0;
   let filesBytes = 0;
   let filesTrashPath;
@@ -522,6 +540,8 @@ async function runManageBatch(
           {
             ...(settings.trashDir !== undefined ? { trashDir: settings.trashDir } : {}),
             ...(removeFiles ? { removeFiles: true } : {}),
+            ...(removeFiles && Array.isArray(selectedFiles) ? { selectedFiles: [...selectedFiles] } : {}),
+            ...(permanent ? { permanent: true } : {}),
           },
         );
         if (outcome !== null && typeof outcome === 'object') {
@@ -529,10 +549,12 @@ async function runManageBatch(
             trashedPath = outcome.trashedPath;
           }
           if (removeFiles) {
-            const moved = Number.isSafeInteger(outcome.filesMoved) ? outcome.filesMoved : 0;
+            const moved = Number.isSafeInteger(outcome.filesMoved) ? outcome.filesMoved : undefined;
+            const removed = Number.isSafeInteger(outcome.filesRemoved) ? outcome.filesRemoved : undefined;
             const skipped = Number.isSafeInteger(outcome.filesSkipped) ? outcome.filesSkipped : 0;
             const bytes = Number.isSafeInteger(outcome.filesBytes) ? outcome.filesBytes : 0;
-            filesMoved += moved;
+            if (moved !== undefined) filesMoved += moved;
+            if (removed !== undefined) filesRemoved += removed;
             filesSkipped += skipped;
             filesBytes += bytes;
             if (typeof outcome.filesTrashPath === 'string' && outcome.filesTrashPath !== '') {
@@ -544,8 +566,10 @@ async function runManageBatch(
             results.push({
               sessionId,
               ok: true,
+              ...(permanent ? { permanent: true } : {}),
               files: {
-                moved,
+                ...(moved !== undefined ? { moved } : permanent ? {} : { moved: 0 }),
+                ...(removed !== undefined ? { removed } : permanent ? { removed: 0 } : {}),
                 skipped,
                 bytes,
                 ...(typeof outcome.filesTrashPath === 'string' && outcome.filesTrashPath !== ''
@@ -560,7 +584,7 @@ async function runManageBatch(
           }
         }
       }
-      results.push({ sessionId, ok: true });
+      results.push({ sessionId, ok: true, ...(permanent ? { permanent: true } : {}) });
     } catch (error) {
       const code = typeof error?.code === 'string' && error.code !== '' ? error.code : undefined;
       results.push({
@@ -579,22 +603,67 @@ async function runManageBatch(
     ...(removeFiles
       ? {
           filesMoved,
+          ...(filesRemoved > 0 || permanent ? { filesRemoved } : {}),
           filesSkipped,
           filesBytes,
           ...(filesTrashPath !== undefined ? { filesTrashPath } : {}),
           ...(fileWarnings.length > 0 ? { fileWarnings } : {}),
         }
       : {}),
+    ...(permanent ? { permanent: true } : {}),
   };
+}
+
+/**
+ * Parse one explicit selected-files list for a delete-with-files request.
+ *
+ * The list must contain absolute paths; duplicates collapse in request order
+ * and the count is bounded by {@link MAX_SELECTED_FILES}. The management module
+ * still intersects it with the freshly derived plan, so a stale or foreign path
+ * is skipped with a warning instead of touching an unrelated file.
+ * @param {unknown} value - raw `selectedFiles` value.
+ * @returns {string[] | undefined} normalized paths, or undefined when absent.
+ * @throws {SessionPortFormatError} `invalid-selection`, `too-many-files`.
+ */
+function parseSelectedFiles(value) {
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value)) {
+    throw new SessionPortFormatError('invalid-selection', 'selectedFiles 必须是绝对路径数组');
+  }
+  const paths = [];
+  const seen = new Set();
+  for (const entry of value) {
+    if (typeof entry !== 'string' || entry.trim() === '') {
+      throw new SessionPortFormatError('invalid-selection', 'selectedFiles 的每一项都必须是非空字符串');
+    }
+    const path = entry.trim();
+    if (!isAbsolute(path)) {
+      throw new SessionPortFormatError('invalid-selection', `selectedFiles 必须是绝对路径：${path}`);
+    }
+    if (seen.has(path)) continue;
+    seen.add(path);
+    paths.push(path);
+  }
+  if (paths.length === 0) {
+    throw new SessionPortFormatError('invalid-selection', 'selectedFiles 不能为空');
+  }
+  if (paths.length > MAX_SELECTED_FILES) {
+    throw new SessionPortFormatError('too-many-files', `一次最多勾选 ${MAX_SELECTED_FILES} 个文件（本次 ${paths.length} 个）`);
+  }
+  return paths;
 }
 
 /**
  * `POST /session-kit/{archive,unarchive,delete}` — batch management action.
  *
- * Body: `{ sessionIds: string[], stopActivity?: boolean }`. Delete is a
- * trash move and accepts no `permanent` flag. A fully failed batch answers with
- * the status of its first failure code (404 not-found / 409 active / 500);
- * a partial success answers 200 with one result per id.
+ * Body: `{ sessionIds: string[], stopActivity?: boolean }` for archive/unarchive;
+ * delete additionally accepts `removeFiles?: boolean`, `selectedFiles?: string[]`
+ * and `permanent?: boolean`. `removeFiles:true` requires an explicit
+ * `selectedFiles` list (`400 invalid-selection` otherwise) so no client can move
+ * every derived file silently; `permanent:true` erases instead of trashing and
+ * also requires `confirm:true`. A fully failed batch answers with the status of
+ * its first failure code (404 not-found / 409 active / 500); a partial success
+ * answers 200 with one result per id.
  * @param {object} ctx - the plugin context.
  * @param {object} settings - resolved settings.
  * @param {object | undefined} overrides - module injection seam.
@@ -604,26 +673,45 @@ async function runManageBatch(
  */
 async function handleManage(ctx, settings, overrides, req, res, action) {
   const payload = await readJsonBody(req, MAX_JSON_BODY_BYTES);
-  if (action === 'delete' && payload.permanent === true) {
-    throw new SessionPortFormatError(
-      'permanent-unsupported',
-      '删除只会把会话移入回收站（session-kit-trash），不支持永久删除（permanent）',
-    );
-  }
   const sessionIds = parseSessionIdList(payload.sessionIds, { allowAll: false });
   if (sessionIds === undefined) {
     throw new SessionPortFormatError('invalid-sessionIds', '请求缺少 sessionIds（会话 id 数组）');
   }
-  const removeFiles = action === 'delete' && payload.removeFiles === true;
-  if (removeFiles && payload.confirm !== true) {
-    throw new SessionPortFormatError(
-      'confirm-required',
-      '同时移走会话相关文件需要 confirm:true（文件推导是尽力而为的，删除前请先预览）',
-    );
+  const isDelete = action === 'delete';
+  const removeFiles = isDelete && payload.removeFiles === true;
+  const permanent = isDelete && payload.permanent === true;
+  const selectedFiles = isDelete ? parseSelectedFiles(payload.selectedFiles) : undefined;
+  if (isDelete) {
+    if (permanent && payload.confirm !== true) {
+      throw new SessionPortFormatError(
+        'confirm-required',
+        '永久删除会把会话目录与勾选文件直接擦除（不可恢复），需要 confirm:true',
+      );
+    }
+    if (removeFiles && payload.confirm !== true) {
+      throw new SessionPortFormatError(
+        'confirm-required',
+        '同时处理会话相关文件需要 confirm:true（文件推导是尽力而为的，删除前请先预览）',
+      );
+    }
+    if (removeFiles && selectedFiles === undefined) {
+      throw new SessionPortFormatError(
+        'invalid-selection',
+        'removeFiles:true 需要 selectedFiles 显式文件列表（防止静默搬走全部推导文件）',
+      );
+    }
+    if (!removeFiles && selectedFiles !== undefined) {
+      throw new SessionPortFormatError(
+        'invalid-selection',
+        'selectedFiles 只能与 removeFiles:true 一起使用',
+      );
+    }
   }
   const outcome = await runManageBatch(ctx, settings, overrides, action, sessionIds, {
     stopActivity: payload.stopActivity === true,
     removeFiles,
+    selectedFiles,
+    permanent,
   });
   const failed = outcome.results.filter((result) => !result.ok);
   const status = failed.length > 0 && failed.length === outcome.results.length
@@ -671,6 +759,54 @@ async function handleSessionFiles(ctx, settings, overrides, req, res) {
     ? plan.totalBytes
     : filesList.reduce((sum, entry) => sum + (Number.isSafeInteger(entry?.bytes) ? entry.bytes : 0), 0);
   sendJson(res, 200, { ok: true, files: filesList, skipped, warnings, totalBytes });
+}
+
+/**
+ * `POST /session-kit/session-detail` — storage detail (size) for the selected
+ * sessions.
+ *
+ * Body: `{ sessionIds: string[] }` (explicit ids, trimmed/de-duplicated, capped
+ * at {@link MAX_DETAIL_BATCH}). The list endpoint stays cheap; the panel asks
+ * for detail only for rows the user actually selects. Per-id failures stay in
+ * `sessions` (with `ok:false`); a fully failed batch maps its first code.
+ * @param {object} ctx - the plugin context.
+ * @param {object} settings - resolved settings.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {import('node:http').IncomingMessage} req - request.
+ * @param {import('node:http').ServerResponse} res - response.
+ */
+async function handleSessionDetail(ctx, settings, overrides, req, res) {
+  const payload = await readJsonBody(req, MAX_JSON_BODY_BYTES);
+  const sessionIds = parseSessionIdList(payload.sessionIds, { allowAll: false, maxBatch: MAX_DETAIL_BATCH });
+  if (sessionIds === undefined) {
+    throw new SessionPortFormatError('invalid-sessionIds', '请求缺少 sessionIds（会话 id 数组）');
+  }
+  const helpers = await loadSessions(overrides);
+  if (typeof helpers.sessionDetail !== 'function') {
+    throw new SessionPortFormatError('unavailable', '会话详情模块不可用');
+  }
+  const sessions = [];
+  for (const sessionId of sessionIds) {
+    try {
+      const detail = await helpers.sessionDetail(ctx, sessionId);
+      sessions.push({
+        id: sessionId,
+        ok: true,
+        ...(Number.isSafeInteger(detail?.sizeBytes) ? { sizeBytes: detail.sizeBytes } : {}),
+        ...(typeof detail?.formatStatus === 'string' ? { formatStatus: detail.formatStatus } : {}),
+        legacy: detail?.legacy === true,
+        archived: detail?.archived === true,
+      });
+    } catch (error) {
+      const code = typeof error?.code === 'string' && error.code !== '' ? error.code : 'detail-failed';
+      sessions.push({ id: sessionId, ok: false, error: errorText(error), code });
+    }
+  }
+  const failed = sessions.filter((entry) => entry.ok !== true);
+  const status = failed.length > 0 && failed.length === sessions.length
+    ? statusForManageCode(failed[0].code)
+    : 200;
+  sendJson(res, status, { ok: failed.length === 0, sessions });
 }
 
 /**
@@ -949,7 +1085,8 @@ function statusOf(error) {
   if (code === 'too-large') return 413;
   if (code === 'active') return 409;
   if (code === 'unsafe-location' || code === 'delete-failed' || code === 'migration-failed'
-    || code === 'files-failed' || code === 'internal') return 500;
+    || code === 'files-failed' || code === 'file-plan-failed' || code === 'detail-failed'
+    || code === 'internal') return 500;
   return 400;
 }
 
@@ -978,10 +1115,10 @@ function registerTool(ctx, settings, overrides) {
           'action=export writes selected sessions (or all) as ONE ZIP under a plugin-owned folder and returns its path; mode=compact keeps only the conversational spine, mode=full keeps the complete session logs.',
           'Export can optionally pack whole workspace trees (includeWorkspaceFiles) while excluding VCS/build caches and secret files, and can include subagent transcripts (includeSubagents, default false).',
           'action=import creates NEW sessions from an archive produced by this plugin or by DSH\'s built-in session-log export; it never modifies or deletes an existing session, never imports subagent transcripts, and can restore the archive\'s workspace files into the target directory (restoreWorkspaceFiles).',
-          'action=archive / action=unarchive toggle a session\'s archived state; action=delete moves sessions into <DSH_HOME>/session-kit-trash (never a permanent erase) and requires confirm:true plus explicit session ids.',
+          'action=archive / action=unarchive toggle a session\'s archived state; action=delete moves sessions into <DSH_HOME>/session-kit-trash and requires confirm:true plus explicit session ids. The related-files handling is experimental: pass removeFiles:true together with an explicit selectedFiles list to move only those files; permanent:true erases the session directories and selected files irreversibly (also requires confirm:true).',
           'action=migrate upgrades legacy session logs through DSH\'s official migration chain; sessionIds are explicit ids, or "all" (which requires confirm:true). The old generation is kept and a failed session stays unchanged.',
           'action=files previews the workspace files a deletion would move for the selected sessions; the derivation is best effort (shell redirections, PTC scripts and files only mentioned in text cannot be discovered) and shared workspace files may be affected.',
-          'action=delete with removeFiles:true also moves those derived files into <DSH_HOME>/session-kit-trash (never erased); preview with action=files first and keep confirm:true.',
+          'action=delete with removeFiles:true requires selectedFiles (absolute paths from the files preview) and moves only those derived files; preview with action=files first and keep confirm:true. Without permanent:true nothing is erased.',
         ].join(' '),
         parameters: {
           type: 'object',
@@ -1022,7 +1159,7 @@ function registerTool(ctx, settings, overrides) {
             },
             confirm: {
               type: 'boolean',
-              description: 'delete: must be true (moves sessions into the trash directory instead of erasing them). migrate with sessionIds="all": must be true.',
+              description: 'delete: must be true (and a second confirmation is required for permanent:true). migrate with sessionIds="all": must be true.',
             },
             stopActivity: {
               type: 'boolean',
@@ -1030,7 +1167,16 @@ function registerTool(ctx, settings, overrides) {
             },
             removeFiles: {
               type: 'boolean',
-              description: 'delete only: also move the derived session-related workspace files into the trash directory (best effort; preview with action=files first).',
+              description: 'delete only: also handle the derived session-related workspace files (experimental; requires selectedFiles; preview with action=files first).',
+            },
+            selectedFiles: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'delete only: absolute paths from the files preview to move (or permanently delete) together with the sessions; required when removeFiles is true.',
+            },
+            permanent: {
+              type: 'boolean',
+              description: 'delete only: erase the session directories and selected files irreversibly instead of moving them to the trash directory; requires confirm:true.',
             },
             path: {
               type: 'string',
@@ -1127,8 +1273,22 @@ function registerTool(ctx, settings, overrides) {
  * @returns {Promise<string>} summary text.
  */
 async function runManageTool(ctx, settings, overrides, helpers, action, args) {
-  if (action === 'delete' && args.confirm !== true) {
-    throw new Error('session_kit: delete 需要 confirm:true（删除只会把会话移入回收站，不会永久删除）');
+  const isDelete = action === 'delete';
+  const removeFiles = isDelete && args.removeFiles === true;
+  const permanent = isDelete && args.permanent === true;
+  const selectedFiles = isDelete ? parseSelectedFiles(args.selectedFiles) : undefined;
+  if (isDelete) {
+    if (args.confirm !== true) {
+      throw new Error(permanent
+        ? 'session_kit: delete permanent:true 需要 confirm:true（永久删除不可恢复）'
+        : 'session_kit: delete 需要 confirm:true（删除只会把会话移入回收站，不会永久删除）');
+    }
+    if (removeFiles && selectedFiles === undefined) {
+      throw new Error('session_kit: delete removeFiles 需要 selectedFiles 显式文件列表（防止静默搬走全部推导文件）');
+    }
+    if (!removeFiles && selectedFiles !== undefined) {
+      throw new Error('session_kit: selectedFiles 只能与 removeFiles:true 一起使用');
+    }
   }
   const allowAll = action === 'archive';
   let sessionIds = parseSessionIdList(args.sessionIds, { allowAll });
@@ -1144,7 +1304,9 @@ async function runManageTool(ctx, settings, overrides, helpers, action, args) {
   }
   const outcome = await runManageBatch(ctx, settings, overrides, action, sessionIds, {
     stopActivity: args.stopActivity === true,
-    removeFiles: action === 'delete' && args.removeFiles === true,
+    removeFiles,
+    selectedFiles,
+    permanent,
   });
   return manageToolText(action, outcome);
 }
@@ -1331,8 +1493,11 @@ function manageToolText(action, outcome) {
   const failed = outcome.results.filter((result) => !result.ok);
   const lines = [`${label}：成功 ${outcome.results.length - failed.length} 个${failed.length > 0 ? `，失败 ${failed.length} 个` : ''}`];
   for (const result of failed) lines.push(`- ${result.sessionId}：${result.error ?? '失败'}`);
+  if (outcome.permanent === true) lines.push('已永久删除所选会话与文件（不可恢复）');
   if (outcome.trashedPath !== undefined) lines.push(`已移入回收站：${outcome.trashedPath}`);
-  if (Number.isSafeInteger(outcome.filesMoved)) {
+  if (Number.isSafeInteger(outcome.filesRemoved)) {
+    lines.push(`永久删除文件 ${outcome.filesRemoved} 个（${outcome.filesBytes ?? 0} 字节），跳过 ${outcome.filesSkipped ?? 0} 个`);
+  } else if (Number.isSafeInteger(outcome.filesMoved)) {
     lines.push(`同时移走文件 ${outcome.filesMoved} 个（${outcome.filesBytes ?? 0} 字节），跳过 ${outcome.filesSkipped ?? 0} 个`);
     if (outcome.filesTrashPath !== undefined) lines.push(`文件回收站：${outcome.filesTrashPath}`);
   }

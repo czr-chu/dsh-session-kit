@@ -664,7 +664,12 @@ test('deleteSession removeFiles moves planned files first and writes a manifest'
     totalBytes: 2,
   };
   const expectedBytes = statSync(report).size + statSync(data).size;
-  const result = await deleteSession(ctx, 'session-a', { trashDir: fixture.trashDir, removeFiles: true, filePlan: plan });
+  const result = await deleteSession(ctx, 'session-a', {
+    trashDir: fixture.trashDir,
+    removeFiles: true,
+    selectedFiles: [report, data],
+    filePlan: plan,
+  });
   assert.equal(result.filesMoved, 2);
   assert.equal(result.filesSkipped, 1);
   assert.equal(result.filesBytes, expectedBytes);
@@ -704,7 +709,7 @@ test('deleteSession without removeFiles reports empty file stats and writes no m
   assert.equal(existsSync(join(result.trashedPath, 'files')), false);
 });
 
-test('deleteSession derives the file plan when removeFiles has no filePlan', async (t) => {
+test('deleteSession requires an explicit selection and derives the plan internally', async (t) => {
   const fixture = deleteFixture(t);
   const workspaceRoot = tempDir(t, 'derived');
   const derived = writeWorkspaceFile(workspaceRoot, 'derived.txt', 'derived');
@@ -733,7 +738,15 @@ test('deleteSession derives the file plan when removeFiles has no filePlan', asy
     workspaceRegistry: registry,
     sessions: { get: () => undefined },
   });
-  const result = await deleteSession(ctx, 'session-a', { trashDir: fixture.trashDir, removeFiles: true });
+  await assert.rejects(
+    deleteSession(ctx, 'session-a', { trashDir: fixture.trashDir, removeFiles: true }),
+    (error) => error.code === 'invalid-selection',
+  );
+  const result = await deleteSession(ctx, 'session-a', {
+    trashDir: fixture.trashDir,
+    removeFiles: true,
+    selectedFiles: [derived],
+  });
   assert.equal(result.filesMoved, 1);
   assert.ok(result.fileWarnings.some((warning) => warning.includes('尽力推导')));
   assert.equal(existsSync(join(result.filesTrashPath, encodeSegment(workspaceRoot), 'derived.txt')), true);
@@ -768,7 +781,12 @@ test('deleteSession rolls moved files back when a later file move fails', async 
   chmodSync(locked, 0o555);
   try {
     await assert.rejects(
-      deleteSession(ctx, 'session-a', { trashDir: fixture.trashDir, removeFiles: true, filePlan: plan }),
+      deleteSession(ctx, 'session-a', {
+        trashDir: fixture.trashDir,
+        removeFiles: true,
+        selectedFiles: [first, second],
+        filePlan: plan,
+      }),
       (error) => {
         assert.equal(error.code, 'delete-failed');
         assert.match(error.message, /移动会话相关文件到回收站失败/u);
@@ -818,7 +836,12 @@ test('deleteSession rolls files back when a later session move fails', async (t)
   chmodSync(projectB, 0o555);
   try {
     await assert.rejects(
-      deleteSession(ctx, 'session-a', { trashDir, removeFiles: true, filePlan: plan }),
+      deleteSession(ctx, 'session-a', {
+        trashDir,
+        removeFiles: true,
+        selectedFiles: [file],
+        filePlan: plan,
+      }),
       (error) => {
         assert.equal(error.code, 'delete-failed');
         assert.match(error.message, /移动会话目录到回收站失败/u);
@@ -869,7 +892,12 @@ test('deleteSession skips stale or unsafe plan entries but still deletes the ses
     warnings: [],
     totalBytes: 0,
   };
-  const result = await deleteSession(ctx, 'session-a', { trashDir: fixture.trashDir, removeFiles: true, filePlan: plan });
+  const result = await deleteSession(ctx, 'session-a', {
+    trashDir: fixture.trashDir,
+    removeFiles: true,
+    selectedFiles: [real, link, missing, other],
+    filePlan: plan,
+  });
   assert.equal(result.filesMoved, 1);
   assert.equal(result.filesSkipped, 4);
   assert.ok(result.fileWarnings.some((warning) => warning.includes('同一回收站路径')));
@@ -884,14 +912,233 @@ test('deleteSession rejects an invalid filePlan before moving anything', async (
   const persistence = { async list() { return fixture.snapshots; } };
   const { ctx } = fakeContext({ sessionPersistence: persistence, sessions: { get: () => undefined } });
   await assert.rejects(
-    deleteSession(ctx, 'session-a', { trashDir: fixture.trashDir, removeFiles: true, filePlan: { files: null } }),
+    deleteSession(ctx, 'session-a', { trashDir: fixture.trashDir, removeFiles: true, selectedFiles: [], filePlan: { files: null } }),
     (error) => error.code === 'invalid-argument',
   );
   await assert.rejects(
-    deleteSession(ctx, 'session-a', { trashDir: fixture.trashDir, removeFiles: true, filePlan: 'nonsense' }),
+    deleteSession(ctx, 'session-a', { trashDir: fixture.trashDir, removeFiles: true, selectedFiles: [], filePlan: 'nonsense' }),
     (error) => error.code === 'invalid-argument',
   );
   assert.equal(existsSync(fixture.root.sessionDir), true);
   assert.equal(existsSync(fixture.child.sessionDir), true);
 });
+
+test('deleteSession honours selectedFiles as an explicit subset', async (t) => {
+  const fixture = deleteFixture(t);
+  const workspaceRoot = tempDir(t, 'subset');
+  const chosen = writeWorkspaceFile(workspaceRoot, 'chosen.txt', 'chosen');
+  const untouched = writeWorkspaceFile(workspaceRoot, 'untouched.txt', 'untouched');
+  const workspaces = [{ id: 'workspace-1', path: workspaceRoot, sessionIds: ['session-a'] }];
+  const registry = registryMock({ workspaces });
+  const persistence = { async list() { return fixture.snapshots; } };
+  const { ctx } = fakeContext({
+    sessionPersistence: persistence,
+    workspaceRegistry: registry,
+    sessions: { get: () => undefined },
+  });
+  const unknown = join(workspaceRoot, 'unknown.txt');
+  const plan = {
+    files: [planEntry(workspaceRoot, 'chosen.txt'), planEntry(workspaceRoot, 'untouched.txt')],
+    skipped: [],
+    warnings: [],
+    totalBytes: 2,
+  };
+  const result = await deleteSession(ctx, 'session-a', {
+    trashDir: fixture.trashDir,
+    removeFiles: true,
+    selectedFiles: [chosen, 'relative.txt', unknown],
+    filePlan: plan,
+  });
+  assert.equal(result.filesMoved, 1);
+  assert.equal(result.filesSkipped, 2);
+  assert.equal(existsSync(join(result.filesTrashPath, encodeSegment(workspaceRoot), 'chosen.txt')), true);
+  assert.equal(existsSync(chosen), false);
+  assert.equal(existsSync(untouched), true, 'the unselected file stays in place');
+  assert.ok(result.fileWarnings.some((warning) => warning.includes('必须是绝对路径')));
+  assert.ok(result.fileWarnings.some((warning) => warning.includes('不在本次推导计划中')));
+});
+
+test('deleteSession permanent removes sessions and only the selected files', async (t) => {
+  const fixture = deleteFixture(t);
+  const workspaceRoot = tempDir(t, 'permanent');
+  const chosen = writeWorkspaceFile(workspaceRoot, 'chosen.txt', 'chosen');
+  const untouched = writeWorkspaceFile(workspaceRoot, 'untouched.txt', 'untouched');
+  const workspaces = [{ id: 'workspace-1', path: workspaceRoot, sessionIds: ['session-a'] }];
+  const registry = registryMock({ workspaces, archived: ['session-a'], pinned: ['session-a'] });
+  const persistence = { async list() { return fixture.snapshots; } };
+  const { ctx } = fakeContext({
+    sessionPersistence: persistence,
+    workspaceRegistry: registry,
+    sessions: { get: () => undefined },
+  });
+  const plan = {
+    files: [planEntry(workspaceRoot, 'chosen.txt'), planEntry(workspaceRoot, 'untouched.txt')],
+    skipped: [],
+    warnings: [],
+    totalBytes: 2,
+  };
+  const size = statSync(chosen).size;
+  const result = await deleteSession(ctx, 'session-a', {
+    removeFiles: true,
+    selectedFiles: [chosen],
+    filePlan: plan,
+    permanent: true,
+  });
+  assert.deepEqual(result.sessionIds, ['session-a', 'session-b', 'session-c']);
+  assert.equal(result.permanent, true);
+  assert.equal(result.filesRemoved, 1);
+  assert.equal(result.filesSkipped, 0);
+  assert.equal(result.filesBytes, size);
+  assert.deepEqual(result.fileWarnings, []);
+  assert.equal(result.trashedPath, undefined);
+  assert.equal(existsSync(chosen), false);
+  assert.equal(existsSync(untouched), true, 'unselected files are preserved');
+  assert.equal(existsSync(fixture.root.sessionDir), false);
+  assert.equal(existsSync(fixture.child.sessionDir), false);
+  assert.equal(existsSync(fixture.grandchild.sessionDir), false);
+  assert.equal(existsSync(fixture.forkChild.sessionDir), true, 'a user fork is never erased');
+  assert.equal(existsSync(fixture.trashDir), false, 'permanent delete never creates the trash');
+  assert.deepEqual(registry.archivedSessionIds, []);
+  assert.deepEqual(registry.pinnedSessionIds, []);
+});
+
+test('deleteSession permanent without removeFiles keeps related files', async (t) => {
+  const fixture = deleteFixture(t);
+  const workspaceRoot = tempDir(t, 'permanent-nofiles');
+  const file = writeWorkspaceFile(workspaceRoot, 'keep.txt', 'keep');
+  const persistence = { async list() { return fixture.snapshots; } };
+  const { ctx } = fakeContext({ sessionPersistence: persistence, sessions: { get: () => undefined } });
+  const result = await deleteSession(ctx, 'session-a', { permanent: true });
+  assert.equal(result.permanent, true);
+  assert.equal(result.filesRemoved, 0);
+  assert.equal(result.filesBytes, 0);
+  assert.equal(existsSync(file), true);
+  assert.equal(existsSync(fixture.root.sessionDir), false);
+  assert.equal(existsSync(fixture.child.sessionDir), false);
+});
+
+test('deleteSession permanent reports partial file deletion without rollback', async (t) => {
+  if (typeof process.getuid === 'function' && process.getuid() === 0) {
+    t.skip('running as root: directory permissions cannot force an unlink failure');
+    return;
+  }
+  const fixture = deleteFixture(t);
+  const workspaceRoot = tempDir(t, 'permanent-partial');
+  const first = writeWorkspaceFile(workspaceRoot, 'ok/first.txt', 'first');
+  const second = writeWorkspaceFile(workspaceRoot, 'locked/second.txt', 'second');
+  const workspaces = [{ id: 'workspace-1', path: workspaceRoot, sessionIds: ['session-a'] }];
+  const registry = registryMock({ workspaces });
+  const persistence = { async list() { return fixture.snapshots; } };
+  const { ctx } = fakeContext({
+    sessionPersistence: persistence,
+    workspaceRegistry: registry,
+    sessions: { get: () => undefined },
+  });
+  const plan = {
+    files: [planEntry(workspaceRoot, 'ok/first.txt'), planEntry(workspaceRoot, 'locked/second.txt')],
+    skipped: [],
+    warnings: [],
+    totalBytes: 2,
+  };
+  const locked = join(workspaceRoot, 'locked');
+  chmodSync(locked, 0o555);
+  try {
+    await assert.rejects(
+      deleteSession(ctx, 'session-a', {
+        removeFiles: true,
+        selectedFiles: [first, second],
+        filePlan: plan,
+        permanent: true,
+      }),
+      (error) => {
+        assert.equal(error.code, 'delete-failed');
+        assert.match(error.message, /永久删除文件失败/u);
+        assert.match(error.message, /已删除 1 个文件（不可恢复）/u);
+        assert.match(error.message, /会话目录未删除/u);
+        return true;
+      },
+    );
+  } finally {
+    chmodSync(locked, 0o755);
+  }
+  assert.equal(existsSync(first), false, 'permanent deletion never rolls back');
+  assert.equal(existsSync(second), true);
+  assert.equal(existsSync(fixture.root.sessionDir), true, 'the session directories were never touched');
+});
+
+test('deleteSession permanent reports partial session deletion', async (t) => {
+  if (typeof process.getuid === 'function' && process.getuid() === 0) {
+    t.skip('running as root: directory permissions cannot force an rm failure');
+    return;
+  }
+  const home = tempDir(t, 'permanent-session');
+  const sessionsRoot = join(home, 'sessions');
+  const root = writeSessionDir(sessionsRoot, '--work-demo--', 'session-a');
+  const child = writeSessionDir(sessionsRoot, '--blocked--', 'session-b');
+  const nested = join(child.sessionDir, 'nested');
+  mkdirSync(nested, { recursive: true });
+  writeFileSync(join(nested, 'file.txt'), 'x');
+  const snapshots = [
+    snapshotOf('session-a', root.logPath),
+    snapshotOf('session-b', child.logPath, { parentSession: 'session-a', origin: 'subagent' }),
+  ];
+  const persistence = { async list() { return snapshots; } };
+  const { ctx } = fakeContext({ sessionPersistence: persistence, sessions: { get: () => undefined } });
+  chmodSync(nested, 0o555);
+  try {
+    await assert.rejects(
+      deleteSession(ctx, 'session-a', { permanent: true }),
+      (error) => {
+        assert.equal(error.code, 'delete-failed');
+        assert.match(error.message, /永久删除会话目录失败/u);
+        assert.match(error.message, /已删除会话：session-a/u);
+        assert.match(error.message, /未删除会话：session-b/u);
+        return true;
+      },
+    );
+  } finally {
+    chmodSync(nested, 0o755);
+  }
+  assert.equal(existsSync(root.sessionDir), false, 'the sessions erased before the failure stay erased');
+  assert.equal(existsSync(child.sessionDir), true);
+});
+
+test('deleteSession permanent validates every path before erasing anything', async (t) => {
+  const home = tempDir(t, 'permanent-unsafe');
+  const sessionsRoot = join(home, 'sessions');
+  const wrongDir = join(sessionsRoot, '--work-demo--', 'not-the-id');
+  mkdirSync(wrongDir, { recursive: true });
+  writeFileSync(join(wrongDir, 'session.v4.jsonl'), '{}\n');
+  const wrongLog = join(wrongDir, 'session.v4.jsonl');
+  const persistence = { async list() { return [snapshotOf('session-a', wrongLog)]; } };
+  const { ctx } = fakeContext({ sessionPersistence: persistence, sessions: { get: () => undefined } });
+  await assert.rejects(
+    deleteSession(ctx, 'session-a', { permanent: true }),
+    (error) => error.code === 'unsafe-location' && /目录名/u.test(error.message),
+  );
+  assert.equal(existsSync(wrongDir), true);
+  assert.equal(existsSync(wrongLog), true);
+});
+
+test('deleteSession validates the selection mode itself', async (t) => {
+  const fixture = deleteFixture(t);
+  const persistence = { async list() { return fixture.snapshots; } };
+  const { ctx } = fakeContext({ sessionPersistence: persistence, sessions: { get: () => undefined } });
+  await assert.rejects(
+    deleteSession(ctx, 'session-a', { trashDir: fixture.trashDir, removeFiles: true, selectedFiles: { bad: true } }),
+    (error) => error.code === 'invalid-selection',
+  );
+  await assert.rejects(
+    deleteSession(ctx, 'session-a', { removeFiles: true, permanent: true }),
+    (error) => error.code === 'invalid-selection',
+  );
+  // selectedFiles is meaningful only with removeFiles; without it the delete is unchanged.
+  const result = await deleteSession(ctx, 'session-a', {
+    trashDir: fixture.trashDir,
+    selectedFiles: ['/some/path.txt'],
+  });
+  assert.equal(result.filesMoved, 0);
+  assert.equal(existsSync(fixture.root.sessionDir), false);
+});
+
 

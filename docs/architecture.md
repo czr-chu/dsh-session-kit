@@ -83,6 +83,17 @@ refusal from the official migration leaves the source unchanged and is reported
 per session. `/session-kit/list` exposes `formatStatus` / `legacy` so the panel
 can badge and batch-migrate old rows.
 
+## Session detail and permanent delete
+
+Clicking a row loads `POST /session-kit/session-detail`: the storage size sums
+regular files in the backend-resolved session directory (all retained
+generations, locks excluded), without opening the log. The delete dialog groups
+derived files by session, preselects strong evidence only, and sends an explicit
+`selectedFiles` list. A separate permanent-erase mode deletes the validated
+session directories and selected files after a distinct red confirmation; it has
+no rollback, never uses the trash, and reports which items were removed if a
+failure occurs.
+
 ## Related-file deletion
 
 `lib/session-files.js` derives a best-effort set of workspace files from the

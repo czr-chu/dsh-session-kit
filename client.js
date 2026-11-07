@@ -7,10 +7,14 @@
  * with checkboxes (plus per-group and global select all/none), and exposes both
  * per-row and batch archive / restore / trash-delete actions. Legacy-format
  * sessions additionally carry a version badge and a per-row or batch upgrade
- * action that runs DSH's official migration chain. Deleting a session can
- * optionally move its best-effort related workspace files into the trash after a
- * preview and a separate second confirmation. It also exports the selection as
- * one ZIP through `POST /session-kit/export` and imports an archive through
+ * action that runs DSH's official migration chain. Clicking/selecting a row
+ * loads its storage detail (size across retained generations, format status,
+ * archived state). Deleting a session optionally moves its best-effort related
+ * files, shown per session as an experimental, individually selectable list
+ * (strong evidence preselected) and guarded by a separate second confirmation;
+ * permanent delete adds a distinct red second confirmation because data cannot
+ * be recovered. It also exports the selection as one ZIP through
+ * `POST /session-kit/export` and imports an archive through
  * `POST /session-kit/import`.
  *
  * Hand-written ModuleLoader factory: no bundler, no JSX, no TypeScript, and the
@@ -100,12 +104,10 @@ window.__ModuleLoader__.load({
       'panel.migrateItemPlain': '{title}（旧格式）',
       'panel.confirmMigrate': '确认升级',
       'panel.confirmMore': '…另有 {count} 个会话',
-      'panel.removeFiles': '同时移走该会话涉及的文件（移到回收站）',
+      'panel.removeFiles': '同时移走该会话涉及的文件（移到回收站，实验性）',
       'panel.removeFilesHint': '仅从会话事件 best-effort 推导，可能有遗漏。',
       'panel.filesPreviewLoading': '正在推导涉及的文件…',
       'panel.filesPreviewFailed': '文件预览失败：{reason}',
-      'panel.filesPreviewSummary': '发现 {count} 个文件，共 {size}',
-      'panel.filesPreviewMore': '…另有 {count} 个文件',
       'panel.filesPreviewEmpty': '没有发现可移走的文件。',
       'panel.filesPreviewSkipped': '另有 {count} 个文件无法移走。',
       'panel.filesSkipLine': '跳过 {path}：{reason}',
@@ -122,6 +124,38 @@ window.__ModuleLoader__.load({
       'panel.filesMoved': '已移走 {count} 个文件（{size}）',
       'panel.filesSkipped': '跳过 {count} 个文件',
       'panel.filesTrashPath': '文件回收站：{path}',
+      'panel.experimental': '实验性',
+      'panel.fileSelectionExperimental': '文件推导为实验性功能：列表仅从事件近似推导，可能遗漏或误判，请逐项核对。',
+      'panel.filesSelectedSummary': '已选 {count} 个文件（{size}）',
+      'panel.filesSelectAll': '全选',
+      'panel.filesClear': '清空',
+      'panel.fileWeakHint': '弱证据：可能只是工具参数，未必真的写入',
+      'panel.fileEvidence': '证据：{evidence}',
+      'panel.fileGroupTitle': '{title}（{count} 个文件）',
+      'panel.unknownSessionGroup': '未知会话',
+      'panel.noFileSelected': '请至少勾选一个文件，或取消勾选“移走文件”。',
+      'panel.permanentDelete': '永久删除（不可恢复，不进入回收站）',
+      'panel.permanentRisk': '永久删除会直接擦除会话目录与选中文件，无法恢复，也不会进入 session-kit-trash。',
+      'panel.confirmPermanentTitle': '永久删除会话',
+      'panel.confirmPermanentBody': '将永久删除 {count} 个会话，无法恢复，也不会进入回收站。',
+      'panel.confirmPermanentWithFilesBody': '将永久删除 {count} 个会话，并永久删除选中的 {files} 个文件（{size}）；无法恢复，也不会进入回收站。',
+      'panel.confirmPermanent': '永久删除',
+      'panel.permanentDeleting': '正在永久删除…',
+      'panel.permanentDone': '已永久删除 {count} 个会话（不可恢复）',
+      'panel.permanentNotice': '永久删除已完成，数据无法恢复。',
+      'panel.filesRemoved': '已永久删除 {count} 个文件（{size}）',
+      'panel.confirmMoreItems': '…另有 {count} 项',
+      'panel.detailLoading': '正在读取会话详情…',
+      'panel.detailFailed': '会话详情读取失败：{reason}',
+      'panel.detailSize': '存储大小（含所有代际）：{size}',
+      'panel.detailFormat': '格式状态：{status}',
+      'panel.detailArchived': '归档状态：{status}',
+      'panel.detailFormatCurrent': '当前格式',
+      'panel.detailFormatLegacy': '旧格式',
+      'panel.detailArchivedYes': '已归档',
+      'panel.detailArchivedNo': '未归档',
+      'panel.showDetail': '查看会话详情 {title}',
+      'panel.hideDetail': '收起会话详情 {title}',
       'panel.statusFilter': '状态筛选',
       'panel.statusAll': '全部',
       'panel.statusActive': '未归档',
@@ -236,12 +270,10 @@ window.__ModuleLoader__.load({
       'panel.migrateItemPlain': '{title} (legacy format)',
       'panel.confirmMigrate': 'Upgrade',
       'panel.confirmMore': '…and {count} more sessions',
-      'panel.removeFiles': 'Also move this session\'s related files (to trash)',
+      'panel.removeFiles': 'Also move related files (to trash, experimental)',
       'panel.removeFilesHint': 'Derived best-effort from session events; some files may be missed.',
       'panel.filesPreviewLoading': 'Deriving related files…',
       'panel.filesPreviewFailed': 'File preview failed: {reason}',
-      'panel.filesPreviewSummary': 'Found {count} files, {size} total',
-      'panel.filesPreviewMore': '…and {count} more files',
       'panel.filesPreviewEmpty': 'No movable files were found.',
       'panel.filesPreviewSkipped': '{count} more files cannot be moved.',
       'panel.filesSkipLine': 'Skipped {path}: {reason}',
@@ -258,6 +290,38 @@ window.__ModuleLoader__.load({
       'panel.filesMoved': 'Moved {count} files ({size})',
       'panel.filesSkipped': 'Skipped {count} files',
       'panel.filesTrashPath': 'Files trash: {path}',
+      'panel.experimental': 'Experimental',
+      'panel.fileSelectionExperimental': 'File derivation is experimental: the list is approximated from events and may miss or misjudge files. Review each entry.',
+      'panel.filesSelectedSummary': '{count} files selected ({size})',
+      'panel.filesSelectAll': 'Select all',
+      'panel.filesClear': 'Clear',
+      'panel.fileWeakHint': 'Weak evidence: a tool argument, not proof the file was written',
+      'panel.fileEvidence': 'Evidence: {evidence}',
+      'panel.fileGroupTitle': '{title} ({count} files)',
+      'panel.unknownSessionGroup': 'Unknown session',
+      'panel.noFileSelected': 'Select at least one file, or uncheck "move files".',
+      'panel.permanentDelete': 'Permanent delete (unrecoverable, skips trash)',
+      'panel.permanentRisk': 'Permanent delete erases the session directories and selected files irreversibly and never enters session-kit-trash.',
+      'panel.confirmPermanentTitle': 'Permanently delete sessions',
+      'panel.confirmPermanentBody': 'Permanently delete {count} session(s). This cannot be recovered and never enters the trash.',
+      'panel.confirmPermanentWithFilesBody': 'Permanently delete {count} session(s) and the selected {files} file(s) ({size}). This cannot be recovered and never enters the trash.',
+      'panel.confirmPermanent': 'Delete permanently',
+      'panel.permanentDeleting': 'Deleting permanently…',
+      'panel.permanentDone': 'Permanently deleted {count} session(s) (unrecoverable)',
+      'panel.permanentNotice': 'Permanent deletion finished; the data cannot be recovered.',
+      'panel.filesRemoved': 'Permanently deleted {count} files ({size})',
+      'panel.confirmMoreItems': '…and {count} more items',
+      'panel.detailLoading': 'Loading session detail…',
+      'panel.detailFailed': 'Could not load session detail: {reason}',
+      'panel.detailSize': 'Storage size (all generations): {size}',
+      'panel.detailFormat': 'Format status: {status}',
+      'panel.detailArchived': 'Archived: {status}',
+      'panel.detailFormatCurrent': 'current',
+      'panel.detailFormatLegacy': 'legacy',
+      'panel.detailArchivedYes': 'archived',
+      'panel.detailArchivedNo': 'not archived',
+      'panel.showDetail': 'Show session detail for {title}',
+      'panel.hideDetail': 'Hide session detail for {title}',
       'panel.statusFilter': 'Status',
       'panel.statusAll': 'All',
       'panel.statusActive': 'Active',
@@ -556,13 +620,36 @@ window.__ModuleLoader__.load({
       });
       const files = {
         moved: pickNumber(data.filesMoved ?? root.filesMoved),
+        removed: pickNumber(data.filesRemoved ?? root.filesRemoved),
         skipped: pickNumber(data.filesSkipped ?? root.filesSkipped),
         bytes: pickNumber(data.filesBytes ?? root.filesBytes),
         trashPath: pickString(data.filesTrashPath ?? root.filesTrashPath),
         warnings: Array.isArray(data.fileWarnings)
           ? data.fileWarnings.filter((line) => typeof line === 'string')
           : [],
+        permanent: data.permanent === true
+          || root.permanent === true
+          || rawResults.some((raw) => raw !== null && typeof raw === 'object' && raw.permanent === true),
       };
+      if (files.moved === 0 && files.removed === 0 && files.skipped === 0 && files.bytes === 0) {
+        for (const raw of rawResults) {
+          const record = raw !== null && typeof raw === 'object' ? raw : {};
+          const perFile = record.files;
+          if (perFile === null || typeof perFile !== 'object') continue;
+          files.moved += pickNumber(perFile.moved);
+          files.removed += pickNumber(perFile.removed);
+          files.skipped += pickNumber(perFile.skipped);
+          files.bytes += pickNumber(perFile.bytes);
+          if (files.trashPath === '' && typeof perFile.trashPath === 'string' && perFile.trashPath !== '') {
+            files.trashPath = perFile.trashPath;
+          }
+          if (Array.isArray(perFile.warnings)) {
+            for (const warning of perFile.warnings) {
+              if (typeof warning === 'string' && !files.warnings.includes(warning)) files.warnings.push(warning);
+            }
+          }
+        }
+      }
       if (results.length === 0) {
         return { results: requestedIds.map((id) => ({ sessionId: id, ok: true, error: '' })), files };
       }
@@ -596,6 +683,25 @@ window.__ModuleLoader__.load({
       const totalFromServer = pickNumber(data.totalBytes);
       const totalBytes = totalFromServer > 0 ? totalFromServer : files.reduce((sum, file) => sum + file.bytes, 0);
       return { files, skipped, warnings, totalBytes };
+    }
+
+    /** Normalize the `POST /session-kit/session-detail` payload. */
+    function normalizeSessionDetails(payload) {
+      const root = payload !== null && typeof payload === 'object' ? payload : {};
+      const data = root.data !== null && typeof root.data === 'object' && !Array.isArray(root.data) ? root.data : root;
+      const rawSessions = Array.isArray(data.sessions) ? data.sessions : Array.isArray(root.sessions) ? root.sessions : [];
+      return rawSessions.map((raw) => {
+        const record = raw !== null && typeof raw === 'object' ? raw : {};
+        return {
+          sessionId: pickString(record.id ?? record.sessionId),
+          ok: record.ok !== false,
+          error: pickString(record.error ?? record.message),
+          sizeBytes: pickNumber(record.sizeBytes ?? record.size),
+          formatStatus: pickString(record.formatStatus),
+          legacy: record.legacy === true,
+          archived: record.archived === true,
+        };
+      }).filter((session) => session.sessionId !== '');
     }
 
     /** Normalize the `POST /session-kit/migrate` payload. */
@@ -853,6 +959,7 @@ window.__ModuleLoader__.load({
         minWidth: 0,
       },
       groupCount: { font: `12px/18px ${T.font}`, color: T.labelSecondary, flex: 'none' },
+      rowWrapper: { display: 'flex', flexDirection: 'column', gap: 4 },
       row: {
         display: 'flex',
         alignItems: 'flex-start',
@@ -863,8 +970,28 @@ window.__ModuleLoader__.load({
         borderRadius: T.radius,
         background: T.bgLayer1,
       },
-      rowMain: { display: 'flex', alignItems: 'flex-start', gap: 10, flex: '1 1 auto', minWidth: 0, cursor: 'pointer' },
+      rowMain: { display: 'flex', alignItems: 'flex-start', gap: 10, flex: '1 1 auto', minWidth: 0 },
+      rowDetailToggle: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 10,
+        flex: '1 1 auto',
+        minWidth: 0,
+        padding: 0,
+        border: 'none',
+        background: 'transparent',
+        color: 'inherit',
+        font: 'inherit',
+        textAlign: 'left',
+        cursor: 'pointer',
+      },
       rowActions: { display: 'flex', alignItems: 'center', gap: 6, flex: 'none' },
+      rowDetail: {
+        padding: '8px 12px',
+        border: `1px solid ${T.border}`,
+        borderRadius: T.radius,
+        background: T.bgLayer2,
+      },
       rowText: { display: 'flex', flexDirection: 'column', gap: 2, flex: '1 1 auto', minWidth: 0 },
       rowTitle: { font: `13px/20px ${T.font}`, color: T.labelPrimary, wordBreak: 'break-word' },
       rowMeta: {
@@ -932,7 +1059,9 @@ window.__ModuleLoader__.load({
         color: T.labelPrimary,
         font: `13px/20px ${T.font}`,
       },
+      dialogDanger: { border: `1px solid ${T.error}` },
       dialogTitle: { margin: 0, font: `600 16px/24px ${T.font}` },
+      dialogTitleDanger: { margin: 0, font: `600 16px/24px ${T.font}`, color: T.error },
       dialogBody: { margin: 0, font: `13px/20px ${T.font}`, color: T.labelSecondary },
       dialogList: {
         display: 'flex',
@@ -1009,7 +1138,7 @@ window.__ModuleLoader__.load({
     /** One modal confirmation surface shared by destructive and migration actions. */
     function confirmDialogNode(options) {
       const {
-        tr, title, body, items, note, control, details, moreKey,
+        tr, title, body, items, note, control, details, moreKey, danger,
         confirmRole, confirmLabel, busyLabel, busy, busyAction, confirmDisabled, onCancel, onConfirm,
       } = options;
       return h(
@@ -1018,7 +1147,7 @@ window.__ModuleLoader__.load({
         h(
           'div',
           {
-            style: STYLES.dialog,
+            style: danger === true ? { ...STYLES.dialog, ...STYLES.dialogDanger } : STYLES.dialog,
             role: 'dialog',
             'aria-modal': 'true',
             'aria-label': title,
@@ -1026,7 +1155,7 @@ window.__ModuleLoader__.load({
               if (event.key === 'Escape' && !busy) onCancel();
             },
           },
-          h('h2', { style: STYLES.dialogTitle }, title),
+          h('h2', { style: danger === true ? STYLES.dialogTitleDanger : STYLES.dialogTitle }, title),
           h('p', { style: STYLES.dialogBody }, body),
           control === undefined || control === null ? null : control,
           h(
@@ -1066,8 +1195,9 @@ window.__ModuleLoader__.load({
      * upgrade, export mode switch, export download, and archive import.
      * @param {{t: Function, loadCatalog: Function, exportSelection: Function,
      *          importSelection: Function, manageSessions: Function,
-     *          previewSessionFiles: Function, migrateSessions: Function,
-     *          refreshSessions: Function, targetOf: Function}} props
+     *          previewSessionFiles: Function, loadSessionDetails: Function,
+     *          migrateSessions: Function, refreshSessions: Function,
+     *          targetOf: Function}} props
      *   slot translator and the Host operations injected by `apply`.
      */
     function SessionKitPanel(props) {
@@ -1086,6 +1216,8 @@ window.__ModuleLoader__.load({
       const [confirmDelete, setConfirmDelete] = React.useState(null);
       const [confirmFiles, setConfirmFiles] = React.useState(null);
       const [confirmMigrate, setConfirmMigrate] = React.useState(null);
+      const [details, setDetails] = React.useState({});
+      const [openDetail, setOpenDetail] = React.useState(null);
       const [busy, setBusy] = React.useState('');
       const [notice, setNotice] = React.useState(null);
       const fileInputRef = React.useRef(null);
@@ -1113,7 +1245,14 @@ window.__ModuleLoader__.load({
             const kept = [...previous].filter((id) => alive.has(id));
             return kept.length === previous.size ? previous : new Set(kept);
           });
+          setDetails((previous) => {
+            const kept = {};
+            for (const [id, detail] of Object.entries(previous)) if (alive.has(id)) kept[id] = detail;
+            return Object.keys(kept).length === Object.keys(previous).length ? previous : kept;
+          });
+          setOpenDetail((current) => (current !== null && !alive.has(current) ? null : current));
           setPhase('ready');
+          return next;
         } catch (error) {
           if (!mountedRef.current) return;
           setPhase('error');
@@ -1134,6 +1273,53 @@ window.__ModuleLoader__.load({
       const selectedCount = selected.size;
       const BATCH_LIMIT = 500;
       const MIGRATE_LIMIT = 100;
+
+      /** Load one session's storage detail on demand and cache it. */
+      async function loadSessionDetail(sessionId) {
+        const cached = details[sessionId];
+        if (cached !== undefined && (cached.phase === 'loading' || cached.phase === 'ready')) return;
+        setDetails((previous) => ({ ...previous, [sessionId]: { phase: 'loading' } }));
+        try {
+          const sessions = await props.loadSessionDetails([sessionId]);
+          if (!mountedRef.current) return;
+          const found = sessions.find((entry) => entry.sessionId === sessionId);
+          setDetails((previous) => ({
+            ...previous,
+            [sessionId]: found === undefined
+              ? { phase: 'error', error: tr('panel.unknownSessionGroup') }
+              : found.ok === false
+                ? { phase: 'error', error: found.error === '' ? tr('panel.unknownSessionGroup') : found.error }
+                : { phase: 'ready', ...found },
+          }));
+        } catch (error) {
+          if (!mountedRef.current) return;
+          setDetails((previous) => ({ ...previous, [sessionId]: { phase: 'error', error: errorMessageOf(error, tr) } }));
+        }
+      }
+
+      /** Toggle the expanded detail block for one row. */
+      function toggleSessionDetail(sessionId) {
+        setOpenDetail((current) => (current === sessionId ? null : sessionId));
+        void loadSessionDetail(sessionId);
+      }
+
+      /** Refresh cached details for sessions that survived an action. */
+      async function refreshDetailsFor(sessionIds) {
+        if (sessionIds.length === 0) return;
+        try {
+          const sessions = await props.loadSessionDetails(sessionIds);
+          if (!mountedRef.current) return;
+          setDetails((previous) => {
+            const next = { ...previous };
+            for (const session of sessions) {
+              if (session.ok !== false) next[session.sessionId] = { phase: 'ready', ...session };
+            }
+            return next;
+          });
+        } catch {
+          // Keep the cached detail; the row still shows the last known size.
+        }
+      }
 
       function toggleSession(id) {
         setSelected((previous) => {
@@ -1260,9 +1446,11 @@ window.__ModuleLoader__.load({
           sessionIds: [...sessionIds],
           titles,
           removeFiles: false,
+          permanent: false,
           preview: null,
           previewLoading: false,
           previewError: '',
+          selectedFiles: new Set(),
         });
       }
 
@@ -1271,16 +1459,17 @@ window.__ModuleLoader__.load({
         if (confirmDelete === null) return;
         const sessionIds = confirmDelete.sessionIds;
         if (!checked) {
-          setConfirmDelete({ ...confirmDelete, removeFiles: false, preview: null, previewLoading: false, previewError: '' });
+          setConfirmDelete({ ...confirmDelete, removeFiles: false, preview: null, previewLoading: false, previewError: '', selectedFiles: new Set() });
           return;
         }
-        setConfirmDelete({ ...confirmDelete, removeFiles: true, preview: null, previewLoading: true, previewError: '' });
+        setConfirmDelete({ ...confirmDelete, removeFiles: true, preview: null, previewLoading: true, previewError: '', selectedFiles: new Set() });
         try {
           const preview = await props.previewSessionFiles(sessionIds);
           if (!mountedRef.current) return;
           setConfirmDelete((current) => {
             if (current === null || current.removeFiles !== true || current.sessionIds.join('\u0000') !== sessionIds.join('\u0000')) return current;
-            return { ...current, preview, previewLoading: false, previewError: '' };
+            const selectedFiles = new Set(preview.files.filter((file) => file.weak !== true).map((file) => file.path));
+            return { ...current, preview, previewLoading: false, previewError: '', selectedFiles };
           });
         } catch (error) {
           if (!mountedRef.current) return;
@@ -1290,49 +1479,185 @@ window.__ModuleLoader__.load({
         }
       }
 
-      /** Detail lines under the delete dialog's file checkbox. */
-      function deleteFileLines(state) {
-        const lines = [];
+      /** Toggle the permanent-delete option (off by default). */
+      function toggleDeletePermanent(checked) {
+        setConfirmDelete((current) => (current === null ? current : { ...current, permanent: checked }));
+      }
+
+      /** Files of the open delete dialog grouped by the first session that referenced them. */
+      function deleteFileGroups(state) {
+        if (state.preview === null) return [];
+        const byKey = new Map();
+        const titles = new Map(catalog.sessions.map((session) => [session.id, session.title !== '' ? session.title : session.id]));
+        for (const file of state.preview.files) {
+          const sessionId = file.sessionIds.length > 0 ? file.sessionIds[0] : '';
+          const key = sessionId === '' ? '__unknown__' : sessionId;
+          let group = byKey.get(key);
+          if (group === undefined) {
+            group = {
+              key,
+              sessionId,
+              title: sessionId === '' ? tr('panel.unknownSessionGroup') : (titles.get(sessionId) ?? sessionId),
+              files: [],
+            };
+            byKey.set(key, group);
+          }
+          group.files.push(file);
+        }
+        return [...byKey.values()];
+      }
+
+      function selectedFileObjects(state) {
+        if (state.preview === null) return [];
+        return state.preview.files.filter((file) => state.selectedFiles.has(file.path));
+      }
+
+      function fileSelectionTotals(state) {
+        const files = selectedFileObjects(state);
+        return { count: files.length, bytes: files.reduce((sum, file) => sum + file.bytes, 0) };
+      }
+
+      function toggleFileSelection(path) {
+        setConfirmDelete((current) => {
+          if (current === null) return current;
+          const next = new Set(current.selectedFiles);
+          if (next.has(path)) next.delete(path);
+          else next.add(path);
+          return { ...current, selectedFiles: next };
+        });
+      }
+
+      function setGroupFileSelection(group, on) {
+        setConfirmDelete((current) => {
+          if (current === null) return current;
+          const next = new Set(current.selectedFiles);
+          for (const file of group.files) {
+            if (on) next.add(file.path);
+            else next.delete(file.path);
+          }
+          return { ...current, selectedFiles: next };
+        });
+      }
+
+      /** Interactive per-session file selection shown under the delete dialog. */
+      function deleteFileSelectionNode(state) {
+        const lines = [tr('panel.fileSelectionExperimental')];
         if (state.previewLoading === true) lines.push(tr('panel.filesPreviewLoading'));
         if (state.previewError !== '') lines.push(tr('panel.filesPreviewFailed', { reason: state.previewError }));
         if (state.preview !== null) {
-          const preview = state.preview;
-          if (preview.files.length === 0) {
-            lines.push(tr('panel.filesPreviewEmpty'));
-          } else {
-            lines.push(tr('panel.filesPreviewSummary', { count: preview.files.length, size: formatBytes(preview.totalBytes) }));
-            for (const file of preview.files.slice(0, 5)) {
-              lines.push(tr('panel.filesItem', {
-                path: file.relative !== '' ? file.relative : file.path,
-                size: formatBytes(file.bytes),
-              }));
-            }
-            if (preview.files.length > 5) lines.push(tr('panel.filesPreviewMore', { count: preview.files.length - 5 }));
-            for (const warning of preview.warnings) lines.push(warning);
-          }
-          if (preview.skipped.length > 0) lines.push(tr('panel.filesPreviewSkipped', { count: preview.skipped.length }));
+          const totals = fileSelectionTotals(state);
+          lines.push(tr('panel.filesSelectedSummary', { count: totals.count, size: formatBytes(totals.bytes) }));
+          if (state.preview.files.length === 0) lines.push(tr('panel.filesPreviewEmpty'));
+          if (state.preview.files.length > 0 && state.selectedFiles.size === 0) lines.push(tr('panel.noFileSelected'));
+          for (const warning of state.preview.warnings) lines.push(warning);
+          if (state.preview.skipped.length > 0) lines.push(tr('panel.filesPreviewSkipped', { count: state.preview.skipped.length }));
         }
         lines.push(tr('panel.filesRiskBestEffort'), tr('panel.filesRiskShared'), tr('panel.filesRiskTrash'));
-        return lines;
+        const groups = deleteFileGroups(state);
+        return h(
+          'div',
+          { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+          linesNode(lines),
+          state.preview === null || groups.length === 0 ? null : groups.map((group) => h(
+            'div',
+            {
+              key: group.key,
+              style: {
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+                padding: '6px 8px',
+                border: `1px solid ${T.border}`,
+                borderRadius: T.radius,
+                background: T.bgLayer2,
+              },
+            },
+            h(
+              'div',
+              { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+              h('span', {
+                style: {
+                  flex: '1 1 auto',
+                  minWidth: 0,
+                  font: `600 12px/18px ${T.font}`,
+                  color: T.labelPrimary,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                },
+              }, tr('panel.fileGroupTitle', { title: group.title, count: group.files.length })),
+              h('button', { type: 'button', style: { ...buttonStyle('ghost', false), height: 24, padding: '0 8px', font: `12px/18px ${T.font}` }, onClick: () => setGroupFileSelection(group, true) }, tr('panel.filesSelectAll')),
+              h('button', { type: 'button', style: { ...buttonStyle('ghost', false), height: 24, padding: '0 8px', font: `12px/18px ${T.font}` }, onClick: () => setGroupFileSelection(group, false) }, tr('panel.filesClear')),
+            ),
+            group.files.map((file) => h(
+              'label',
+              { key: file.path, style: { display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', font: `12px/18px ${T.font}` } },
+              h('input', {
+                type: 'checkbox',
+                checked: state.selectedFiles.has(file.path),
+                onChange: () => toggleFileSelection(file.path),
+              }),
+              h(
+                'span',
+                { style: { display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 } },
+                h('span', { style: { font: `12px/18px ${T.mono}`, color: T.labelPrimary, wordBreak: 'break-all' } }, tr('panel.filesItem', {
+                  path: file.relative !== '' ? file.relative : file.path,
+                  size: formatBytes(file.bytes),
+                })),
+                file.weak ? h('span', { style: { font: `11px/16px ${T.font}`, color: T.warn } }, tr('panel.fileWeakHint')) : null,
+                file.evidence.length > 0
+                  ? h('span', {
+                      style: { font: `11px/16px ${T.font}`, color: T.labelTertiary, wordBreak: 'break-word' },
+                    }, tr('panel.fileEvidence', { evidence: file.evidence.join(', ').slice(0, 140) }))
+                  : null,
+              ),
+            )),
+          )),
+        );
       }
 
-      /** First delete confirm: delete directly, or open the file-move second dialog. */
+      /** Everything the delete dialog shows below its controls. */
+      function deleteDialogDetails(state) {
+        const parts = [];
+        if (state.permanent === true) {
+          parts.push(h('p', { style: { margin: 0, font: `12px/18px ${T.font}`, color: T.error } }, tr('panel.permanentRisk')));
+        }
+        if (state.removeFiles === true) parts.push(deleteFileSelectionNode(state));
+        if (parts.length === 0) return null;
+        return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } }, ...parts);
+      }
+
+      /** First delete confirm: delete directly, or open the files/permanent second dialog. */
       function handleDeleteConfirm() {
         if (confirmDelete === null || busy !== '') return;
-        if (confirmDelete.removeFiles !== true) {
-          void runAction('delete', confirmDelete.sessionIds);
+        const state = confirmDelete;
+        if (state.removeFiles === true) {
+          if (state.previewLoading === true || state.preview === null) return;
+          if (state.preview.files.length === 0 && state.permanent !== true) {
+            // Nothing was derived to move: a plain delete is the honest result.
+            setConfirmDelete(null);
+            void runAction('delete', state.sessionIds);
+            return;
+          }
+          if (state.preview.files.length > 0 && state.selectedFiles.size === 0) return;
+        }
+        if (state.permanent !== true && state.removeFiles !== true) {
+          void runAction('delete', state.sessionIds);
           return;
         }
-        if (confirmDelete.previewLoading === true || confirmDelete.preview === null) return;
-        const preview = confirmDelete.preview;
-        const sessionIds = confirmDelete.sessionIds;
+        const selected = state.removeFiles === true && state.preview !== null
+          ? state.preview.files.filter((file) => state.selectedFiles.has(file.path))
+          : [];
         setConfirmDelete(null);
         setConfirmFiles({
-          sessionIds,
-          files: preview.files,
-          skipped: preview.skipped,
-          warnings: preview.warnings,
-          totalBytes: preview.totalBytes,
+          sessionIds: state.sessionIds,
+          titles: state.titles,
+          files: selected,
+          skipped: state.preview === null ? [] : state.preview.skipped,
+          warnings: state.preview === null ? [] : state.preview.warnings,
+          totalBytes: selected.reduce((sum, file) => sum + file.bytes, 0),
+          removeFiles: state.removeFiles === true && selected.length > 0,
+          permanent: state.permanent === true,
         });
       }
 
@@ -1357,32 +1682,42 @@ window.__ModuleLoader__.load({
           return;
         }
         const removeFiles = action === 'delete' && options !== undefined && options !== null && options.removeFiles === true;
+        const permanent = action === 'delete' && options !== undefined && options !== null && options.permanent === true;
+        const selectedFiles = options !== undefined && options !== null && Array.isArray(options.selectedFiles)
+          ? options.selectedFiles.filter((path) => typeof path === 'string')
+          : [];
         setBusy(action);
         setNotice(null);
         try {
-          const result = await props.manageSessions(action, sessionIds, removeFiles ? { removeFiles: true } : {});
+          const result = await props.manageSessions(action, sessionIds, { removeFiles, selectedFiles, permanent });
           const succeeded = result.results.filter((entry) => entry.ok).length;
           const failed = result.results.filter((entry) => !entry.ok);
           const files = result.files !== undefined && result.files !== null
             ? result.files
-            : { moved: 0, skipped: 0, bytes: 0, trashPath: '', warnings: [] };
+            : { moved: 0, removed: 0, skipped: 0, bytes: 0, trashPath: '', warnings: [], permanent };
           const fileLines = [];
           if (removeFiles) {
-            fileLines.push(tr('panel.filesMoved', { count: files.moved, size: formatBytes(files.bytes) }));
+            if (permanent) fileLines.push(tr('panel.filesRemoved', { count: files.removed, size: formatBytes(files.bytes) }));
+            else fileLines.push(tr('panel.filesMoved', { count: files.moved, size: formatBytes(files.bytes) }));
             if (files.skipped > 0) fileLines.push(tr('panel.filesSkipped', { count: files.skipped }));
-            if (files.trashPath !== '') fileLines.push(tr('panel.filesTrashPath', { path: files.trashPath }));
+            if (!permanent && files.trashPath !== '') fileLines.push(tr('panel.filesTrashPath', { path: files.trashPath }));
             for (const warning of files.warnings) fileLines.push(warning);
           }
-          await reload({ quiet: true });
+          if (permanent) fileLines.push(tr('panel.permanentNotice'));
+          const next = await reload({ quiet: true });
           await props.refreshSessions();
+          const aliveIds = next === undefined
+            ? []
+            : sessionIds.filter((id) => next.sessions.some((session) => session.id === id));
+          if (aliveIds.length > 0) void refreshDetailsFor(aliveIds);
           if (failed.length === 0) {
-            const doneKey = action === 'archive' ? 'panel.archiveDone'
-              : action === 'unarchive' ? 'panel.unarchiveDone' : 'panel.deleteDone';
-            setNotice({
-              tone: 'success',
-              title: tr(doneKey, { count: succeeded === 0 ? sessionIds.length : succeeded }),
-              lines: capNoticeLines(fileLines, tr),
-            });
+            const title = permanent
+              ? tr('panel.permanentDone', { count: succeeded === 0 ? sessionIds.length : succeeded })
+              : tr(action === 'archive' ? 'panel.archiveDone'
+                : action === 'unarchive' ? 'panel.unarchiveDone' : 'panel.deleteDone', {
+                  count: succeeded === 0 ? sessionIds.length : succeeded,
+                });
+            setNotice({ tone: 'success', title, lines: capNoticeLines(fileLines, tr) });
           } else {
             const lines = failed.map((failure) => tr('panel.actionFailureLine', {
               id: failure.sessionId === '' ? tr('panel.unknownPath') : failure.sessionId,
@@ -1462,8 +1797,12 @@ window.__ModuleLoader__.load({
           const failed = result.results.filter((entry) => !entry.ok);
           const alreadyCurrent = succeeded.filter((entry) => entry.status === 'current');
           const migrated = succeeded.filter((entry) => entry.status !== 'current');
-          await reload({ quiet: true });
+          const next = await reload({ quiet: true });
           await props.refreshSessions();
+          const aliveIds = next === undefined
+            ? []
+            : sessionIds.filter((id) => next.sessions.some((session) => session.id === id));
+          if (aliveIds.length > 0) void refreshDetailsFor(aliveIds);
           const lines = [];
           for (const failure of failed) {
             lines.push(tr('panel.migrateFailureLine', {
@@ -1777,80 +2116,125 @@ window.__ModuleLoader__.load({
               const checked = selected.has(session.id);
               const archived = session.archived === true;
               const rowBusy = busy !== '';
+              const detail = details[session.id];
+              const detailReady = detail !== undefined && detail.phase === 'ready';
+              const detailOpen = openDetail === session.id;
               const meta = [];
+              if (detailReady) meta.push(formatBytes(detail.sizeBytes));
               if (session.eventCount > 0) meta.push(tr('panel.events', { count: session.eventCount }));
               if (session.cwd !== '') meta.push(session.cwd);
               meta.push(session.id);
               const shortId = session.id.length > 26 ? `${session.id.slice(0, 12)}…${session.id.slice(-8)}` : session.id;
               const metaText = meta.length === 0 ? shortId : meta.join(' · ');
               const displayTitle = session.title !== '' ? session.title : tr('panel.untitled');
+              let detailNode = null;
+              if (detailOpen) {
+                const detailLines = detail === undefined || detail.phase === 'loading'
+                  ? [tr('panel.detailLoading')]
+                  : detail.phase === 'error'
+                    ? [tr('panel.detailFailed', { reason: detail.error })]
+                    : [
+                        tr('panel.detailSize', { size: formatBytes(detail.sizeBytes) }),
+                        tr('panel.detailFormat', {
+                          status: detail.legacy === true || detail.formatStatus === 'migration-required'
+                            ? tr('panel.detailFormatLegacy')
+                            : detail.formatStatus === '' || detail.formatStatus === 'current'
+                              ? tr('panel.detailFormatCurrent')
+                              : detail.formatStatus,
+                        }),
+                        tr('panel.detailArchived', {
+                          status: detail.archived === true ? tr('panel.detailArchivedYes') : tr('panel.detailArchivedNo'),
+                        }),
+                      ];
+                detailNode = h('div', { style: STYLES.rowDetail, 'data-session-detail': session.id }, linesNode(detailLines));
+              }
               return h(
                 'div',
-                { key: session.id, style: { ...STYLES.row, opacity: archived ? 0.66 : 1 } },
+                { key: session.id, style: STYLES.rowWrapper },
                 h(
-                  'label',
-                  { style: STYLES.rowMain },
-                  h('input', {
-                    type: 'checkbox',
-                    checked,
-                    style: STYLES.input,
-                    onChange: () => toggleSession(session.id),
-                    'aria-label': tr('panel.selectSession', { title: displayTitle }),
-                  }),
+                  'div',
+                  { style: { ...STYLES.row, opacity: archived ? 0.66 : 1 } },
                   h(
-                    'span',
-                    { style: STYLES.rowText },
+                    'div',
+                    { style: STYLES.rowMain },
+                    h('input', {
+                      type: 'checkbox',
+                      checked,
+                      style: STYLES.input,
+                      onChange: () => {
+                        toggleSession(session.id);
+                        void loadSessionDetail(session.id);
+                      },
+                      'aria-label': tr('panel.selectSession', { title: displayTitle }),
+                    }),
                     h(
-                      'span',
-                      { style: STYLES.rowTitle },
-                      session.running ? h('span', { style: STYLES.runningDot, 'aria-hidden': 'true' }) : null,
-                      displayTitle,
-                      session.running ? ` (${tr('panel.running')})` : '',
+                      'button',
+                      {
+                        type: 'button',
+                        style: STYLES.rowDetailToggle,
+                        onClick: () => toggleSessionDetail(session.id),
+                        'aria-expanded': detailOpen ? 'true' : 'false',
+                        'aria-label': detailOpen
+                          ? tr('panel.hideDetail', { title: displayTitle })
+                          : tr('panel.showDetail', { title: displayTitle }),
+                      },
                       h(
                         'span',
-                        { style: { ...STYLES.badge, ...(archived ? STYLES.badgeArchived : STYLES.badgeActive) } },
-                        archived ? tr('panel.statusBadgeArchived') : tr('panel.statusBadgeActive'),
-                      ),
-                      session.legacy
-                        ? h(
+                        { style: STYLES.rowText },
+                        h(
+                          'span',
+                          { style: STYLES.rowTitle },
+                          session.running ? h('span', { style: STYLES.runningDot, 'aria-hidden': 'true' }) : null,
+                          displayTitle,
+                          session.running ? ` (${tr('panel.running')})` : '',
+                          h(
                             'span',
-                            { style: { ...STYLES.badge, ...STYLES.badgeLegacy } },
-                            session.storedVersion > 0
-                              ? tr('panel.legacyBadge', { version: session.storedVersion })
-                              : tr('panel.legacyBadgePlain'),
-                          )
-                        : null,
-                    ),
-                    h('span', { style: STYLES.rowMeta, title: session.id }, metaText),
-                  ),
-                ),
-                h(
-                  'span',
-                  { style: STYLES.rowActions },
-                  session.legacy
-                    ? h(
-                        'button',
-                        { type: 'button', style: rowButtonStyle('secondary', rowBusy), disabled: rowBusy, onClick: () => requestMigrateConfirm([session.id]) },
-                        tr('panel.upgradeFormat'),
-                      )
-                    : null,
-                  archived
-                    ? h(
-                        'button',
-                        { type: 'button', style: rowButtonStyle('ghost', rowBusy), disabled: rowBusy, onClick: () => { void runAction('unarchive', [session.id]); } },
-                        tr('panel.unarchive'),
-                      )
-                    : h(
-                        'button',
-                        { type: 'button', style: rowButtonStyle('ghost', rowBusy), disabled: rowBusy, onClick: () => { void runAction('archive', [session.id]); } },
-                        tr('panel.archive'),
+                            { style: { ...STYLES.badge, ...(archived ? STYLES.badgeArchived : STYLES.badgeActive) } },
+                            archived ? tr('panel.statusBadgeArchived') : tr('panel.statusBadgeActive'),
+                          ),
+                          session.legacy
+                            ? h(
+                                'span',
+                                { style: { ...STYLES.badge, ...STYLES.badgeLegacy } },
+                                session.storedVersion > 0
+                                  ? tr('panel.legacyBadge', { version: session.storedVersion })
+                                  : tr('panel.legacyBadgePlain'),
+                              )
+                            : null,
+                        ),
+                        h('span', { style: STYLES.rowMeta, title: session.id }, metaText),
                       ),
+                    ),
+                  ),
                   h(
-                    'button',
-                    { type: 'button', style: rowButtonStyle('dangerGhost', rowBusy), disabled: rowBusy, onClick: () => requestDeleteConfirm([session.id]) },
-                    tr('panel.delete'),
+                    'span',
+                    { style: STYLES.rowActions },
+                    session.legacy
+                      ? h(
+                          'button',
+                          { type: 'button', style: rowButtonStyle('secondary', rowBusy), disabled: rowBusy, onClick: () => requestMigrateConfirm([session.id]) },
+                          tr('panel.upgradeFormat'),
+                        )
+                      : null,
+                    archived
+                      ? h(
+                          'button',
+                          { type: 'button', style: rowButtonStyle('ghost', rowBusy), disabled: rowBusy, onClick: () => { void runAction('unarchive', [session.id]); } },
+                          tr('panel.unarchive'),
+                        )
+                      : h(
+                          'button',
+                          { type: 'button', style: rowButtonStyle('ghost', rowBusy), disabled: rowBusy, onClick: () => { void runAction('archive', [session.id]); } },
+                          tr('panel.archive'),
+                        ),
+                    h(
+                      'button',
+                      { type: 'button', style: rowButtonStyle('dangerGhost', rowBusy), disabled: rowBusy, onClick: () => requestDeleteConfirm([session.id]) },
+                      tr('panel.delete'),
+                    ),
                   ),
                 ),
+                detailNode,
               );
             }),
           );
@@ -1878,68 +2262,144 @@ window.__ModuleLoader__.load({
         title: tr('panel.confirmDeleteTitle'),
         body: tr('panel.confirmDeleteBody', { count: confirmDelete.sessionIds.length }),
         control: h(
-          'label',
-          { style: STYLES.modeLabel },
-          h('input', {
-            type: 'checkbox',
-            checked: confirmDelete.removeFiles === true,
-            disabled: busy !== '' || confirmDelete.previewLoading === true,
-            onChange: (event) => { void toggleDeleteRemoveFiles(event.target.checked); },
-          }),
+          'div',
+          { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
           h(
-            'span',
-            null,
-            tr('panel.removeFiles'),
-            h('span', { style: STYLES.modeHint }, tr('panel.removeFilesHint')),
+            'label',
+            { style: STYLES.modeLabel },
+            h('input', {
+              type: 'checkbox',
+              checked: confirmDelete.removeFiles === true,
+              disabled: busy !== '' || confirmDelete.previewLoading === true,
+              onChange: (event) => { void toggleDeleteRemoveFiles(event.target.checked); },
+            }),
+            h(
+              'span',
+              null,
+              tr('panel.removeFiles'),
+              h('span', { style: { ...STYLES.badge, marginLeft: 6, color: T.warn, border: `1px solid ${T.border}` } }, tr('panel.experimental')),
+              h('span', { style: STYLES.modeHint }, tr('panel.removeFilesHint')),
+            ),
+          ),
+          h(
+            'label',
+            { style: { ...STYLES.modeLabel, color: T.error } },
+            h('input', {
+              type: 'checkbox',
+              checked: confirmDelete.permanent === true,
+              disabled: busy !== '',
+              onChange: (event) => toggleDeletePermanent(event.target.checked),
+            }),
+            h(
+              'span',
+              null,
+              tr('panel.permanentDelete'),
+              h('span', { style: { ...STYLES.modeHint, color: T.error } }, tr('panel.permanentRisk')),
+            ),
           ),
         ),
         items: confirmDelete.titles,
-        details: confirmDelete.removeFiles !== true ? null : linesNode(deleteFileLines(confirmDelete)),
+        details: deleteDialogDetails(confirmDelete),
         moreKey: 'panel.confirmMore',
         note: tr('panel.deleteNote'),
         confirmRole: 'danger',
-        confirmLabel: confirmDelete.removeFiles === true ? tr('panel.continue') : tr('panel.confirmDelete'),
+        confirmLabel: confirmDelete.permanent === true
+          || (confirmDelete.removeFiles === true
+            && confirmDelete.preview !== null
+            && confirmDelete.preview.files.length > 0)
+          ? tr('panel.continue')
+          : tr('panel.confirmDelete'),
         busyLabel: tr('panel.deleting'),
         busy: busy !== '',
         busyAction: busy === 'delete',
         confirmDisabled: confirmDelete.removeFiles === true
-          && (confirmDelete.previewLoading === true || confirmDelete.preview === null),
+          && (confirmDelete.previewLoading === true
+            || confirmDelete.preview === null
+            || (confirmDelete.preview.files.length > 0 && confirmDelete.selectedFiles.size === 0)),
         onCancel: () => setConfirmDelete(null),
         onConfirm: handleDeleteConfirm,
       });
 
-      const filesDialog = confirmFiles === null ? null : confirmDialogNode({
-        tr,
-        title: tr('panel.confirmFilesTitle'),
-        body: tr('panel.confirmFilesBody', {
-          count: confirmFiles.sessionIds.length,
-          files: confirmFiles.files.length,
-          size: formatBytes(confirmFiles.totalBytes),
-        }),
-        items: confirmFiles.files.map((file) => tr('panel.filesItem', {
-          path: file.relative !== '' ? file.relative : file.path,
-          size: formatBytes(file.bytes),
-        })),
-        details: linesNode([
-          ...confirmFiles.warnings,
-          ...confirmFiles.skipped.slice(0, 8).map((entry) => tr('panel.filesSkipLine', {
-            path: entry.path === '' ? tr('panel.unknownPath') : entry.path,
-            reason: entry.reason === '' ? tr('panel.unknownReason') : entry.reason,
-          })),
-          tr('panel.filesRiskBestEffort'),
-          tr('panel.filesRiskShared'),
-          tr('panel.filesRiskTrash'),
-        ]),
-        moreKey: 'panel.filesMore',
-        note: tr('panel.confirmFilesNote'),
-        confirmRole: 'danger',
-        confirmLabel: tr('panel.confirmDeleteWithFiles'),
-        busyLabel: tr('panel.deleting'),
-        busy: busy !== '',
-        busyAction: busy === 'delete',
-        onCancel: () => setConfirmFiles(null),
-        onConfirm: () => { void runAction('delete', confirmFiles.sessionIds, { removeFiles: true }); },
-      });
+      const filesDialog = confirmFiles === null ? null : confirmDialogNode(confirmFiles.permanent === true
+        ? {
+            tr,
+            title: tr('panel.confirmPermanentTitle'),
+            body: confirmFiles.removeFiles === true && confirmFiles.files.length > 0
+              ? tr('panel.confirmPermanentWithFilesBody', {
+                  count: confirmFiles.sessionIds.length,
+                  files: confirmFiles.files.length,
+                  size: formatBytes(confirmFiles.totalBytes),
+                })
+              : tr('panel.confirmPermanentBody', { count: confirmFiles.sessionIds.length }),
+            items: [
+              ...confirmFiles.titles,
+              ...confirmFiles.files.map((file) => tr('panel.filesItem', {
+                path: file.relative !== '' ? file.relative : file.path,
+                size: formatBytes(file.bytes),
+              })),
+            ],
+            details: linesNode([
+              tr('panel.permanentRisk'),
+              ...confirmFiles.warnings,
+              ...confirmFiles.skipped.slice(0, 8).map((entry) => tr('panel.filesSkipLine', {
+                path: entry.path === '' ? tr('panel.unknownPath') : entry.path,
+                reason: entry.reason === '' ? tr('panel.unknownReason') : entry.reason,
+              })),
+            ]),
+            moreKey: 'panel.confirmMoreItems',
+            note: '',
+            danger: true,
+            confirmRole: 'danger',
+            confirmLabel: tr('panel.confirmPermanent'),
+            busyLabel: tr('panel.permanentDeleting'),
+            busy: busy !== '',
+            busyAction: busy === 'delete',
+            onCancel: () => setConfirmFiles(null),
+            onConfirm: () => {
+              void runAction('delete', confirmFiles.sessionIds, {
+                removeFiles: confirmFiles.removeFiles === true,
+                selectedFiles: confirmFiles.files.map((file) => file.path),
+                permanent: true,
+              });
+            },
+          }
+        : {
+            tr,
+            title: tr('panel.confirmFilesTitle'),
+            body: tr('panel.confirmFilesBody', {
+              count: confirmFiles.sessionIds.length,
+              files: confirmFiles.files.length,
+              size: formatBytes(confirmFiles.totalBytes),
+            }),
+            items: confirmFiles.files.map((file) => tr('panel.filesItem', {
+              path: file.relative !== '' ? file.relative : file.path,
+              size: formatBytes(file.bytes),
+            })),
+            details: linesNode([
+              ...confirmFiles.warnings,
+              ...confirmFiles.skipped.slice(0, 8).map((entry) => tr('panel.filesSkipLine', {
+                path: entry.path === '' ? tr('panel.unknownPath') : entry.path,
+                reason: entry.reason === '' ? tr('panel.unknownReason') : entry.reason,
+              })),
+              tr('panel.filesRiskBestEffort'),
+              tr('panel.filesRiskShared'),
+              tr('panel.filesRiskTrash'),
+            ]),
+            moreKey: 'panel.filesMore',
+            note: tr('panel.confirmFilesNote'),
+            confirmRole: 'danger',
+            confirmLabel: tr('panel.confirmDeleteWithFiles'),
+            busyLabel: tr('panel.deleting'),
+            busy: busy !== '',
+            busyAction: busy === 'delete',
+            onCancel: () => setConfirmFiles(null),
+            onConfirm: () => {
+              void runAction('delete', confirmFiles.sessionIds, {
+                removeFiles: true,
+                selectedFiles: confirmFiles.files.map((file) => file.path),
+              });
+            },
+          });
 
       const migrateDialog = confirmMigrate === null ? null : confirmDialogNode({
         tr,
@@ -2043,9 +2503,15 @@ window.__ModuleLoader__.load({
         throw new Error(`session-kit: unsupported action ${String(action)}`);
       }
       const requestBody = { sessionIds };
-      if (action === 'delete') requestBody.confirm = true;
-      if (action === 'delete' && options !== undefined && options !== null && options.removeFiles === true) {
-        requestBody.removeFiles = true;
+      if (action === 'delete') {
+        requestBody.confirm = true;
+        if (options !== undefined && options !== null && options.permanent === true) requestBody.permanent = true;
+        if (options !== undefined && options !== null && options.removeFiles === true) {
+          requestBody.removeFiles = true;
+          requestBody.selectedFiles = Array.isArray(options.selectedFiles)
+            ? options.selectedFiles.filter((path) => typeof path === 'string')
+            : [];
+        }
       }
       const response = await fetch(hostUrl(`/${action}`), {
         method: 'POST',
@@ -2078,6 +2544,27 @@ window.__ModuleLoader__.load({
         throw requestFailure(payload, response.status);
       }
       return normalizeFilePreview(payload);
+    }
+
+    /** Load storage details (size/format/archived) for the given sessions. */
+    async function loadSessionDetails(sessionIds) {
+      const response = await fetch(hostUrl('/session-detail'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ sessionIds }),
+      });
+      const payload = await jsonBody(response);
+      const data = payload !== null && typeof payload === 'object' && payload.data !== null && typeof payload.data === 'object' && !Array.isArray(payload.data)
+        ? payload.data
+        : payload;
+      if (data !== null && typeof data === 'object' && Array.isArray(data.sessions)) {
+        // Per-id failures stay in the list even when the batch answers non-2xx.
+        return normalizeSessionDetails(payload);
+      }
+      if (!response.ok || payload === null || typeof payload !== 'object' || payload.ok !== true) {
+        throw requestFailure(payload, response.status);
+      }
+      return normalizeSessionDetails(payload);
     }
 
     /** Upgrade legacy sessions through the Host's official migration route. */
@@ -2165,6 +2652,7 @@ window.__ModuleLoader__.load({
               importSelection: (file, hints) => importSelection(file, hints),
               manageSessions: (action, sessionIds, options) => manageSelection(action, sessionIds, options),
               previewSessionFiles: (sessionIds) => previewSessionFiles(sessionIds),
+              loadSessionDetails: (sessionIds) => loadSessionDetails(sessionIds),
               migrateSessions: (sessionIds) => migrateSelection(sessionIds),
               refreshSessions: () => refreshSessionList(ctx),
               targetOf: () => importTargetOf(ctx),
