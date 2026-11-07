@@ -1,4 +1,8 @@
-# Migration research notes (context)
+# Migration research notes (historical context)
+
+> Historical design context from the initial feasibility study. Current behavior
+> is documented in the README, `docs/architecture.md`, and
+> `docs/feature-matrix.md`; this page is not maintained as an API reference.
 
 This plugin started from a feasibility study of moving DeepSeek Harness
 workspaces and conversations to another machine.

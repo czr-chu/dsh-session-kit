@@ -27,9 +27,10 @@ node --import tsx/esm --test dsh-session-kit/test/*.test.mjs
 Run `npm run format:check` before committing; the same check runs in CI.
 
 The real-backend tests are guarded: without the DSH TypeScript sources (and
-`tsx`) they self-skip, so the plain command stays green in any checkout. CI runs
-the plain command on Node 22 and 24; run the `tsx` variant locally when touching
-persistence, migrations, imports or the management modules.
+`tsx`) they self-skip, so the plain command stays green in any checkout. CI runs `npm ci`, `npm run build:client`, `npm run format:check`,
+an artifact diff check, the plain suite on Node 22 and 24, and a pack check. Run
+the `tsx` variant locally when touching persistence, migrations, imports or the
+management modules.
 
 Never make a test depend on a real `$DSH_HOME`, real sessions, network access or
 a real `dsh web` process; use the test-only third `apply` argument for helper

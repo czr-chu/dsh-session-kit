@@ -2,7 +2,7 @@
 
 **Session manager, backup, and migration toolkit for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).**
 
-Version **0.10.0** · public beta · [中文说明](README.zh.md)
+Version **0.10.1** · public beta · [中文说明](README.zh.md)
 
 dsh-session-kit adds a **Session manager** panel and a <code>session_kit</code> agent
 tool to DeepSeek Harness (DSH). It lists and inspects conversations, exports them
@@ -177,7 +177,7 @@ a Web or Desktop deployment; a headless deployment still gets the
 
 ~~~bash
 # from GitHub (recommended: pin a release tag)
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.0
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.1
 
 # from a local checkout (iterating on the plugin)
 dsh plugin --profile web add ~/src/dsh-session-kit
@@ -205,19 +205,21 @@ An incompatible DSH version is refused at install time through
 1. **Open the panel.** After restarting <code>dsh web</code> and refreshing, click
    **Session manager** in the sidebar. Rows are grouped by workspace; use the
    search box and the all/active/archived filter.
-2. **Export.** Select one or more main conversations, choose **compact** or
-   **full**, then Export. The browser downloads one ZIP; the agent tool writes it
-   under <code>$DSH_HOME/session-kit/exports/</code> instead.
-3. **Import.** Open the import panel, drop a ZIP or a bare <code>.jsonl</code>,
-   pick the target workspace and whether to restore workspace files. Imported
-   conversations appear as new sessions; nothing existing is overwritten.
+2. **Export.** Select one or more main conversations, then choose **compact** or
+   **full** in the Export card on the right and click **Export selected**. The
+   browser downloads one ZIP; the agent tool writes it under
+   <code>$DSH_HOME/session-kit/exports/</code> instead.
+3. **Import an archive.** In the Import card choose the **Archive** tab, pick a
+   ZIP or bare <code>.jsonl</code>, optionally enable workspace-file restore,
+   and click **Import archive**. Imported conversations appear as new sessions;
+   nothing existing is overwritten.
 4. **Manage.** Use the row actions to archive/unarchive or delete. Delete moves
    the session to the trash; the delete dialog also offers the experimental
    related-file selection and a separate permanent-erase confirmation.
 5. **Upgrade legacy rows.** A row with the legacy badge can be upgraded singly or
    in a batch through DSH's official migration; the old generation is kept.
-6. **Import a DeepSeek share.** Paste a share link or id in the share card,
-   choose a workspace, and import.
+6. **Import a DeepSeek share.** In the Import card choose the **DeepSeek share**
+   tab, paste a share link or id, choose a workspace, and import.
 7. **Or ask the agent.** The <code>session_kit</code> tool exposes the same
    operations (see the action table below).
 

@@ -4,6 +4,21 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-11-07
+
+### Changed / removed
+
+- Documentation refresh for 0.10.1: README quick-start now matches the
+  Sessions/Tools layout and Archive/DeepSeek-share tabs.
+- `SECURITY.md` supported-version table updated to the 0.10/0.9 lines.
+- Removed the obsolete 0.1.0 `INTERFACES.md`; current behavior lives in the
+  README, `docs/architecture.md`, `docs/feature-matrix.md` and package JSDoc.
+- `docs/architecture.md` now documents the tsdown/CSS Modules browser build.
+- Roadmap, conformance and research notes refreshed; stale source line numbers
+  were removed so references do not rot with every refactor.
+- Contributor guide describes the actual CI steps (install, build, format,
+  artifact diff, tests, pack).
+
 ## [0.10.0] - 2026-11-07
 
 ### Changed

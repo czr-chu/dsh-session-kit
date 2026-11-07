@@ -4,9 +4,9 @@
 
 | Version | Supported |
 | --- | --- |
-| 0.8.x | Yes |
-| 0.7.x | Security fixes only |
-| < 0.7 | No |
+| 0.10.x | Yes |
+| 0.9.x | Security fixes only |
+| < 0.9 | No |
 
 The plugin runs inside DeepSeek Harness and only reads services the host
 exposes; keep DSH itself up to date as well.

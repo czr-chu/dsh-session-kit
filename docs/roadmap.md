@@ -1,6 +1,6 @@
 # Roadmap
 
-Shipped through 0.10.0:
+Shipped through 0.10.1:
 
 - session/workspace browsing, search, status filters, archived badges and selection;
 - session detail (storage size across retained generations, format status, archived state);
@@ -12,7 +12,9 @@ Shipped through 0.10.0:
 - DeepSeek public share-link import into a chosen workspace;
 - one agent tool (`session_kit`) covering the same operations;
 - public-release documentation, security policy, CI and issue templates;
-- standard-schema `Config` validation, bundle icon and localized detail documents.
+- standard-schema `Config` validation, bundle icon and localized detail documents;
+- official-style tsdown/CSS Modules client bundle, reproducible artifact and CI format gate;
+- two-column Sessions/Tools panel layout with responsive stacking.
 
 Next:
 

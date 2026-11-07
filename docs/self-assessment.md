@@ -1,6 +1,6 @@
 # Public-release self-assessment
 
-Self-check for dsh-session-kit <code>0.10.0</code> (2026-11-07). The check was
+Self-check for dsh-session-kit <code>0.10.1</code> (2026-11-07). The check was
 code-and-test plus limited real <code>dsh web</code> spot checks; no live
 DeepSeek share API call and no real cross-machine restore. Evidence is marked
 by source:
@@ -77,7 +77,7 @@ the real persistence backend and product replay checks.
 
 Other checks: <code>node --check</code> passes for <code>index.js</code>,
 <code>src/client/index.js</code> and all <code>lib/*.js</code>; locale and package JSON
-parse; <code>npm pack --dry-run</code> reports 44 files, 383.6 kB tarball (includes the README screenshot) including the built client bundle and source map.
+parse; <code>npm pack --dry-run</code> reports 44 files, 384.2 kB tarball (includes the README screenshot) including the built client bundle and source map.
 
 ### 3.2 Real-backend and end-to-end evidence
 
@@ -90,11 +90,11 @@ parse; <code>npm pack --dry-run</code> reports 44 files, 383.6 kB tarball (inclu
 - **[仓库自动化]** The <code>tsx</code> run exercises DSH's real JSONL
   persistence and replay paths (the five guarded cases above), including a real
   released v3 migration fixture.
-- **[仓库记录]** <code>docs/research/migration-notes.md:31-34</code> records
+- **[仓库记录]** <code>docs/research/migration-notes.md</code> records
   development validation with a disposable <code>DSH_HOME</code> and a headless
   browser driving the real panel (select sessions, download an archive, import
   it, restore workspace files). That predates the 0.5–0.7 UI additions
-  (detail/file list, file selection, permanent delete, share card).
+  (detail/file list, file selection, permanent delete, share tab).
 - **[仓库记录 / 交接信息]** A development run migrated 38 real v3-only sessions:
   36 succeeded, 2 were refused by the official migration with an unresolved
   tool-call error; the source files were unchanged. V0 samples were frequently
@@ -105,13 +105,13 @@ parse; <code>npm pack --dry-run</code> reports 44 files, 383.6 kB tarball (inclu
   22.7 MB to 0.35 MB. These measurements are from development records, not this
   self-check.
 
-### 3.3 Client build verification (0.10.0)
+### 3.3 Client build verification (0.10.1)
 
 - **[本次运行]** <code>npm ci</code> + <code>npm run build:client</code> produced
   <code>lib/client.js</code> and its source map; two consecutive builds were
   byte-identical (sha256 equal).
 - **[本次运行]** A disposable profile installed from the packed
-  <code>dsh-session-kit-0.10.0.tgz</code> on DSH **0.2.2-rc.1** loaded the built
+  <code>dsh-session-kit-0.10.1.tgz</code> on DSH **0.2.2-rc.1** loaded the built
   bundle: the Session manager panel opened, its one plugin style tag
   was injected, the CSS-module page/content classes had the expected computed
   layout (860 px content, 18 px gap, card padding), and there were no console,
@@ -137,7 +137,7 @@ parse; <code>npm pack --dry-run</code> reports 44 files, 383.6 kB tarball (inclu
   in an earlier 0.4 check.
 - Not exercised end-to-end in a real browser for this release: executing
   selectable file deletion, permanent erase, export download/import, and
-  share-link import; the share card and those dialogs have mock-runtime smoke
+  share-link import; the share tab and those dialogs have mock-runtime smoke
   checks only. Treat those paths as beta quality.
 
 ### 3.5 Not covered by automation
@@ -175,7 +175,7 @@ The full matrix is in <code>docs/feature-matrix.md</code>. Summary:
 ### Data safety and security
 
 1. **Related-file derivation is best-effort and experimental**
-   (<code>lib/session-files.js:1-13</code>). Shell redirections, PTC/script
+   (<code>lib/session-files.js</code>). Shell redirections, PTC/script
    outputs and files only mentioned in prose are invisible. A file shared with
    other sessions is affected too. The derivation excludes the Harness home,
    session storage and the trash, but it does **not** re-apply the export-time
@@ -205,16 +205,16 @@ The full matrix is in <code>docs/feature-matrix.md</code>. Summary:
 
 ### Functional and format limits
 
-7. **Compact export is lossy by design** (<code>lib/compact.js:1-30</code>):
+7. **Compact export is lossy by design** (<code>lib/compact.js</code>):
    tool calls/results, reasoning, stream chunks, jobs, subagents and runtime
    records are dropped. It is not a byte-level backup.
-8. **Imported sessions are standalone** (<code>lib/import.js:10</code>,
+8. **Imported sessions are standalone** (<code>lib/import.js</code>,
    <code>:571</code>, <code>:673</code>): no parent/seed lineage, and subagent
    transcripts are never imported. User-visible forks remain independent
    sessions.
 9. **Format version is strict.** Import requires the archive log version to equal
    the running DSH version (currently v4,
-   <code>lib/import.js:578</code>); there is no in-plugin cross-version
+   <code>lib/import.js</code>); there is no in-plugin cross-version
    conversion. Legacy logs must be upgraded by DSH's official migration first.
 10. **Legacy migration can be refused.** The plugin only triggers DSH's official
     <code>open(id,'write')</code> migration and reports refusals; it cannot force
@@ -223,23 +223,23 @@ The full matrix is in <code>docs/feature-matrix.md</code>. Summary:
 11. **Share import is narrow and network-dependent.** Only
     <code>chat.deepseek.com/share/&lt;id&gt;</code> links or bare ids are accepted
     (no arbitrary URL fetching); the request has a 60 s timeout and a 32 MiB
-    response cap (<code>lib/deepseek-share.js:31-35</code>). Private/deleted
+    response cap (<code>lib/deepseek-share.js</code>). Private/deleted
     shares fail, API changes can break the mapping, and tests always mock the
     network.
 12. **Workspace export packs the whole tree.** The checked-file selection exists
     only for deletion; a per-session touched-files export is future work. Large
     workspaces are limited by <code>maxExportBytes</code>/
     <code>workspaceMaxBytes</code> and by the in-memory build.
-13. **Archive building is in memory.** <code>lib/export.js:792-800</code> builds
+13. **Archive building is in memory.** <code>lib/export.js</code> builds
     the full ZIP buffer before returning it; defaults are a 1 GiB export cap and
     a 512 MiB import cap with at most 100 sessions
-    (<code>index.js:246-253</code>, <code>lib/import.js:51-53</code>). Very large
+    (<code>index.js</code>, <code>lib/import.js</code>). Very large
     stores can be slow or fail with <code>too-large</code>; there is no streaming
     archive path yet.
 14. **Listing is a full scan with no pagination.** <code>/session-kit/list</code>
     walks the persistence listing and the panel renders all groups; large stores
     can make the UI heavy. Titles use the projection cache so cold logs are not
-    opened for every row (<code>lib/sessions.js:282</code>,
+    opened for every row (<code>lib/sessions.js</code>,
     <code>docs/architecture.md</code>).
 
 ### Environment and configuration
@@ -271,7 +271,7 @@ The full matrix is in <code>docs/feature-matrix.md</code>. Summary:
     <code>node --test test/*.test.mjs</code> on Node 22/24 and
     <code>npm pack --dry-run</code>; the five real-backend cases still skip there,
     and no Playwright/browser job exists. There is also no release/publish workflow.
-20. **Documentation drift remains a maintenance risk.** The 0.10.0
+20. **Documentation drift remains a maintenance risk.** The 0.10.1
     public-release pass refreshed <code>docs/roadmap.md</code>, removed the
     nonexistent <code>docs/assets</code> entry from <code>package.json</code>,
     added issue templates and linked the self-assessment/feature matrix from the
@@ -302,13 +302,13 @@ Suggested pre-publication checklist:
    the candidate <code>npm pack</code> payload was inspected; re-verify it in the
    release workflow, and decide whether both README files should ship.
 5. **Docs**: <code>docs/roadmap.md</code> and README/install/Node requirements
-   were aligned for 0.10.0; state the experimental/permanent-delete limits in the
+   were aligned for 0.10.1; state the experimental/permanent-delete limits in the
    release notes.
 6. **Real-world QA**: on a clean machine and a second DSH instance, install from
    the pinned tag, export a synthetic archive, import it in a different
    workspace, restore files, exercise archive/trash/permanent delete, and test
    one real public share link with non-sensitive content.
-7. **Release mechanics**: tag <code>v0.10.0</code>, publish with provenance
+7. **Release mechanics**: tag <code>v0.10.1</code>, publish with provenance
    (<code>npm publish --provenance</code> or equivalent), attach release notes,
    and publish to the plugin index if intended.
 8. **Security/privacy**: document archive privacy (conversation text,

@@ -26,6 +26,18 @@ Every DSH capability is read through `ctx.get(...)` (sessionQuery,
 sessionPersistence, sessions, attachments, workspaceRegistry, agentPresets,
 workingDirectory), so the bundle has no @deepseek-ai runtime imports.
 
+## Browser half
+
+`src/client/index.js` is bundled by tsdown into `lib/client.js`, the
+`window.__ModuleLoader__.load({ id, factory })` artifact the DSH client module
+system loads. Static styling lives in `src/client/styles.module.css` and is
+compiled by Lightning CSS into the same factory; runtime button tones and
+dynamic state stay as minimal inline styles. The panel registers through
+`ctx.slots.inject` / `ctx.slots.register`, localizes through `ctx.locale`,
+and talks to the Host only through the fenced `/session-kit/*` routes.
+`npm run build:client` regenerates the committed artifact; CI rebuilds it and
+fails when the artifact differs.
+
 ## Export model
 
 One ZIP = one manifest plus per-session folders:

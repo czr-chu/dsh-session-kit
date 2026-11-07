@@ -1,7 +1,7 @@
 # dsh-session-kit
 
 **DeepSeek Harness 的会话管理、备份与迁移工具包。**
-Version **0.10.0** · 公开 beta · [English](README.md)
+Version **0.10.1** · 公开 beta · [English](README.md)
 
 dsh-session-kit 为 DeepSeek Harness（DSH）增加一个 **会话管理（Session manager）**
 面板和一个 <code>session_kit</code> agent 工具：浏览与检查会话、导出为可迁移的
@@ -139,7 +139,7 @@ ZIP（可选携带工作区文件）、在另一台机器或另一个工作区�
 
 ~~~bash
 # 从 GitHub 安装（建议固定 release tag）
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.0
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.1
 
 # 从本地 checkout 安装（便于迭代）
 dsh plugin --profile web add ~/src/dsh-session-kit
@@ -163,14 +163,16 @@ DSH 版本不满足时会通过 <code>engines.dsh</code> 在安装阶段被拒�
 
 1. **打开面板。** 重启 <code>dsh web</code> 并刷新页面后，点侧边栏 **Session manager**。
    列表按工作区分组，可用搜索框和全部/活动/已归档筛选。
-2. **导出。** 勾选一个或多个主对话，选择 **精简** 或 **全量**，点导出；浏览器会下载一个
-   ZIP（agent 工具则写到 <code>$DSH_HOME/session-kit/exports/</code>）。
-3. **导入。** 打开导入面板，拖入 ZIP 或裸 <code>.jsonl</code>，选择目标工作区以及是否恢复
-   工作区文件；导入的对话会成为新会话，不会覆盖已有会话。
+2. **导出。** 勾选一个或多个主对话，在右侧 Export 卡片选择 **精简** 或 **全量**，
+   点 **Export selected**；浏览器会下载一个 ZIP（agent 工具则写到
+   <code>$DSH_HOME/session-kit/exports/</code>）。
+3. **导入会话包。** 在 Import 卡片切到 **Archive**，选择 ZIP 或裸 <code>.jsonl</code>，
+   可选恢复工作区文件，点 **Import archive**；导入的对话会成为新会话，不会覆盖已有会话。
 4. **管理。** 用行内操作归档/恢复或删除。删除会移入回收站；删除对话框同时提供实验性的
    相关文件选择，以及独立的永久删除二次确认。
 5. **升级旧格式。** 带旧格式徽标的行可以单条或批量通过 DSH 官方迁移升级，旧代际文件保留。
-6. **导入 DeepSeek 分享。** 在分享卡片里粘贴链接或 id，选择工作区后导入。
+6. **导入 DeepSeek 分享。** 在 Import 卡片切到 **DeepSeek share**，粘贴链接或 id，
+   选择工作区后导入。
 7. **或者直接让 agent 做。** <code>session_kit</code> 工具暴露同样的操作（见下方 action 表）。
 
 ## 包格式
