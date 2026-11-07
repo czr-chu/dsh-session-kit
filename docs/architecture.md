@@ -85,9 +85,10 @@ can badge and batch-migrate old rows.
 
 ## Session detail and permanent delete
 
-Clicking a row loads `POST /session-kit/session-detail`: the storage size sums
-regular files in the backend-resolved session directory (all retained
-generations, locks excluded), without opening the log. The delete dialog groups
+Clicking a row loads `POST /session-kit/session-detail` (storage size from the
+backend-resolved session directory, all retained generations, locks excluded)
+and `POST /session-kit/session-files` (the derived related-file preview), so the
+row can show both the size and its best-effort file list without opening logs The delete dialog groups
 derived files by session, preselects strong evidence only, and sends an explicit
 `selectedFiles` list. A separate permanent-erase mode deletes the validated
 session directories and selected files after a distinct red confirmation; it has

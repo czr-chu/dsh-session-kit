@@ -154,6 +154,12 @@ window.__ModuleLoader__.load({
       'panel.detailFormatLegacy': '旧格式',
       'panel.detailArchivedYes': '已归档',
       'panel.detailArchivedNo': '未归档',
+      'panel.detailFiles': '相关文件（实验性）：{count} 个，共 {size}',
+      'panel.detailFilesNone': '没有从事件中发现相关文件（尽力推导，可能遗漏）。',
+      'panel.detailFilesLoading': '正在推导相关文件…',
+      'panel.detailFilesFailed': '相关文件预览失败：{reason}',
+      'panel.detailFileItem': '{path}（{size}{weak}）',
+      'panel.detailFileWeak': ' · 弱证据',
       'panel.showDetail': '查看会话详情 {title}',
       'panel.hideDetail': '收起会话详情 {title}',
       'panel.statusFilter': '状态筛选',
@@ -320,6 +326,12 @@ window.__ModuleLoader__.load({
       'panel.detailFormatLegacy': 'legacy',
       'panel.detailArchivedYes': 'archived',
       'panel.detailArchivedNo': 'not archived',
+      'panel.detailFiles': 'Related files (experimental): {count}, {size} total',
+      'panel.detailFilesNone': 'No related files derived from events (best-effort; some may be missed).',
+      'panel.detailFilesLoading': 'Deriving related files…',
+      'panel.detailFilesFailed': 'Related-file preview failed: {reason}',
+      'panel.detailFileItem': '{path} ({size}{weak})',
+      'panel.detailFileWeak': ' · weak evidence',
       'panel.showDetail': 'Show session detail for {title}',
       'panel.hideDetail': 'Hide session detail for {title}',
       'panel.statusFilter': 'Status',
@@ -1274,22 +1286,29 @@ window.__ModuleLoader__.load({
       const BATCH_LIMIT = 500;
       const MIGRATE_LIMIT = 100;
 
-      /** Load one session's storage detail on demand and cache it. */
+      /** Load one session's storage detail and derived files on demand and cache them. */
       async function loadSessionDetail(sessionId) {
         const cached = details[sessionId];
         if (cached !== undefined && (cached.phase === 'loading' || cached.phase === 'ready')) return;
         setDetails((previous) => ({ ...previous, [sessionId]: { phase: 'loading' } }));
         try {
-          const sessions = await props.loadSessionDetails([sessionId]);
+          const [sessionsResult, previewResult] = await Promise.allSettled([
+            props.loadSessionDetails([sessionId]),
+            props.previewSessionFiles([sessionId]),
+          ]);
           if (!mountedRef.current) return;
+          if (sessionsResult.status !== 'fulfilled') throw sessionsResult.reason;
+          const sessions = sessionsResult.value;
           const found = sessions.find((entry) => entry.sessionId === sessionId);
+          const filePreview = previewResult.status === 'fulfilled' ? previewResult.value : undefined;
+          const filePreviewError = previewResult.status === 'fulfilled' ? '' : errorMessageOf(previewResult.reason, tr);
           setDetails((previous) => ({
             ...previous,
             [sessionId]: found === undefined
               ? { phase: 'error', error: tr('panel.unknownSessionGroup') }
               : found.ok === false
                 ? { phase: 'error', error: found.error === '' ? tr('panel.unknownSessionGroup') : found.error }
-                : { phase: 'ready', ...found },
+                : { phase: 'ready', ...found, ...(filePreview === undefined ? {} : { filePreview }), filePreviewError },
           }));
         } catch (error) {
           if (!mountedRef.current) return;
@@ -2145,6 +2164,19 @@ window.__ModuleLoader__.load({
                         tr('panel.detailArchived', {
                           status: detail.archived === true ? tr('panel.detailArchivedYes') : tr('panel.detailArchivedNo'),
                         }),
+                        ...(detail.filePreview === undefined
+                          ? [detail.filePreviewError === '' ? tr('panel.detailFilesLoading') : tr('panel.detailFilesFailed', { reason: detail.filePreviewError })]
+                          : detail.filePreview.files.length === 0
+                            ? [tr('panel.detailFilesNone')]
+                            : [
+                                tr('panel.detailFiles', { count: detail.filePreview.files.length, size: formatBytes(detail.filePreview.totalBytes) }),
+                                ...detail.filePreview.files.slice(0, 5).map((file) => tr('panel.detailFileItem', {
+                                  path: file.relative === '' ? file.path : file.relative,
+                                  size: formatBytes(file.bytes),
+                                  weak: file.weak === true ? tr('panel.detailFileWeak') : '',
+                                })),
+                                ...(detail.filePreview.files.length > 5 ? [tr('panel.filesPreviewMore', { count: detail.filePreview.files.length - 5 })] : []),
+                              ]),
                       ];
                 detailNode = h('div', { style: STYLES.rowDetail, 'data-session-detail': session.id }, linesNode(detailLines));
               }
