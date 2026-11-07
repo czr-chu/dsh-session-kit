@@ -4,6 +4,18 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-11-07
+
+### Changed
+
+- Redesigned the Session manager panel for readability: a page header with
+  summary chips, a two-column wide layout (Sessions on the left, Tools on the
+  right), a contextual selection bar, an Export card with mode cards and
+  options, and an Import card with Archive / DeepSeek share tabs. Narrow screens
+  stack the columns. All existing actions, dialogs, aria labels and request
+  bodies are unchanged.
+- Added a sanitized panel screenshot to the README.
+
 ## [0.9.4] - 2026-11-07
 
 ### Added

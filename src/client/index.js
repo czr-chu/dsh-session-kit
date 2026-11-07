@@ -47,7 +47,20 @@ const PANEL_ID = 'session-kit'
 // #region dictionaries
 const zh = {
   'panel.title': '会话管理',
-  'panel.subtitle': '按工作区浏览会话，勾选后打包导出，或导入会话包。',
+  'panel.subtitle': '在左侧浏览与管理会话，在右侧导出或导入。',
+  'panel.statSessions': '会话',
+  'panel.statWorkspaces': '工作区',
+  'panel.statArchived': '已归档',
+  'panel.statLegacy': '旧格式',
+  'panel.tools': '工具',
+  'panel.exportReady': '已选 {count} 个会话',
+  'panel.exportNeedSelection': '先在左侧选择会话',
+  'panel.exportSection': '导出',
+  'panel.importSection': '导入',
+  'panel.tabArchive': '会话包',
+  'panel.tabShare': 'DeepSeek 分享',
+  'panel.exportCardHint': '打包所选会话；精简模式体积更小，全量模式保留完整历史。',
+  'panel.importCardHint': '导入会话包，或从 DeepSeek 公开分享链接新建会话。',
   'panel.loading': '正在加载会话列表…',
   'panel.loadFailed': '会话列表加载失败',
   'panel.retry': '重试',
@@ -238,7 +251,20 @@ const zh = {
 }
 const en = {
   'panel.title': 'Session manager',
-  'panel.subtitle': 'Browse sessions by workspace, select any subset, and export or import archives.',
+  'panel.subtitle': 'Browse and manage sessions on the left; export or import on the right.',
+  'panel.statSessions': 'Sessions',
+  'panel.statWorkspaces': 'Workspaces',
+  'panel.statArchived': 'Archived',
+  'panel.statLegacy': 'Legacy',
+  'panel.tools': 'Tools',
+  'panel.exportReady': '{count} selected',
+  'panel.exportNeedSelection': 'Select sessions on the left first',
+  'panel.exportSection': 'Export',
+  'panel.importSection': 'Import',
+  'panel.tabArchive': 'Archive',
+  'panel.tabShare': 'DeepSeek share',
+  'panel.exportCardHint': 'Package the selected sessions; compact is smaller, full keeps the complete history.',
+  'panel.importCardHint': 'Import an archive, or create a new session from a public DeepSeek share link.',
   'panel.loading': 'Loading sessions…',
   'panel.loadFailed': 'Could not load sessions',
   'panel.retry': 'Retry',
@@ -1051,19 +1077,6 @@ function rowButtonStyle(role, disabled) {
   return { ...buttonStyle(role, disabled), height: 26, padding: '0 8px', font: `12px/18px ${T.font}` }
 }
 
-/** Segmented status-filter button style. */
-function filterButtonStyle(active) {
-  return {
-    ...buttonStyle('secondary', false),
-    height: 28,
-    padding: '0 10px',
-    background: active ? T.bgLayer2 : 'transparent',
-    color: active ? T.labelPrimary : T.labelSecondary,
-    border: active ? `1px solid ${T.brand}` : `1px solid ${T.border}`,
-    fontWeight: active ? 600 : 500,
-  }
-}
-
 /** Render one compact block of muted detail lines inside a dialog. */
 function linesNode(lines) {
   return h(
@@ -1187,6 +1200,7 @@ function SessionKitPanel(props) {
   const [shareTitle, setShareTitle] = React.useState('')
   const [shareBusy, setShareBusy] = React.useState(false)
   const [shareResult, setShareResult] = React.useState(null)
+  const [importTab, setImportTab] = React.useState('archive')
   const [busy, setBusy] = React.useState('')
   const [notice, setNotice] = React.useState(null)
   const fileInputRef = React.useRef(null)
@@ -1978,370 +1992,6 @@ function SessionKitPanel(props) {
     ),
   )
 
-  const statusFilterRow = h(
-    'div',
-    { className: styles.toolbar, role: 'group', 'aria-label': tr('panel.statusFilter') },
-    h('span', { className: styles.counter }, tr('panel.statusFilter')),
-    h(
-      'button',
-      {
-        type: 'button',
-        style: filterButtonStyle(statusFilter === 'all'),
-        'aria-pressed': statusFilter === 'all',
-        onClick: () => setStatusFilter('all'),
-      },
-      tr('panel.statusAll'),
-      h('span', { className: styles.filterCount }, String(counts.all)),
-    ),
-    h(
-      'button',
-      {
-        type: 'button',
-        style: filterButtonStyle(statusFilter === 'active'),
-        'aria-pressed': statusFilter === 'active',
-        onClick: () => setStatusFilter('active'),
-      },
-      tr('panel.statusActive'),
-      h('span', { className: styles.filterCount }, String(counts.active)),
-    ),
-    h(
-      'button',
-      {
-        type: 'button',
-        style: filterButtonStyle(statusFilter === 'archived'),
-        'aria-pressed': statusFilter === 'archived',
-        onClick: () => setStatusFilter('archived'),
-      },
-      tr('panel.statusArchived'),
-      h('span', { className: styles.filterCount }, String(counts.archived)),
-    ),
-    h(
-      'span',
-      { className: styles.counter + ' ' + styles.counterOffset },
-      tr('panel.legacyCount', { count: legacyCount }),
-    ),
-    h(
-      'button',
-      {
-        type: 'button',
-        style: buttonStyle('secondary', legacyCount === 0 || busy !== ''),
-        disabled: legacyCount === 0 || busy !== '',
-        onClick: batchMigrate,
-        title: tr('panel.upgradeHint'),
-      },
-      tr('panel.upgradeLegacy'),
-    ),
-  )
-
-  const searchRow = h(
-    'div',
-    { className: styles.toolbar },
-    h('input', {
-      type: 'search',
-      value: query,
-      placeholder: tr('panel.search'),
-      'aria-label': tr('panel.search'),
-      onChange: (event) => setQuery(event.target.value),
-      className: styles.search,
-    }),
-    h(
-      'button',
-      {
-        type: 'button',
-        style: buttonStyle('secondary', allVisible.length === 0),
-        disabled: allVisible.length === 0,
-        onClick: () => setMany(allVisible, true),
-      },
-      tr('panel.selectAll'),
-    ),
-    h(
-      'button',
-      {
-        type: 'button',
-        style: buttonStyle('secondary', allVisible.length === 0),
-        disabled: allVisible.length === 0,
-        onClick: () => setMany(allVisible, false),
-      },
-      tr('panel.selectNone'),
-    ),
-    h('span', { className: styles.counter }, tr('panel.selectedCount', { selected: selectedCount, total })),
-    h('span', { className: styles.counter }, tr('panel.searchCount', { matched: matchedCount, total })),
-    h(
-      'button',
-      {
-        type: 'button',
-        style: buttonStyle('secondary', selectedCount === 0 || busy !== ''),
-        disabled: selectedCount === 0 || busy !== '',
-        onClick: batchArchive,
-      },
-      tr('panel.archiveSelected'),
-    ),
-    h(
-      'button',
-      {
-        type: 'button',
-        style: buttonStyle('secondary', selectedCount === 0 || busy !== ''),
-        disabled: selectedCount === 0 || busy !== '',
-        onClick: batchUnarchive,
-      },
-      tr('panel.unarchiveSelected'),
-    ),
-    h(
-      'button',
-      {
-        type: 'button',
-        style: buttonStyle('dangerGhost', selectedCount === 0 || busy !== ''),
-        disabled: selectedCount === 0 || busy !== '',
-        onClick: batchDelete,
-      },
-      tr('panel.deleteSelected'),
-    ),
-  )
-
-  const modeRow = h(
-    'div',
-    { className: styles.modeRow, role: 'group', 'aria-label': tr('panel.exportOptions') },
-    h(
-      'label',
-      { className: styles.modeLabel },
-      h('input', {
-        type: 'radio',
-        name: 'session-kit-export-mode',
-        value: 'compact',
-        checked: mode === 'compact',
-        disabled: busy !== '',
-        onChange: () => setMode('compact'),
-      }),
-      h('span', null, tr('panel.modeCompact'), h('span', { className: styles.modeHint }, tr('panel.modeCompactHint'))),
-    ),
-    h(
-      'label',
-      { className: styles.modeLabel },
-      h('input', {
-        type: 'radio',
-        name: 'session-kit-export-mode',
-        value: 'full',
-        checked: mode === 'full',
-        disabled: busy !== '',
-        onChange: () => setMode('full'),
-      }),
-      h('span', null, tr('panel.modeFull'), h('span', { className: styles.modeHint }, tr('panel.modeFullHint'))),
-    ),
-    h(
-      'label',
-      { className: styles.modeLabel },
-      h('input', {
-        type: 'checkbox',
-        checked: includeAttachments,
-        disabled: busy !== '',
-        onChange: (event) => setIncludeAttachments(event.target.checked),
-      }),
-      h('span', null, tr('panel.attachments'), h('span', { className: styles.modeHint }, tr('panel.attachmentsHint'))),
-    ),
-    h(
-      'label',
-      { className: styles.modeLabel },
-      h('input', {
-        type: 'checkbox',
-        checked: includeWorkspaceFiles,
-        disabled: busy !== '',
-        onChange: (event) => setIncludeWorkspaceFiles(event.target.checked),
-      }),
-      h(
-        'span',
-        null,
-        tr('panel.workspaceFiles'),
-        h('span', { className: styles.modeHint }, tr('panel.workspaceFilesHint')),
-      ),
-    ),
-    h(
-      'label',
-      { className: styles.modeLabel },
-      h('input', {
-        type: 'checkbox',
-        checked: includeSubagents,
-        disabled: busy !== '',
-        onChange: (event) => setIncludeSubagents(event.target.checked),
-      }),
-      h('span', null, tr('panel.subagents'), h('span', { className: styles.modeHint }, tr('panel.subagentsHint'))),
-    ),
-  )
-
-  const actions = h(
-    'div',
-    { className: styles.actionsRow },
-    h(
-      'button',
-      {
-        type: 'button',
-        style: buttonStyle('primary', busy !== '' || selectedCount === 0),
-        disabled: busy !== '' || selectedCount === 0,
-        onClick: () => {
-          void runExport()
-        },
-        'aria-busy': busyExport ? 'true' : undefined,
-      },
-      busyExport ? tr('panel.exporting') : tr('panel.export'),
-    ),
-    h(
-      'button',
-      {
-        type: 'button',
-        style: buttonStyle('secondary', busy !== ''),
-        disabled: busy !== '',
-        onClick: pickFile,
-        'aria-busy': busyImport ? 'true' : undefined,
-      },
-      busyImport ? tr('panel.importing') : tr('panel.import'),
-    ),
-    h('input', {
-      ref: fileInputRef,
-      type: 'file',
-      accept: '.zip,.jsonl,application/zip,application/jsonl,application/x-ndjson',
-      className: styles.hiddenInput,
-      onChange: onFileChange,
-      'aria-hidden': 'true',
-      tabIndex: -1,
-    }),
-  )
-
-  const importOptions = h(
-    'div',
-    { className: styles.modeRow, role: 'group', 'aria-label': tr('panel.importOptions') },
-    h(
-      'label',
-      { className: styles.modeLabel },
-      h('input', {
-        type: 'checkbox',
-        checked: restoreWorkspaceFiles,
-        disabled: busy !== '',
-        onChange: (event) => setRestoreWorkspaceFiles(event.target.checked),
-      }),
-      h(
-        'span',
-        null,
-        tr('panel.restoreWorkspaceFiles'),
-        h('span', { className: styles.modeHint }, tr('panel.restoreWorkspaceFilesHint')),
-      ),
-    ),
-  )
-
-  const shareWorkspaceOptions = catalog.workspaces
-    .filter((workspace) => workspace.workspaceId !== '')
-    .map((workspace) =>
-      h(
-        'option',
-        { key: workspace.workspaceId, value: workspace.workspaceId },
-        workspace.title !== '' ? `${workspace.title} · ${workspace.path}` : workspace.path,
-      ),
-    )
-
-  const shareResultNode =
-    shareResult === null
-      ? null
-      : h(
-          'div',
-          {
-            className: styles.notice,
-            style: { borderLeftColor: shareResult.phase === 'error' ? T.error : T.success },
-            role: shareResult.phase === 'error' ? 'alert' : 'status',
-            'aria-live': 'polite',
-          },
-          shareResult.phase === 'error'
-            ? [
-                h('span', { key: 'title', className: styles.noticeTitle }, tr('panel.shareFailed')),
-                h('span', { key: 'error', className: styles.noticeLine }, shareResult.error),
-              ]
-            : shareResult.phase === 'success'
-              ? [
-                  h('span', { key: 'title', className: styles.noticeTitle }, tr('panel.shareSuccess')),
-                  h(
-                    'span',
-                    { key: 'id', className: styles.noticeLine },
-                    tr('panel.shareSessionId', { id: shareResult.sessionId }),
-                  ),
-                  shareResult.title !== ''
-                    ? h('span', { key: 'session-title', className: styles.noticeLine }, shareResult.title)
-                    : null,
-                  h(
-                    'span',
-                    { key: 'count', className: styles.noticeLine },
-                    tr('panel.shareEventCount', { count: shareResult.eventCount }),
-                  ),
-                  ...shareResult.warnings.map((warning, index) =>
-                    h('span', { key: `warning-${index}`, className: styles.noticeLine }, warning),
-                  ),
-                ]
-              : [h('span', { key: 'busy', className: styles.noticeTitle }, tr('panel.shareImporting'))],
-        )
-
-  const shareCard = h(
-    'div',
-    { className: styles.card, role: 'group', 'aria-label': tr('panel.shareTitle') },
-    h(
-      'div',
-      { className: styles.shareHeader },
-      h('span', { className: styles.shareTitleText }, tr('panel.shareTitle')),
-      h('span', { className: styles.modeHint }, tr('panel.shareHint')),
-    ),
-    h(
-      'div',
-      { className: styles.formRow },
-      h('input', {
-        type: 'text',
-        value: shareInput,
-        placeholder: tr('panel.sharePlaceholder'),
-        'aria-label': tr('panel.sharePlaceholder'),
-        disabled: shareBusy,
-        onChange: (event) => setShareInput(event.target.value),
-        className: styles.search,
-        style: { flex: '1 1 320px', minWidth: 220 },
-      }),
-      h(
-        'select',
-        {
-          value: shareWorkspaceId,
-          disabled: shareBusy,
-          'aria-label': tr('panel.shareWorkspace'),
-          onChange: (event) => setShareWorkspaceId(event.target.value),
-          className: styles.select,
-        },
-        h('option', { value: '' }, tr('panel.shareWorkspaceDefault')),
-        ...shareWorkspaceOptions,
-      ),
-      h('input', {
-        type: 'text',
-        value: shareTitle,
-        placeholder: tr('panel.shareTitleLabel'),
-        'aria-label': tr('panel.shareTitleLabel'),
-        disabled: shareBusy,
-        onChange: (event) => setShareTitle(event.target.value),
-        className: styles.search,
-        style: { flex: '0 1 200px', minWidth: 150 },
-      }),
-      h(
-        'button',
-        {
-          type: 'button',
-          style: buttonStyle('secondary', shareBusy),
-          disabled: shareBusy,
-          onClick: () => {
-            void runShareImport()
-          },
-          'aria-busy': shareBusy ? 'true' : undefined,
-        },
-        shareBusy ? tr('panel.shareImporting') : tr('panel.shareImport'),
-      ),
-    ),
-    h(
-      'div',
-      { className: styles.lines },
-      h('span', { className: styles.modeHint }, tr('panel.shareRiskPublic')),
-      h('span', { className: styles.modeHint }, tr('panel.shareRiskNew')),
-    ),
-    shareResultNode,
-  )
-
   let body
   if (phase === 'loading') {
     body = h('div', { className: styles.emptyCard }, tr('panel.loading'))
@@ -2595,6 +2245,513 @@ function SessionKitPanel(props) {
     })
   }
 
+  const workspaceCount = catalog.workspaces.length
+
+  const statChip = (label, value) =>
+    h(
+      'span',
+      { className: styles.statChip },
+      h('span', { className: styles.statLabel }, label),
+      h('span', { className: styles.statValue }, String(value)),
+    )
+
+  const statsRow = h(
+    'div',
+    { className: styles.statsRow },
+    statChip(tr('panel.statSessions'), total),
+    statChip(tr('panel.statWorkspaces'), workspaceCount),
+    statChip(tr('panel.statArchived'), counts.archived),
+    statChip(tr('panel.statLegacy'), legacyCount),
+    h('span', { className: styles.statsSpacer }),
+    h(
+      'button',
+      {
+        type: 'button',
+        style: buttonStyle('secondary', legacyCount === 0 || busy !== ''),
+        disabled: legacyCount === 0 || busy !== '',
+        onClick: batchMigrate,
+        title: tr('panel.upgradeHint'),
+      },
+      tr('panel.upgradeLegacy'),
+    ),
+  )
+
+  const statusFilterRow = h(
+    'div',
+    { className: styles.segmented, role: 'group', 'aria-label': tr('panel.statusFilter') },
+    h(
+      'button',
+      {
+        type: 'button',
+        className: styles.segment,
+        'aria-pressed': statusFilter === 'all' ? 'true' : 'false',
+        onClick: () => setStatusFilter('all'),
+      },
+      tr('panel.statusAll'),
+      h('span', { className: styles.segmentCount }, String(counts.all)),
+    ),
+    h(
+      'button',
+      {
+        type: 'button',
+        className: styles.segment,
+        'aria-pressed': statusFilter === 'active' ? 'true' : 'false',
+        onClick: () => setStatusFilter('active'),
+      },
+      tr('panel.statusActive'),
+      h('span', { className: styles.segmentCount }, String(counts.active)),
+    ),
+    h(
+      'button',
+      {
+        type: 'button',
+        className: styles.segment,
+        'aria-pressed': statusFilter === 'archived' ? 'true' : 'false',
+        onClick: () => setStatusFilter('archived'),
+      },
+      tr('panel.statusArchived'),
+      h('span', { className: styles.segmentCount }, String(counts.archived)),
+    ),
+  )
+
+  const searchRow = h(
+    'div',
+    { className: styles.searchRow },
+    h('input', {
+      type: 'search',
+      value: query,
+      placeholder: tr('panel.search'),
+      'aria-label': tr('panel.search'),
+      onChange: (event) => setQuery(event.target.value),
+      className: styles.search,
+    }),
+    h(
+      'div',
+      { className: styles.selectActions },
+      h(
+        'button',
+        {
+          type: 'button',
+          style: buttonStyle('secondary', allVisible.length === 0),
+          disabled: allVisible.length === 0,
+          onClick: () => setMany(allVisible, true),
+        },
+        tr('panel.selectAll'),
+      ),
+      h(
+        'button',
+        {
+          type: 'button',
+          style: buttonStyle('secondary', allVisible.length === 0),
+          disabled: allVisible.length === 0,
+          onClick: () => setMany(allVisible, false),
+        },
+        tr('panel.selectNone'),
+      ),
+    ),
+  )
+
+  const selectionBar =
+    selectedCount === 0
+      ? null
+      : h(
+          'div',
+          {
+            className: styles.selectionBar,
+            role: 'group',
+            'aria-label': tr('panel.selectedCount', { selected: selectedCount, total }),
+          },
+          h('span', { className: styles.selectionInfo }, tr('panel.selectedCount', { selected: selectedCount, total })),
+          h(
+            'div',
+            { className: styles.selectionActions },
+            h(
+              'button',
+              {
+                type: 'button',
+                style: buttonStyle('primary', busy !== ''),
+                disabled: busy !== '',
+                onClick: () => {
+                  void runExport()
+                },
+                'aria-busy': busyExport ? 'true' : undefined,
+              },
+              busyExport ? tr('panel.exporting') : tr('panel.export'),
+            ),
+            h(
+              'button',
+              {
+                type: 'button',
+                style: buttonStyle('secondary', busy !== ''),
+                disabled: busy !== '',
+                onClick: batchArchive,
+              },
+              tr('panel.archive'),
+            ),
+            h(
+              'button',
+              {
+                type: 'button',
+                style: buttonStyle('secondary', busy !== ''),
+                disabled: busy !== '',
+                onClick: batchUnarchive,
+              },
+              tr('panel.unarchive'),
+            ),
+            h(
+              'button',
+              {
+                type: 'button',
+                style: buttonStyle('dangerGhost', busy !== ''),
+                disabled: busy !== '',
+                onClick: batchDelete,
+              },
+              tr('panel.delete'),
+            ),
+          ),
+        )
+
+  const sessionsPanel = h(
+    'section',
+    { className: styles.sessionsPanel, 'aria-label': tr('panel.title') },
+    h(
+      'div',
+      { className: styles.sectionHeader },
+      h('h2', { className: styles.sectionTitle }, tr('panel.statSessions')),
+      h('span', { className: styles.sectionMeta }, tr('panel.searchCount', { matched: matchedCount, total })),
+    ),
+    h('div', { className: styles.sessionsToolbar }, searchRow, statusFilterRow),
+    selectionBar,
+    body,
+  )
+
+  const checkRow = (checked, disabled, onChange, label, hint) =>
+    h(
+      'label',
+      { className: styles.checkRow },
+      h('input', { type: 'checkbox', checked, disabled, onChange }),
+      h(
+        'span',
+        { className: styles.checkText },
+        h('span', null, label),
+        h('span', { className: styles.modeHint }, hint),
+      ),
+    )
+
+  const modeGrid = h(
+    'div',
+    { className: styles.modeGrid },
+    h(
+      'label',
+      {
+        className: mode === 'compact' ? styles.modeCard + ' ' + styles.modeCardActive : styles.modeCard,
+      },
+      h('input', {
+        type: 'radio',
+        name: 'session-kit-export-mode',
+        value: 'compact',
+        checked: mode === 'compact',
+        disabled: busy !== '',
+        onChange: () => setMode('compact'),
+      }),
+      h(
+        'span',
+        { className: styles.modeCardText },
+        h('span', { className: styles.modeCardTitle }, tr('panel.modeCompact')),
+        h('span', { className: styles.modeHint }, tr('panel.modeCompactHint')),
+      ),
+    ),
+    h(
+      'label',
+      {
+        className: mode === 'full' ? styles.modeCard + ' ' + styles.modeCardActive : styles.modeCard,
+      },
+      h('input', {
+        type: 'radio',
+        name: 'session-kit-export-mode',
+        value: 'full',
+        checked: mode === 'full',
+        disabled: busy !== '',
+        onChange: () => setMode('full'),
+      }),
+      h(
+        'span',
+        { className: styles.modeCardText },
+        h('span', { className: styles.modeCardTitle }, tr('panel.modeFull')),
+        h('span', { className: styles.modeHint }, tr('panel.modeFullHint')),
+      ),
+    ),
+  )
+
+  const exportOptions = h(
+    'div',
+    { className: styles.exportOptions, role: 'group', 'aria-label': tr('panel.exportOptions') },
+    modeGrid,
+    h(
+      'div',
+      { className: styles.optionList },
+      checkRow(
+        includeAttachments,
+        busy !== '',
+        (event) => setIncludeAttachments(event.target.checked),
+        tr('panel.attachments'),
+        tr('panel.attachmentsHint'),
+      ),
+      checkRow(
+        includeWorkspaceFiles,
+        busy !== '',
+        (event) => setIncludeWorkspaceFiles(event.target.checked),
+        tr('panel.workspaceFiles'),
+        tr('panel.workspaceFilesHint'),
+      ),
+      checkRow(
+        includeSubagents,
+        busy !== '',
+        (event) => setIncludeSubagents(event.target.checked),
+        tr('panel.subagents'),
+        tr('panel.subagentsHint'),
+      ),
+    ),
+  )
+
+  const exportPanel = h(
+    'div',
+    { className: styles.toolCard },
+    h(
+      'div',
+      { className: styles.toolCardHeader },
+      h('h3', { className: styles.toolCardTitle }, tr('panel.exportSection')),
+      h('p', { className: styles.toolCardHint }, tr('panel.exportCardHint')),
+    ),
+    exportOptions,
+    h(
+      'p',
+      { className: styles.toolCardStatus },
+      selectedCount === 0 ? tr('panel.exportNeedSelection') : tr('panel.exportReady', { count: selectedCount }),
+    ),
+    h(
+      'div',
+      { className: styles.toolActions },
+      h(
+        'button',
+        {
+          type: 'button',
+          style: buttonStyle('primary', busy !== '' || selectedCount === 0),
+          disabled: busy !== '' || selectedCount === 0,
+          onClick: () => {
+            void runExport()
+          },
+          'aria-busy': busyExport ? 'true' : undefined,
+        },
+        busyExport ? tr('panel.exporting') : tr('panel.export'),
+      ),
+    ),
+  )
+
+  const importOptions = h(
+    'div',
+    { className: styles.optionList, role: 'group', 'aria-label': tr('panel.importOptions') },
+    checkRow(
+      restoreWorkspaceFiles,
+      busy !== '',
+      (event) => setRestoreWorkspaceFiles(event.target.checked),
+      tr('panel.restoreWorkspaceFiles'),
+      tr('panel.restoreWorkspaceFilesHint'),
+    ),
+  )
+
+  const archivePanel = h(
+    'div',
+    {
+      className: styles.tabPanel,
+      role: 'tabpanel',
+      id: 'session-kit-tabpanel-archive',
+      'aria-labelledby': 'session-kit-tab-archive',
+    },
+    importOptions,
+    h(
+      'div',
+      { className: styles.toolActions },
+      h(
+        'button',
+        {
+          type: 'button',
+          style: buttonStyle('secondary', busy !== ''),
+          disabled: busy !== '',
+          onClick: pickFile,
+          'aria-busy': busyImport ? 'true' : undefined,
+        },
+        busyImport ? tr('panel.importing') : tr('panel.import'),
+      ),
+      h('input', {
+        ref: fileInputRef,
+        type: 'file',
+        accept: '.zip,.jsonl,application/zip,application/jsonl,application/x-ndjson',
+        className: styles.hiddenInput,
+        onChange: onFileChange,
+        'aria-hidden': 'true',
+        tabIndex: -1,
+      }),
+    ),
+    h('p', { className: styles.toolCardHint }, tr('panel.importHint')),
+  )
+
+  const shareWorkspaceOptions = catalog.workspaces
+    .filter((workspace) => workspace.workspaceId !== '')
+    .map((workspace) =>
+      h(
+        'option',
+        { key: workspace.workspaceId, value: workspace.workspaceId },
+        workspace.title !== '' ? workspace.title + ' · ' + workspace.path : workspace.path,
+      ),
+    )
+
+  const shareResultNode =
+    shareResult === null
+      ? null
+      : h(
+          'div',
+          {
+            className: styles.notice,
+            style: { borderLeftColor: shareResult.phase === 'error' ? T.error : T.success },
+            role: shareResult.phase === 'error' ? 'alert' : 'status',
+            'aria-live': 'polite',
+          },
+          shareResult.phase === 'error'
+            ? [
+                h('span', { key: 'title', className: styles.noticeTitle }, tr('panel.shareFailed')),
+                h('span', { key: 'error', className: styles.noticeLine }, shareResult.error),
+              ]
+            : shareResult.phase === 'success'
+              ? [
+                  h('span', { key: 'title', className: styles.noticeTitle }, tr('panel.shareSuccess')),
+                  h(
+                    'span',
+                    { key: 'id', className: styles.noticeLine },
+                    tr('panel.shareSessionId', { id: shareResult.sessionId }),
+                  ),
+                  shareResult.title !== ''
+                    ? h('span', { key: 'session-title', className: styles.noticeLine }, shareResult.title)
+                    : null,
+                  h(
+                    'span',
+                    { key: 'count', className: styles.noticeLine },
+                    tr('panel.shareEventCount', { count: shareResult.eventCount }),
+                  ),
+                  ...shareResult.warnings.map((warning, index) =>
+                    h('span', { key: 'warning-' + index, className: styles.noticeLine }, warning),
+                  ),
+                ]
+              : [h('span', { key: 'busy', className: styles.noticeTitle }, tr('panel.shareImporting'))],
+        )
+
+  const sharePanel = h(
+    'div',
+    {
+      className: styles.tabPanel,
+      role: 'tabpanel',
+      id: 'session-kit-tabpanel-share',
+      'aria-labelledby': 'session-kit-tab-share',
+    },
+    h(
+      'div',
+      { className: styles.shareForm, role: 'group', 'aria-label': tr('panel.shareTitle') },
+      h('input', {
+        type: 'text',
+        value: shareInput,
+        placeholder: tr('panel.sharePlaceholder'),
+        'aria-label': tr('panel.sharePlaceholder'),
+        disabled: shareBusy,
+        onChange: (event) => setShareInput(event.target.value),
+        className: styles.search,
+      }),
+      h(
+        'select',
+        {
+          value: shareWorkspaceId,
+          disabled: shareBusy,
+          'aria-label': tr('panel.shareWorkspace'),
+          onChange: (event) => setShareWorkspaceId(event.target.value),
+          className: styles.select,
+        },
+        h('option', { value: '' }, tr('panel.shareWorkspaceDefault')),
+        ...shareWorkspaceOptions,
+      ),
+      h('input', {
+        type: 'text',
+        value: shareTitle,
+        placeholder: tr('panel.shareTitleLabel'),
+        'aria-label': tr('panel.shareTitleLabel'),
+        disabled: shareBusy,
+        onChange: (event) => setShareTitle(event.target.value),
+        className: styles.search,
+      }),
+      h(
+        'button',
+        {
+          type: 'button',
+          style: buttonStyle('secondary', shareBusy),
+          disabled: shareBusy,
+          onClick: () => {
+            void runShareImport()
+          },
+          'aria-busy': shareBusy ? 'true' : undefined,
+        },
+        shareBusy ? tr('panel.shareImporting') : tr('panel.shareImport'),
+      ),
+    ),
+    h(
+      'div',
+      { className: styles.lines },
+      h('span', { className: styles.modeHint }, tr('panel.shareRiskPublic')),
+      h('span', { className: styles.modeHint }, tr('panel.shareRiskNew')),
+    ),
+    shareResultNode,
+  )
+
+  const importTabButton = (id, label) =>
+    h(
+      'button',
+      {
+        type: 'button',
+        role: 'tab',
+        id: 'session-kit-tab-' + id,
+        'aria-selected': importTab === id ? 'true' : 'false',
+        'aria-controls': 'session-kit-tabpanel-' + id,
+        tabIndex: importTab === id ? 0 : -1,
+        className: styles.tab,
+        onClick: () => setImportTab(id),
+      },
+      label,
+    )
+
+  const importPanel = h(
+    'div',
+    { className: styles.toolCard },
+    h(
+      'div',
+      { className: styles.toolCardHeader },
+      h('h3', { className: styles.toolCardTitle }, tr('panel.importSection')),
+      h('p', { className: styles.toolCardHint }, tr('panel.importCardHint')),
+    ),
+    h(
+      'div',
+      { className: styles.tabs, role: 'tablist', 'aria-label': tr('panel.importSection') },
+      importTabButton('archive', tr('panel.tabArchive')),
+      importTabButton('share', tr('panel.tabShare')),
+    ),
+    importTab === 'archive' ? archivePanel : sharePanel,
+  )
+
+  const toolsPanel = h(
+    'aside',
+    { className: styles.toolsPanel, 'aria-label': tr('panel.tools') },
+    exportPanel,
+    importPanel,
+  )
+
+  const mainGrid = h('div', { className: styles.mainGrid }, sessionsPanel, toolsPanel)
+
   const noticeCard =
     notice === null
       ? null
@@ -2822,14 +2979,9 @@ function SessionKitPanel(props) {
       'div',
       { className: styles.content },
       header,
-      statusFilterRow,
-      searchRow,
-      modeRow,
-      actions,
-      importOptions,
-      shareCard,
+      statsRow,
       noticeCard,
-      body,
+      mainGrid,
       h('p', { className: styles.footnote }, tr('panel.importHint')),
     ),
     confirmDialog,

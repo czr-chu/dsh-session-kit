@@ -1,7 +1,7 @@
 # dsh-session-kit
 
 **DeepSeek Harness 的会话管理、备份与迁移工具包。**
-Version **0.9.4** · 公开 beta · [English](README.md)
+Version **0.10.0** · 公开 beta · [English](README.md)
 
 dsh-session-kit 为 DeepSeek Harness（DSH）增加一个 **会话管理（Session manager）**
 面板和一个 <code>session_kit</code> agent 工具：浏览与检查会话、导出为可迁移的
@@ -13,6 +13,8 @@ ZIP（可选携带工作区文件）、在另一台机器或另一个工作区�
 
 > 插件是纯 ESM bundle，不声明任何 <code>@deepseek-ai/*</code> 运行时依赖，
 > 所有 DSH 能力都通过 composed service registry（<code>ctx.get(...)</code>）读取。
+
+![会话管理面板](docs/assets/session-manager.png)
 
 ## 为什么需要它
 
@@ -137,7 +139,7 @@ ZIP（可选携带工作区文件）、在另一台机器或另一个工作区�
 
 ~~~bash
 # 从 GitHub 安装（建议固定 release tag）
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.9.4
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.0
 
 # 从本地 checkout 安装（便于迭代）
 dsh plugin --profile web add ~/src/dsh-session-kit
