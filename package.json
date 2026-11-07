@@ -66,7 +66,10 @@
   "scripts": {
     "test": "node --test test/*.test.mjs"
   },
-  "author": "czr-chu",
+  "author": {
+    "name": "CharlesChu",
+    "url": "https://github.com/czr-chu"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/czr-chu/dsh-session-kit.git"
