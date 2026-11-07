@@ -1,6 +1,6 @@
 # Roadmap
 
-Shipped through 0.8.0:
+Shipped through 0.8.1:
 
 - session/workspace browsing, search, status filters, archived badges and selection;
 - session detail (storage size across retained generations, format status, archived state);
@@ -11,7 +11,8 @@ Shipped through 0.8.0:
 - legacy-format migration through DSH's official persistence chain (single and batch);
 - DeepSeek public share-link import into a chosen workspace;
 - one agent tool (`session_kit`) covering the same operations;
-- public-release documentation, security policy, CI and issue templates.
+- public-release documentation, security policy, CI and issue templates;
+- standard-schema `Config` validation, bundle icon and localized detail documents.
 
 Next:
 

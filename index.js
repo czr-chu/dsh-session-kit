@@ -49,6 +49,79 @@ export const name = 'dsh-session-kit';
 /** Services the plugin cannot work without. */
 export const inject = ['tools', 'sessionQuery', 'sessionPersistence'];
 
+/**
+ * Standard-schema config validation for the Loader row. Unknown keys and
+ * wrong types fail the plugin at startup instead of being silently defaulted;
+ * defaults are applied by {@link resolveSettings}. The internal `modules` test
+ * seam is deliberately absent, so YAML cannot inject modules.
+ */
+export const Config = {
+  '~standard': {
+    version: 1,
+    vendor: 'dsh-session-kit',
+    /**
+     * @param {unknown} value - raw row config.
+     * @returns {{value: object} | {issues: Array<{message: string, path?: string[]}>}} validated config.
+     */
+    validate(value) {
+      if (value === undefined || value === null) return { value: {} };
+      if (typeof value !== 'object' || Array.isArray(value)) {
+        return { issues: [{ message: 'session-kit config must be an object' }] };
+      }
+      const issues = [];
+      const known = new Set([
+        'maxImportBytes',
+        'maxExportBytes',
+        'includeAttachments',
+        'includeWorkspaceFiles',
+        'includeSubagents',
+        'restoreWorkspaceFiles',
+        'workspaceExclude',
+        'workspaceMaxBytes',
+        'trashDir',
+        'defaultMode',
+      ]);
+      for (const key of Object.keys(value)) {
+        if (!known.has(key)) issues.push({ message: `unknown config key: ${key}`, path: [key] });
+      }
+      const positiveInteger = (key) => {
+        const entry = value[key];
+        if (entry === undefined) return;
+        if (!Number.isSafeInteger(entry) || entry <= 0) {
+          issues.push({ message: `${key} must be a positive safe integer`, path: [key] });
+        }
+      };
+      const boolean = (key) => {
+        const entry = value[key];
+        if (entry !== undefined && typeof entry !== 'boolean') {
+          issues.push({ message: `${key} must be a boolean`, path: [key] });
+        }
+      };
+      positiveInteger('maxImportBytes');
+      positiveInteger('maxExportBytes');
+      positiveInteger('workspaceMaxBytes');
+      boolean('includeAttachments');
+      boolean('includeWorkspaceFiles');
+      boolean('includeSubagents');
+      boolean('restoreWorkspaceFiles');
+      const exclude = value.workspaceExclude;
+      if (exclude !== undefined && (!Array.isArray(exclude)
+        || exclude.some((entry) => typeof entry !== 'string' || entry.trim() === ''))) {
+        issues.push({ message: 'workspaceExclude must be an array of non-empty strings', path: ['workspaceExclude'] });
+      }
+      const trashDir = value.trashDir;
+      if (trashDir !== undefined && (typeof trashDir !== 'string' || trashDir.trim() === '')) {
+        issues.push({ message: 'trashDir must be a non-empty string', path: ['trashDir'] });
+      }
+      const mode = value.defaultMode;
+      if (mode !== undefined && mode !== 'full' && mode !== 'compact') {
+        issues.push({ message: 'defaultMode must be "full" or "compact"', path: ['defaultMode'] });
+      }
+      return issues.length === 0 ? { value } : { issues };
+    },
+  },
+};
+
 /** Route prefix owned by this plugin. */
 const ROUTE_PREFIX = '/session-kit';
 /** Cap on the JSON export/manage request body. */

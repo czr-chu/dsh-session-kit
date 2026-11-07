@@ -1,7 +1,7 @@
 # dsh-session-kit
 
 **DeepSeek Harness 的会话管理、备份与迁移工具包。**
-Version **0.8.0** · 公开 beta · [English](README.md)
+Version **0.8.1** · 公开 beta · [English](README.md)
 
 dsh-session-kit 为 DeepSeek Harness（DSH）增加一个 **会话管理（Session manager）**
 面板和一个 <code>session_kit</code> agent 工具：浏览与检查会话、导出为可迁移的
@@ -137,7 +137,7 @@ ZIP（可选携带工作区文件）、在另一台机器或另一个工作区�
 
 ~~~bash
 # 从 GitHub 安装（建议固定 release tag）
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.8.0
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.8.1
 
 # 从本地 checkout 安装（便于迭代）
 dsh plugin --profile web add ~/src/dsh-session-kit
@@ -215,6 +215,7 @@ $DSH_HOME/session-kit-trash/<timestamp>/
 | <code>trashDir</code> | <code>$DSH_HOME/session-kit-trash</code> | 删除会话移动到的目录 |
 | <code>defaultMode</code> | <code>compact</code> | 调用方未指定时使用的导出模式 |
 
+插件导出标准 schema 的 `Config`：未知 key 或类型错误会在启动时直接失败，而不是静默回退默认值。
 批量上限：管理操作每请求最多 500 个 id，迁移/文件预览/会话详情 100 个 id，
 单次删除最多勾选 5000 个文件。
 
@@ -282,7 +283,7 @@ cd dsh-session-kit && npm test
 node --import tsx/esm --test dsh-session-kit/test/*.test.mjs
 ~~~
 
-预期：**218 个测试**，其中 5 个真实后端用例在纯 <code>node --test</code> 下 skip
+预期：**222 个测试**，其中 5 个真实后端用例在纯 <code>node --test</code> 下 skip
 （在通过 <code>tsx</code> 使用 DSH checkout 时会运行）。覆盖会话列表/读取、
 compact 构建、工作区文件收集与敏感排除、归档构建/导入（含 zip-slip 与 sha256 校验）、
 归档/回收站/永久删除语义、官方格式迁移，以及分享链接的规范化/构建/导入

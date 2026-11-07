@@ -1,8 +1,9 @@
 # Public-release self-assessment
 
-Self-check for dsh-session-kit <code>0.8.0</code> (2026-11-07). The check was
-code-and-test only: no real <code>dsh web</code> process, no live DeepSeek share
-API call, no real cross-machine restore. Evidence is marked by source:
+Self-check for dsh-session-kit <code>0.8.1</code> (2026-11-07). The check was
+code-and-test plus limited real <code>dsh web</code> spot checks; no live
+DeepSeek share API call and no real cross-machine restore. Evidence is marked
+by source:
 
 - **[本次运行]** — executed now from this checkout (Node v22.23.2).
 - **[仓库自动化]** — tests committed in this repository.
@@ -51,7 +52,7 @@ From the plugin directory:
 node --test test/*.test.mjs
 ~~~
 
-Result: **218 tests, 213 passed, 0 failed, 5 skipped** (plain Node v22.23.2,
+Result: **222 tests, 217 passed, 0 failed, 5 skipped** (plain Node v22.23.2,
 about 0.26 s). The five skips are guarded tests that need a DSH repository
 checkout through <code>tsx</code>: compact-log product replay, two real JSONL
 persistence import cases, a real released v3 migration fixture, and the
@@ -63,16 +64,21 @@ From a DSH repository checkout:
 node --import tsx/esm --test dsh-session-kit/test/*.test.mjs
 ~~~
 
-Result: **218/218 passed, 0 skipped, 0 failed** (about 1.5 s). This run includes
+Result: **222/222 passed, 0 skipped, 0 failed** (about 1.5 s). This run includes
 the real persistence backend and product replay checks.
 
 Other checks: <code>node --check</code> passes for <code>index.js</code>,
 <code>client.js</code> and all <code>lib/*.js</code>; locale and package JSON
-parse; <code>npm pack --dry-run</code> reports 30 files, 147.9 kB tarball /
-570.2 kB unpacked.
+parse; <code>npm pack --dry-run</code> reports 32 files, 158.0 kB tarball.
 
 ### 3.2 Real-backend and end-to-end evidence
 
+- **[本次运行]** A fresh disposable profile on DSH 0.2.1-rc.3 accepted
+  <code>dsh plugin --profile web add link:...</code> (bundle auto-selected),
+  booted, served <code>/session-kit/info</code>, and loaded the client panel
+  with no console errors. A row with an unknown config key produced Cordis
+  <code>ValidationError: invalid config: unknown config key</code> and the
+  plugin stayed inactive, confirming the new Config schema is enforced.
 - **[仓库自动化]** The <code>tsx</code> run exercises DSH's real JSONL
   persistence and replay paths (the five guarded cases above), including a real
   released v3 migration fixture.
@@ -238,7 +244,7 @@ The full matrix is in <code>docs/feature-matrix.md</code>. Summary:
     <code>node --test test/*.test.mjs</code> on Node 22/24 and
     <code>npm pack --dry-run</code>; the five real-backend cases skip there, and
     no Playwright/browser job exists. There is also no release/publish workflow.
-20. **Documentation drift remains a maintenance risk.** The 0.8.0
+20. **Documentation drift remains a maintenance risk.** The 0.8.1
     public-release pass refreshed <code>docs/roadmap.md</code>, removed the
     nonexistent <code>docs/assets</code> entry from <code>package.json</code>,
     added issue templates and linked the self-assessment/feature matrix from the
@@ -269,13 +275,13 @@ Suggested pre-publication checklist:
    the candidate <code>npm pack</code> payload was inspected; re-verify it in the
    release workflow, and decide whether both README files should ship.
 5. **Docs**: <code>docs/roadmap.md</code> and README/install/Node requirements
-   were aligned for 0.8.0; state the experimental/permanent-delete limits in the
+   were aligned for 0.8.1; state the experimental/permanent-delete limits in the
    release notes.
 6. **Real-world QA**: on a clean machine and a second DSH instance, install from
    the pinned tag, export a synthetic archive, import it in a different
    workspace, restore files, exercise archive/trash/permanent delete, and test
    one real public share link with non-sensitive content.
-7. **Release mechanics**: tag <code>v0.8.0</code>, publish with provenance
+7. **Release mechanics**: tag <code>v0.8.1</code>, publish with provenance
    (<code>npm publish --provenance</code> or equivalent), attach release notes,
    and publish to the plugin index if intended.
 8. **Security/privacy**: document archive privacy (conversation text,

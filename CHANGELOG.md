@@ -4,6 +4,22 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-11-07
+
+Compliance and public-release polish.
+
+### Added
+
+- Standard-schema `Config` export: unknown keys and wrong types now fail the
+  plugin at startup instead of being silently defaulted.
+- Bundle icon (`icon.svg`) and localized `meta.detail` documents
+  (`docs/DETAIL.md`, `docs/DETAIL.zh.md`).
+- `peerDependencies` for `@deepseek-ai/dsh` (`>=0.2.1-rc.3 <0.3.0-0`).
+
+### Changed
+
+- Version documented as 0.8.1.
+
 ## [0.8.0] - 2026-11-07
 
 Public-release preparation. No functional changes.

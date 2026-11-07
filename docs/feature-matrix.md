@@ -1,6 +1,6 @@
 # Feature matrix
 
-Evidence for dsh-session-kit <code>0.8.0</code>, collected 2026-11-07 by reading
+Evidence for dsh-session-kit <code>0.8.1</code>, collected 2026-11-07 by reading
 the code and running the repository test suite. Line numbers point at the source
 as of this check; tests are the authoritative coverage.
 
@@ -39,9 +39,9 @@ as of this check; tests are the authoritative coverage.
 
 ## Cross-cutting notes
 
-- Test totals: 14 files, 218 tests. Plain <code>node --test</code> runs 213 and
+- Test totals: 15 files, 222 tests. Plain <code>node --test</code> runs 217 and
   skips 5 guarded cases that need a DSH checkout through <code>tsx</code>; with
-  <code>tsx</code> the same 218 all pass. See <code>docs/self-assessment.md</code>.
+  <code>tsx</code> the same 222 all pass. See <code>docs/self-assessment.md</code>.
 - Chat UI behavior is not part of the automated suite; treat F2/F16 as manually
   verified only.
 - Evidence is intentionally conservative: a feature is "稳定" only where the

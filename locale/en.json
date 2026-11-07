@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Session manager",
-    "description": "Browse, search, and manage sessions by workspace (status filter, size and related-file detail, archive/restore, optional per-session related-file move to trash, permanent delete, legacy-format upgrade), import DeepSeek public share links into a chosen workspace, and export or import archives with workspace files."
+    "description": "Browse, search, and manage sessions by workspace (status filter, size and related-file detail, archive/restore, optional per-session related-file move to trash, permanent delete, legacy-format upgrade), import DeepSeek public share links into a chosen workspace, and export or import archives with workspace files.",
+    "detail": "docs/DETAIL.md"
   }
 }
