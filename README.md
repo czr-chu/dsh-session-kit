@@ -1,120 +1,378 @@
 # dsh-session-kit
 
-DeepSeek Harness 会话管理与迁移插件：浏览/选择会话，按“精简（compact）”或“全量”导出
-会话与工作区文件，再在另一台 DSH 上导入为新的会话并恢复工作目录。
+**Session manager, backup, and migration toolkit for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).**
 
-## 能力
+Version **0.8.0** · public beta · [中文说明](README.zh.md)
 
-- **会话管理面板（快速列表）**：标题直接读投影缓存（含跨格式代际的前代标题），不再为每行打开完整日志；
-  按工作区分组列出主对话，搜索标题/id/目录，按全部/未归档/已归档筛选，全选/反选、多选；
-  每行明确显示「已归档 / 未归档」，子代理会话默认隐藏。
-- **归档状态完整可见**：已归档会话（包括不在查询语料里的旧归档）会合并进列表并标记；
-- **归档 / 恢复 / 删除**：单条或批量归档、恢复；删除会把会话（含其 subagent 后代；用户 fork 的子会话保留）
-  移动到 `$DSH_HOME/session-kit-trash/<时间戳>/`，不永久抹除；同时清理工作区归属、置顶和归档状态。
-- **会话详情**：点击会话行展开详情，显示**存储大小（含所有代际）**、格式状态、归档状态，
-  以及从事件尽力推导的相关文件列表（实验性，标注强/弱证据）。
-- **删除时处理相关文件（实验性，二次确认）**：删除确认框可勾选“同时处理该会话涉及的文件”；
-  文件列表从会话事件尽力推导，按会话分组、逐文件勾选（强证据默认选中、弱证据默认不选），预览后再二次确认；
-  默认把选中文件移入回收站 `files/` 并生成 `files-manifest.json`，绝不 `rm -rf`。
-- **永久删除（独立二次确认）**：可显式选择“永久删除（不可恢复，不进入回收站）”，红色二次确认后才擦除
-  会话目录与选中文件；永久删除无回滚，UI 会明确警告。
-- **精简导出（创新点）**：把会话压成“显示出来的对话”——只保留用户提问、图片/文件块和每轮最终
-  助手回答，丢弃工具调用/结果、推理流、流式 chunk、任务/子代理事件；体积通常只有原日志的
-  0.1%–1%，导入后仍是可继续对话的合法 DSH 会话。
-- **全量导出**：保留完整事件日志与对话附件，用于完整备份。
-- **工作区文件随包导出（可选，UI 默认开启）**：按会话涉及的每个工作区根目录收集整棵树，
-  放进 ZIP 的 `workspaces/<key>/`；自动排除 `.git`、`node_modules`、构建产物、
-  `.env`/密钥/凭据等敏感文件，符号链接不跟随。
-- **按会话文件夹打包**：每个会话一个 `sessions/<id>/`，含日志、`meta.json`；
-  顶层 `manifest.json`（sha256 校验、工作区映射、touched/presented 文件清单）+ `README.md`。
-- **全导出 / 选择导出 / 子代理开关**：导出全部主对话或只勾选几个；子代理会话默认不导出。
-- **导入**：本插件或 DSH 内置导出的 ZIP/JSONL → 新会话；可选把 `workspaces/` 安全解压到
-  目标工作区（拒绝路径穿越/绝对路径/符号链接，已存在文件不覆盖），导入后会话 cwd 指向该目录。
-- **旧格式升级（基于 DSH 官方迁移）**：列表标记“旧格式”会话，可单条或批量升级到当前格式；
-  升级走官方 `persistence.open(id,'write')` 迁移链（与继续对话时的升级完全相同），旧代际文件保留，
-  迁移失败的会话保持原样并在结果里给出官方原因。
-- **DeepSeek 分享链接导入**：粘贴 `https://chat.deepseek.com/share/<id>`（或裸 id），选择目标工作区，
-  即可把公开分享对话转成当前格式的新会话（复用分享导入映射：fragments、思考、搜索/引用），
-  只允许 chat.deepseek.com 的分享链接，不会抓取任意 URL。
-- **Agent 工具**：`session_kit` 支持 list/export/import/archive/unarchive/delete（delete 必须显式确认，且只移入回收站）。
+dsh-session-kit adds a **Session manager** panel and a <code>session_kit</code> agent
+tool to DeepSeek Harness (DSH). It lists and inspects conversations, exports them
+as portable ZIP archives (optionally with workspace files), imports them as new
+sessions on another machine or workspace, manages archive state, upgrades old
+session logs through DSH's official migration, and turns public DeepSeek share
+links into new local conversations.
 
-## 安装
+It is built for people who migrate DSH between machines, keep local backups, or
+want a smaller conversation-only copy of a long session — without touching DSH's
+storage layout or rewriting session files by hand.
 
-```bash
-dsh plugin --profile web add /absolute/path/to/dsh-session-kit
+> The plugin is a plain ESM bundle. It declares no <code>@deepseek-ai/*</code> runtime
+> dependency and reads every DSH capability through the composed service registry.
+
+## Why dsh-session-kit
+
+- **Move conversations between machines.** One ZIP carries sessions, their
+  attachments and, optionally, the workspace trees they ran in. Import creates
+  new sessions and never overwrites existing ones.
+- **Keep a usable backup, not a byte dump.** *Compact* export keeps the visible
+  conversation — your prompts, image/file blocks and each turn's final answer —
+  and drops tool calls, reasoning and streaming deltas. The result is still a
+  valid DSH session you can continue.
+- **Manage sessions where they live.** Archive/unarchive, delete to a trash
+  directory with strict path validation, or (explicitly) erase permanently.
+- **Upgrade old logs the official way.** Legacy sessions are upgraded through
+  DSH's own migration chain; the old generation is retained and refusals are
+  reported instead of forced.
+- **Bring in a public DeepSeek share.** Paste a share link, pick a workspace, and
+  the public conversation becomes a new local session.
+
+## Features
+
+### Browse, search, inspect
+
+- Sidebar **Session manager** panel grouped by workspace; search by title, id,
+  cwd or workspace; filter all / active / archived; select one, many, or all.
+- Archived sessions stay visible with an **archived** badge and a dimmed row.
+- Subagent transcripts are hidden by default (they can be requested explicitly).
+- Click a row for its **storage size** (all retained generations, lock files
+  excluded), format status and archived state. The list itself never opens cold
+  session logs.
+
+### Export
+
+- **Compact** mode: conversation spine only. User messages, visible image/file
+  blocks and the final assistant text of every turn, plus session-level config,
+  request context and one title. Tool calls/results, reasoning, stream chunks,
+  jobs, subagent and workspace events are dropped; sequence numbers are
+  renumbered and the title's citations are remapped so DSH can replay and
+  continue the log.
+- **Full** mode: the complete event log and the attachments it references.
+- One ZIP can contain many selected sessions; each session is its own folder
+  with a per-session <code>meta.json</code>.
+- **Optional workspace trees**: include the whole workspace of the selected
+  conversations. Dependency/build directories, credential-shaped files and
+  symlinks are excluded; oversized files and cap violations are skipped with
+  warnings.
+- Top-level <code>manifest.json</code> with sha256 checksums, plus an archive
+  <code>README.md</code> that explains the layout.
+
+### Import
+
+- Accepts an archive produced by this plugin, a DSH built-in session-log export,
+  or a bare <code>.jsonl</code> log.
+- Always creates **new** sessions: it never modifies, overwrites or deletes an
+  existing conversation.
+- New session id and header; parent/seed lineage is dropped. Delivery markers and
+  inherited end-seed markers are rewritten for the new owner; attachments are
+  restored into the content-addressed store.
+- Optional **workspace file restore** into the chosen directory. Path traversal,
+  absolute paths and symlinks are rejected before writing; existing files are
+  skipped with a warning.
+- Each imported session is read back through the session query after the write as
+  a post-write verification; a failure is reported per session.
+
+### Manage: archive and delete
+
+- **Archive / unarchive** a session or a batch. Archive state is durable in the
+  workspace registry, so every DSH surface agrees; archived rows stay visible in
+  this panel.
+- **Delete is a move, not an erase.** The session directory and its
+  <code>origin: 'subagent'</code> descendants move to
+  <code>$DSH_HOME/session-kit-trash/&lt;timestamp&gt;/</code>. User-visible
+  fork/seeded children are preserved. Live sessions and running agents are
+  refused before anything moves; every backend session directory is validated
+  (canonical name, canonical project directory, not a symlink) and a failed move
+  rolls back.
+- Workspace membership, pins and archive state are cleaned afterwards; cleanup
+  failures are logged rather than reported as a failed delete.
+
+### Experimental: related files on delete
+
+This feature is marked **experimental** in the UI and requires a second
+confirmation.
+
+- Clicking a session loads a **best-effort** list of workspace files derived from
+  its events: presented deliverables, tool result metadata, tool arguments and
+  working-directory hints. Evidence is labelled strong or weak; files are
+  grouped by session and individually selectable.
+- Trash delete moves only the selected files into the operation's
+  <code>&lt;trash&gt;/files/&lt;encoded-root&gt;/&lt;relative-path&gt;</code> tree
+  with a <code>files-manifest.json</code>, then moves the session directories. A
+  file failure rolls the moved files back before any session directory moves.
+- **Permanent delete** is a separate opt-in mode with its own red confirmation.
+  It validates every session directory and selected file first, then unlinks the
+  files and removes the session directories. There is **no trash copy and no
+  rollback**; failures report what was already erased.
+
+The derivation is inherently approximate: shell redirections, PTC/script outputs
+and files only mentioned in text cannot be discovered, and a file shared with
+another session is affected too. Review the preview before confirming.
+
+### Legacy format migration
+
+- The list marks sessions stored in an older session format
+  (<code>formatStatus</code>, <code>legacy</code>), including their stored
+  generation.
+- Single or batch upgrade runs through DSH's official persistence migration:
+  <code>SessionPersistence.open(id, 'write')</code> triggers the prepare/publish
+  path, the handle is closed immediately, and a second <code>stat</code> verifies
+  the published generation. The plugin never decompresses, re-encodes or
+  rewrites a session artifact itself.
+- The released old generation stays on disk. If the official migration refuses a
+  log (for example an unresolved tool call or an unsupported historical subagent
+  descriptor), the source remains unchanged and the failure is reported with the
+  official reason.
+
+### DeepSeek share-link import
+
+- Paste <code>https://chat.deepseek.com/share/&lt;id&gt;</code> or a bare share
+  id, choose a target workspace, optionally set a title, and import.
+- Only public content from <code>chat.deepseek.com</code> is fetched; arbitrary
+  URLs are refused. Requests have a timeout and a response-size cap, and non-zero
+  API codes / non-JSON responses fail loudly.
+- The public conversation is normalized (requests, responses, thinking, search
+  and opened-source fragments, citations) and converted into the same v4 session
+  skeleton used by the standalone share importer, then imported as a new session
+  in the chosen workspace. No arbitrary workspace file is fetched.
+
+### Agent tool
+
+The <code>session_kit</code> tool exposes the same operations to the model:
+
+| Action | Purpose | Notes |
+| --- | --- | --- |
+| <code>list</code> | Summarize workspaces and sessions | archived rows are marked |
+| <code>export</code> | Write one ZIP under the plugin's export directory | <code>mode: compact</code> or <code>full</code>, <code>sessionIds</code> or <code>all</code> |
+| <code>import</code> | Import an archive file as new sessions | optional workspace file restore |
+| <code>archive</code> / <code>unarchive</code> | Toggle the durable archive state | batch ids supported |
+| <code>delete</code> | Move sessions to the trash | requires <code>confirm: true</code>; optional <code>removeFiles</code> with explicit <code>selectedFiles</code>; <code>permanent: true</code> erases irreversibly |
+| <code>migrate</code> | Upgrade legacy logs through DSH's official migration | <code>sessionIds</code> or <code>all</code> (needs <code>confirm: true</code>) |
+| <code>files</code> | Preview derived related files for a delete | experimental, best effort |
+| <code>import_share</code> | Import a DeepSeek share link | <code>input</code>, optional <code>workspaceId</code> / <code>cwd</code> / <code>title</code> |
+
+Example prompts you can give the agent:
+
+- "Export the current session in compact mode."
+- "Import the archive at ~/Downloads/session-kit-backup.zip into this workspace."
+- "Upgrade all legacy-format sessions."
+- "Import this DeepSeek share link into the project workspace: https://chat.deepseek.com/share/…"
+
+## Install
+
+**Requirements:** DSH <code>0.2.1-rc.3</code> or newer, session format v4, Node 22+
+for the plugin (the shipped DSH CLI requires Node 24.9+). The browser panel needs
+a Web or Desktop deployment; a headless deployment still gets the
+<code>session_kit</code> tool.
+
+~~~bash
+# from GitHub (recommended: pin a release tag)
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.8.0
+
+# from a local checkout (iterating on the plugin)
+dsh plugin --profile web add ~/src/dsh-session-kit
+
+# verify the row was added
 dsh plugin --profile web list --depth 0
-# 重启 dsh web，刷新页面；侧栏出现 Session manager
-```
+~~~
 
-插件声明了 `engines.dsh`，版本不满足时 DSH 会拒绝安装。发布到 npm/npmmirror 后
-可直接 `dsh plugin --profile web add dsh-session-kit`。
+Restart <code>dsh web</code> after installing, then refresh the page. The sidebar
+gets a **Session manager** row under Plugins. On a Desktop build, install the
+bundle through the app's plugin settings instead of the CLI if the CLI is
+unavailable.
 
-## 包格式
+Once the package is published to npm:
 
-```text
-session-kit-<yyyymmdd-hhmmss>.zip
-├── manifest.json
-├── README.md
+~~~bash
+dsh plugin --profile web add dsh-session-kit
+~~~
+
+An incompatible DSH version is refused at install time through
+<code>engines.dsh</code>.
+
+## Quick start
+
+1. **Open the panel.** After restarting <code>dsh web</code> and refreshing, click
+   **Session manager** in the sidebar. Rows are grouped by workspace; use the
+   search box and the all/active/archived filter.
+2. **Export.** Select one or more main conversations, choose **compact** or
+   **full**, then Export. The browser downloads one ZIP; the agent tool writes it
+   under <code>$DSH_HOME/session-kit/exports/</code> instead.
+3. **Import.** Open the import panel, drop a ZIP or a bare <code>.jsonl</code>,
+   pick the target workspace and whether to restore workspace files. Imported
+   conversations appear as new sessions; nothing existing is overwritten.
+4. **Manage.** Use the row actions to archive/unarchive or delete. Delete moves
+   the session to the trash; the delete dialog also offers the experimental
+   related-file selection and a separate permanent-erase confirmation.
+5. **Upgrade legacy rows.** A row with the legacy badge can be upgraded singly or
+   in a batch through DSH's official migration; the old generation is kept.
+6. **Import a DeepSeek share.** Paste a share link or id in the share card,
+   choose a workspace, and import.
+7. **Or ask the agent.** The <code>session_kit</code> tool exposes the same
+   operations (see the action table below).
+
+## Archive layout
+
+One ZIP contains a manifest, a restore README, per-session folders and optional
+workspace trees:
+
+~~~text
+session-kit-<count>-sessions-<timestamp>.zip
+├── manifest.json                         # kind/version, sessions, sha256, workspaces
+├── README.md                             # restore instructions
 ├── sessions/<sessionId>/
-│   ├── session.compact.v4.jsonl   # 精简模式
-│   ├── session.v4.jsonl           # 全量模式
+│   ├── session.v4.jsonl                  # full mode
+│   ├── session.compact.v4.jsonl          # compact mode
 │   └── meta.json
 ├── attachments/
 │   ├── media/<attachmentId>.<ext>
-│   └── files/<2>/<digest>/<name>
-└── workspaces/<encoded-workspace>/
-    └── <工作区相对路径…>            # 整棵工作区（排除敏感/构建缓存）
-```
+│   └── files/<prefix>/<digest>/<name>
+└── workspaces/<encoded-workspace>/...    # optional whole workspace tree
+~~~
 
-## 安全边界
+The trash produced by delete is separate from archives:
 
-- 只导出选中的会话、被引用的对话附件、以及可选的工作区文件；不读 `$DSH_HOME` 凭据、
-  上传索引、缓存或遥测身份。
-- 工作区文件排除：`.git`、`node_modules`、`.venv`、`dist`、`build` 等目录；
-  `.env*`、`*.pem`、`*.key`、`id_rsa*`、`.npmrc`、`.netrc`、`credentials*`、
-  `.ssh`、`.aws`、`.gnupg` 等敏感路径；符号链接不跟随，超限文件跳过并告警。
-- 导入是新建会话：不覆盖/删除已有会话；工作区文件冲突时跳过已有文件并告警。
-- 归档仍是用户内容（对话正文、工作区文件本身），分享前请自行复核。
+~~~text
+$DSH_HOME/session-kit-trash/<timestamp>/
+├── <encoded-session-id>/...              # moved session directory + subagent descendants
+├── files/<encoded-workspace>/<relative>  # selected related files (experimental flow)
+└── files-manifest.json                   # original absolute paths, evidence, session ids
+~~~
 
-## 已知限制
+## Configuration
 
-- 精简导出会丢失工具调用历史与文件卡片，只保留可见对话；需要完整历史用全量导出。
-- 导入不保留子会话/fork 血缘；子代理日志永远不会被导入。
-- 导入要求源/目标会话格式版本一致（当前 v4）；跨版本请先用对应版本 DSH 打开再导出。
-- 工作区文件目前默认同步“整个工作区树”（已排除敏感/构建目录），暂不支持只挑 touched files；
-  超大工作区受 1 GiB 导出上限约束，可调配置。
-- 子代理会话默认隐藏；`includeSubagents: true` 可显式包含（但仍不会在导入时恢复血缘）。
-- **删除相关文件是实验性且 best-effort**：shell 重定向、PTC/脚本产物、仅在文本中提到的文件无法可靠发现；
-  共享文件可能被一并移动；敏感文件若被推导到也会移动。文件推导默认只移回收站，永久删除必须单独二次确认。
-- 永久删除无法恢复、不可回滚；失败时会报告已删/未删项。
-- 分享导入只处理 chat.deepseek.com 公开分享链接；需要网络访问该站点，私有/已删除分享会失败；
-  导入只会新建会话，不会覆盖已有会话。
-- 旧格式升级不是“强制转换”：DSH 的官方迁移会拒绝少数无法安全转换的旧日志（例如未闭合的 tool call、
-  旧 subagent descriptor 版本），此时源文件不动、面板显示失败；这不是插件能绕过的。
-- 删除不是永久擦除：会话目录被移到 `session-kit-trash`，需要彻底清理时手动删除该目录；用户 fork 出来的子会话不会被连带删除。
-- 归档运行中的会话默认会被拒绝；agent 工具可用 `stopActivity` 先停止再归档。
+Plugin row config (<code>cordis.patch.yml</code> or the plugin settings row):
 
-## 实测（2026-10-31/11-01，DSH 0.2.1-rc.3）
+| Field | Default (bundle) | Meaning |
+| --- | --- | --- |
+| <code>maxImportBytes</code> | 512 MiB | Maximum archive upload size |
+| <code>maxExportBytes</code> | 1 GiB | Maximum produced archive size |
+| <code>includeAttachments</code> | <code>true</code> | Export referenced attachments by default |
+| <code>includeWorkspaceFiles</code> | <code>true</code> (bundle) | Include whole workspace trees by default |
+| <code>includeSubagents</code> | <code>false</code> | Export subagent transcripts by default |
+| <code>restoreWorkspaceFiles</code> | <code>true</code> (bundle) | Restore archived workspace files on import by default |
+| <code>workspaceExclude</code> | <code>[]</code> | Extra directory names / patterns to exclude |
+| <code>workspaceMaxBytes</code> | unset | Optional byte cap for the workspace part |
+| <code>trashDir</code> | <code>$DSH_HOME/session-kit-trash</code> | Where deleted sessions move |
+| <code>defaultMode</code> | <code>compact</code> | Export mode used when the caller omits one |
 
-- 测试：`node --import tsx/esm --test dsh-session-kit/test/*.test.mjs` → **218/218 通过**
-  （含真实 JSONL 持久化后端、产品 replay、工作区文件/敏感排除/zip-slip/恢复、归档/删除/回收站、子代理血缘）。
-- 真实数据（49 个主对话）：精简日志文本为原日志的 **0.4%–1.2%**；7 个主对话归档
-  **22.7 MB → 0.35 MB**，全部导入 `verified: true`。
-- 列表性能（真实 DSH 数据）：`/session-kit/list` **约 0.02–0.04 s**（3 个真实归档会话）/ 全量 58 个主对话仍在百毫秒级；
-  旧实现每个会话都要读完整日志折叠标题，已移除。
-- 官方迁移实测：38 个 v3-only 真实会话 36 个成功（约 95%，平均 0.29 s），2 个被官方以
-  “step/end leaves unresolved tool call”拒绝且源文件不变；v0 样本中较多被旧 subagent descriptor 版本拒绝。
-- 隔离 `DSH_HOME` 中真实 `dsh web` + 浏览器：导出/导入、工作区文件恢复、归档/恢复/删除
-  （删除确认框、状态徽标、筛选、搜索计数）全部通过；无 console 错误。
+Batch limits: up to 500 management ids per request, 100 ids for migration, file
+preview and session detail, and 5000 selected files per delete.
 
-## 开发与测试
+## Security and privacy
 
-```bash
-node --test dsh-session-kit/test/*.test.mjs                 # 纯逻辑/模拟，2 个真实后端用例自动 skip
-cd <repo> && node --import tsx/esm --test dsh-session-kit/test/*.test.mjs   # 含真实后端
-```
+- Exports contain **user content**: conversation text, referenced attachments and
+  (optionally) workspace files. Review an archive before sharing it.
+- Workspace collection excludes <code>.git</code>, <code>node_modules</code>,
+  <code>.venv</code>, <code>venv</code>, <code>dist</code>, <code>build</code>,
+  <code>.next</code>, <code>target</code>, <code>__pycache__</code>,
+  <code>.cache</code>, <code>.pnpm-store</code>, <code>.yarn</code>,
+  <code>.idea</code>, <code>.vscode</code> directories; <code>.env</code>,
+  <code>.env.*</code>, <code>*.pem</code>, <code>*.key</code>, <code>*.p12</code>,
+  <code>*.keystore</code>, <code>id_rsa*</code>, <code>id_ed25519*</code>,
+  <code>.npmrc</code>, <code>.netrc</code>, <code>.git-credentials</code>,
+  <code>credentials*</code>, <code>secrets*</code>, <code>.DS_Store</code> files
+  and <code>.ssh</code>, <code>.aws</code>, <code>.gnupg</code>,
+  <code>.config/gcloud</code> directories. Symlinks are not followed. DSH
+  credentials, upload indexes, caches and telemetry identities are never read.
+- Imports treat archives as untrusted: manifests and checksums are validated,
+  workspace restore rejects traversal/absolute paths/symlinks, format-version
+  mismatches and over-limit archives are refused, and existing sessions are never
+  overwritten.
+- Delete is a trash move with strict backend-location validation and rollback;
+  permanent delete is opt-in, validated before erasing, and irreversible.
+- Share import accepts only <code>chat.deepseek.com/share/&lt;id&gt;</code> links
+  or bare share ids, never arbitrary URLs, with timeout and response-size caps.
+- Deleting with related files is **experimental and best effort**. The derivation
+  can miss files and can affect files shared with other sessions. Treat the
+  preview as a hint, not a complete inventory.
+- These protections reduce risk but cannot guarantee that every sensitive file
+  in a workspace is undiscoverable. Keep backups and review exports.
 
-## 许可
+More detail: [docs/security.md](docs/security.md).
 
-MIT。`lib/zip.js`、`lib/format.js`、`lib/attachments.js` 衍生自
-[dsh-session-port](https://github.com/mswinandmc/dsh-session-port)（MIT），详见 `NOTICE`。
+## Compatibility
+
+- DSH <code>0.2.1-rc.3</code> or newer; session format **v4**.
+- Node.js 22+ for the plugin; the shipped DSH CLI requires Node 24.9+.
+- Web and Desktop deployments get the panel; headless deployments get the agent
+  tool.
+- Import requires the archive's session format to match the running DSH; export
+  in a matching version or migrate first.
+- DSH public APIs are pre-stable; this plugin reads capabilities through
+  <code>ctx.get(...)</code>, so it does not pin <code>@deepseek-ai/*</code>
+  packages. A DSH upgrade may still require a plugin update.
+
+## Known limitations
+
+- **Compact export is lossy by design.** It keeps the visible conversation, not
+  tool history, reasoning or runtime records; use full export for a byte-level
+  backup.
+- Subagent transcripts are never imported; imported sessions have no parent/seed
+  lineage. Fork/seeded children hidden from a parent delete are kept as
+  independent sessions.
+- Workspace export currently packs the **whole** workspace tree (with the
+  exclusions above). A per-session touched-files export is not implemented; the
+  checked-file selection exists only for deletion.
+- Large workspaces are bounded by <code>maxExportBytes</code> /
+  <code>workspaceMaxBytes</code>; oversized files and cap violations are skipped
+  with warnings.
+- Related-file derivation is approximate and marked experimental.
+- Permanent delete has no rollback and no trash copy.
+- The official format migration can refuse a legacy log; the plugin reports the
+  refusal and leaves the source unchanged.
+- Share import needs network access to <code>chat.deepseek.com</code>; private or
+  deleted shares fail, and only public content is available.
+- Trash is not cleaned automatically. Remove old operation folders yourself when
+  the space is needed.
+
+## Development and testing
+
+The plugin has no build step (plain ESM). From a checkout of this repository:
+
+~~~bash
+# plugin-local tests (network-free; real-backend cases skip when unavailable)
+cd dsh-session-kit && npm test
+
+# full suite from the DSH repository root, including real persistence/replay checks
+node --import tsx/esm --test dsh-session-kit/test/*.test.mjs
+~~~
+
+Expected result: **218 tests**, with 5 guarded real-backend cases skipped under
+plain <code>node --test</code> (they run when the DSH checkout is available
+through <code>tsx</code>). The suite covers session listing/reading, compact
+building, workspace file collection and sensitive exclusions, archive
+build/import (including zip-slip and sha256 checks), archive/trash/permanent
+delete semantics, official format migration, and share-link
+normalization/build/import against a real local JSONL backend where available.
+
+Project docs: [architecture](docs/architecture.md) ·
+[install and upgrade](docs/install.md) · [security](docs/security.md) ·
+[self-assessment](docs/self-assessment.md) · [feature matrix](docs/feature-matrix.md) ·
+[roadmap](docs/roadmap.md).
+
+## Contributing and reporting security issues
+
+- Issues and pull requests are welcome on
+  [GitHub](https://github.com/czr-chu/dsh-session-kit). Please keep fixtures
+  synthetic: no real session logs, workspace paths, credentials or screenshots.
+- For a security issue, do not open a public issue with sensitive details.
+  Report it privately through GitHub Security Advisories on the repository (or
+  contact the maintainers listed there) and include a minimal reproduction.
+- Before sending a change, run the test command above and keep compatibility
+  notes (DSH version, session format) current.
+
+## License
+
+MIT. See [LICENSE](LICENSE). Portions of <code>lib/zip.js</code>,
+<code>lib/format.js</code> and <code>lib/attachments.js</code> are derived from
+[dsh-session-port](https://github.com/mswinandmc/dsh-session-port) (MIT); see
+[NOTICE](NOTICE).

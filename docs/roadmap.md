@@ -1,22 +1,26 @@
 # Roadmap
 
-Done:
-- session/workspace browsing and selection (main conversations only by default),
-- compact and full multi-session ZIP export,
-- attachments, optional whole-workspace export,
-- new-session import with post-write verification,
-- optional workspace file restore,
-- agent tool (`session_kit`).
+Shipped through 0.8.0:
+
+- session/workspace browsing, search, status filters, archived badges and selection;
+- session detail (storage size across retained generations, format status, archived state);
+- compact and full multi-session ZIP export, attachments, optional whole-workspace export;
+- new-session import with post-write verification and optional workspace file restore;
+- archive/unarchive and delete-to-trash (single and batch); opt-in permanent deletion;
+- experimental, selectable per-session related-file handling on delete;
+- legacy-format migration through DSH's official persistence chain (single and batch);
+- DeepSeek public share-link import into a chosen workspace;
+- one agent tool (`session_kit`) covering the same operations;
+- public-release documentation, security policy, CI and issue templates.
 
 Next:
-- session search, status filter, archived badge,
-- official-format migration for legacy sessions (badge, single/batch upgrade),
-- archive/unarchive and delete-to-trash (single and batch),
-- move session to another workspace and reorder,
-- optional LLM-summarized compact mode (summary per turn) on top of the
-  structural compact export,
-- per-session file selection (only touched/presented files instead of the whole
-  workspace tree; \`collectTouchedFiles\` already exists),
-- streaming archive production for very large workspaces,
-- publish to npm (npmmirror) with signed provenance and a documented security
-  review.
+
+- add a CI job against a pinned DSH checkout so the guarded real-backend cases run;
+- add browser smoke tests (Playwright or equivalent) for the panel, detail, file
+  selection, permanent delete and share-import flows;
+- add route-level success tests for `/export` and `/import`;
+- optional LLM-summarized compact mode on top of the structural compact export;
+- per-session touched-files export (the derivation helper exists for deletion);
+- streaming archive production for very large workspaces;
+- publish to npm/npmmirror with signed provenance;
+- npm/GitHub release automation.

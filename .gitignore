@@ -19,3 +19,11 @@ cookies.txt
 .DS_Store
 .idea/
 .vscode/
+# secrets / local data
+.env
+.env.*
+*.pem
+*.key
+credentials*
+*.sqlite
+*.db

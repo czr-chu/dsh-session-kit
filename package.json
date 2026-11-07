@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-kit",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "DeepSeek Harness session manager: browse/search, size detail, archive, trash/permanent delete with selectable files, official format migration, DeepSeek share-link import into a chosen workspace, compact/full export with workspace files, and import as new sessions.",
   "type": "module",
   "main": "index.js",
@@ -19,7 +19,10 @@
     "README.md",
     "LICENSE",
     "NOTICE",
-    "docs"
+    "docs",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md"
   ],
   "dsh": {
     "bundle": {
@@ -62,5 +65,17 @@
   "license": "MIT",
   "scripts": {
     "test": "node --test test/*.test.mjs"
+  },
+  "author": "czr-chu",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/czr-chu/dsh-session-kit.git"
+  },
+  "homepage": "https://github.com/czr-chu/dsh-session-kit#readme",
+  "bugs": {
+    "url": "https://github.com/czr-chu/dsh-session-kit/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
