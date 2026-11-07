@@ -1,7 +1,7 @@
 # dsh-session-kit
 
 **DeepSeek Harness 的会话管理、备份与迁移工具包。**
-Version **0.10.1** · 公开 beta · [English](README.md)
+Version **0.10.2** · 公开 beta · [English](README.md)
 
 dsh-session-kit 为 DeepSeek Harness（DSH）增加一个 **会话管理（Session manager）**
 面板和一个 <code>session_kit</code> agent 工具：浏览与检查会话、导出为可迁移的
@@ -139,7 +139,10 @@ ZIP（可选携带工作区文件）、在另一台机器或另一个工作区�
 
 ~~~bash
 # 从 GitHub 安装（建议固定 release tag）
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.1
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.2
+
+# 或直接从 GitHub Release 的 tgz 安装
+# dsh plugin --profile web add 'https://github.com/czr-chu/dsh-session-kit/releases/download/v0.10.2/dsh-session-kit-0.10.2.tgz'
 
 # 从本地 checkout 安装（便于迭代）
 dsh plugin --profile web add ~/src/dsh-session-kit
@@ -149,7 +152,12 @@ dsh plugin --profile web list --depth 0
 ~~~
 
 安装后重启 <code>dsh web</code> 并刷新页面，侧边栏“插件”下会出现 **Session manager**
-一行。桌面版若没有 CLI，可在应用内的插件设置里安装这个 bundle。
+一行。
+
+桌面版/Web 的 **插件 → 添加插件** 对话框可直接输入 GitHub 仓库地址
+（`https://github.com/czr-chu/dsh-session-kit#v0.10.2`）、Release 的 `.tgz`
+直链，或绝对本地目录。仓库是公开的，Git 安装不需要 GitHub token；完整说明见
+[docs/install.md](docs/install.md)。
 
 发布到 npm 后可以直接：
 

@@ -4,6 +4,16 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.2] - 2026-11-07
+
+### Added
+
+- `.github/workflows/release.yml`: on a version tag (or manual dispatch with an
+  existing tag), rebuilds the client, runs tests, packs the plugin and creates a
+  GitHub Release with the `.tgz` asset attached.
+- Install documentation covers the Release asset URL, the Desktop/Web
+  **Add plugin** dialog, and the repository requirements for Git installs.
+
 ## [0.10.1] - 2026-11-07
 
 ### Changed / removed

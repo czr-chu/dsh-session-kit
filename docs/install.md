@@ -13,7 +13,7 @@
 
 ```bash
 # pinned release tag — reproducible and easy to audit
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.1
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.2
 
 # or track the main branch (not recommended for production)
 dsh plugin --profile web add github:czr-chu/dsh-session-kit
@@ -27,6 +27,49 @@ Then **restart `dsh web`** and refresh the page. The sidebar gains a
 
 DSH installs the package into `$DSH_HOME/profiles/web` and reads the bundle row
 from `cordis.patch.yml`; published packages contain the built `lib/client.js`, so no build step or npm install is required for installation. A local checkout that edits `src/client/` must run `npm ci && npm run build:client` before restarting DSH.
+
+## Install from a GitHub Release asset
+
+Every tagged release workflow attaches the packed tarball, for example:
+
+```text
+https://github.com/czr-chu/dsh-session-kit/releases/download/v0.10.2/dsh-session-kit-0.10.2.tgz
+```
+
+Install the asset directly (the URL must end in `.tgz`):
+
+```bash
+dsh plugin --profile web add 'https://github.com/czr-chu/dsh-session-kit/releases/download/v0.10.2/dsh-session-kit-0.10.2.tgz'
+```
+
+The Desktop/Web **Plugins → Add plugin** dialog accepts the same forms:
+a package name, a GitHub repository URL, a Release `.tgz` URL, or an absolute
+local directory. For a tagged Git install enter:
+
+```text
+https://github.com/czr-chu/dsh-session-kit#v0.10.2
+```
+
+or the shorthand `github:czr-chu/dsh-session-kit#v0.10.2`. Without a tag the
+default branch is installed.
+
+### What the repository must provide
+
+For a Git URL install to work, the repository must be reachable from the target
+machine and the package must be at the repository root (or addressed with a
+`path:` fragment). It must contain:
+
+- a root `package.json` with `dsh.bundle.patch` and, for this UI, `dsh.client`;
+- a committed browser artifact (`lib/client.js` here) unless the package has a
+  `prepare` build script that the installer is allowed to run;
+- `exports` and `files` covering the Host entry, `./client`, patch, locales and
+  icon;
+- a compatible `engines.dsh`;
+- optionally a Git tag for a reproducible install.
+
+The public repository satisfies these; the Release asset is optional and is
+convenient for machines without Git access to GitHub. A private fork requires
+the target machine's Git credential helper or SSH key.
 
 ## Install from npm (after publishing)
 
@@ -47,10 +90,10 @@ authenticated to GitHub. DSH does not store GitHub credentials.
 
 ```bash
 # SSH (the machine needs a working GitHub key)
-dsh plugin --profile web add git+ssh://git@github.com/<your-org>/dsh-session-kit.git#v0.10.1
+dsh plugin --profile web add git+ssh://git@github.com/<your-org>/dsh-session-kit.git#v0.10.2
 
 # HTTPS (a git credential helper must already hold a token)
-dsh plugin --profile web add https://github.com/<your-org>/dsh-session-kit.git#v0.10.1
+dsh plugin --profile web add https://github.com/<your-org>/dsh-session-kit.git#v0.10.2
 ```
 
 Never paste a token into a command line or commit it anywhere; use the platform
@@ -68,7 +111,7 @@ while iterating but not intended for production installs.
 ## Upgrade, uninstall and restart
 
 ```bash
-# upgrade to a newer pinned tag (replace <newer-tag>, e.g. #v0.10.1)
+# upgrade to a newer pinned tag (replace <newer-tag>, e.g. #v0.10.2)
 dsh plugin --profile web add github:czr-chu/dsh-session-kit#<newer-tag>
 # or, for a registry/git install:
 dsh plugin --profile web update dsh-session-kit
@@ -98,11 +141,11 @@ An entry may point at the public repository and a pinned commit:
   "name": "dsh-session-kit",
   "versions": [
     {
-      "version": "0.10.1",
+      "version": "0.10.2",
       "source": {
         "type": "git",
         "url": "https://github.com/czr-chu/dsh-session-kit",
-        "commit": "<full commit sha of the v0.10.1 tag>"
+        "commit": "<full commit sha of the v0.10.2 tag>"
       }
     }
   ]
