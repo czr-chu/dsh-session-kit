@@ -7,6 +7,7 @@ on-disk format by hand.
 
 ## What you can do
 
+- Use **Workspace backup** to pack one project's sessions and whole file tree once, and restore it through **Import → Archive → Target workspace**.
 - Browse sessions grouped by workspace, search titles/ids/cwds, filter active
   or archived, and open a row for storage size, format status, archived state
   and the derived related-file list.
@@ -38,7 +39,7 @@ on-disk format by hand.
 ## Install
 
 ```sh
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.5
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.11.0
 ```
 
 Restart `dsh web` after installing or upgrading. The plugin has no

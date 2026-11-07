@@ -61,6 +61,19 @@ const zh = {
   'panel.tabShare': 'DeepSeek 分享',
   'panel.exportCardHint': '打包所选会话；精简模式体积更小，全量模式保留完整历史。',
   'panel.importCardHint': '导入会话包，或从 DeepSeek 公开分享链接新建会话。',
+  'panel.workspaceBackupSection': '工作区备份',
+  'panel.workspaceBackupHint': '把一个工作区的全部会话与整个工作区文件树打包为一个 ZIP。',
+  'panel.workspaceBackupSelect': '工作区',
+  'panel.workspaceBackupPlaceholder': '选择要备份的工作区',
+  'panel.workspaceBackupButton': '备份工作区',
+  'panel.workspaceBackuping': '正在备份工作区…',
+  'panel.workspaceBackupDone': '工作区备份完成',
+  'panel.workspaceBackupFailed': '工作区备份失败',
+  'panel.workspaceBackupNoTarget': '请选择要备份的工作区。',
+  'panel.workspaceBackupSaved': '已下载：{filename}',
+  'panel.workspaceBackupNote': '包含该工作区的主会话与整个文件树；敏感文件与依赖/构建目录会被跳过。',
+  'panel.importWorkspaceTarget': '目标工作区',
+  'panel.importWorkspaceDefault': '默认目录 / 当前工作区',
   'panel.loading': '正在加载会话列表…',
   'panel.loadFailed': '会话列表加载失败',
   'panel.retry': '重试',
@@ -265,6 +278,20 @@ const en = {
   'panel.tabShare': 'DeepSeek share',
   'panel.exportCardHint': 'Package the selected sessions; compact is smaller, full keeps the complete history.',
   'panel.importCardHint': 'Import an archive, or create a new session from a public DeepSeek share link.',
+  'panel.workspaceBackupSection': 'Workspace backup',
+  'panel.workspaceBackupHint': 'Package all sessions and the whole workspace tree of one workspace into a ZIP.',
+  'panel.workspaceBackupSelect': 'Workspace',
+  'panel.workspaceBackupPlaceholder': 'Choose a workspace to back up',
+  'panel.workspaceBackupButton': 'Back up workspace',
+  'panel.workspaceBackuping': 'Backing up workspace…',
+  'panel.workspaceBackupDone': 'Workspace backup complete',
+  'panel.workspaceBackupFailed': 'Workspace backup failed',
+  'panel.workspaceBackupNoTarget': 'Choose a workspace to back up.',
+  'panel.workspaceBackupSaved': 'Downloaded: {filename}',
+  'panel.workspaceBackupNote':
+    'Includes the workspace main sessions and the whole tree; sensitive files and dependency or build directories are skipped.',
+  'panel.importWorkspaceTarget': 'Target workspace',
+  'panel.importWorkspaceDefault': 'Default directory / current workspace',
   'panel.loading': 'Loading sessions…',
   'panel.loadFailed': 'Could not load sessions',
   'panel.retry': 'Retry',
@@ -1171,7 +1198,7 @@ function confirmDialogNode(options) {
  * checkboxes, archive / restore / trash-delete actions, legacy-format
  * upgrade, export mode switch, export download, and archive import.
  * @param {{t: Function, loadCatalog: Function, exportSelection: Function,
- *          importSelection: Function, importShare: Function,
+ *          exportWorkspace: Function, importSelection: Function, importShare: Function,
  *          manageSessions: Function, previewSessionFiles: Function,
  *          loadSessionDetails: Function, migrateSessions: Function,
  *          refreshSessions: Function, targetOf: Function}} props
@@ -1201,6 +1228,8 @@ function SessionKitPanel(props) {
   const [shareBusy, setShareBusy] = React.useState(false)
   const [shareResult, setShareResult] = React.useState(null)
   const [importTab, setImportTab] = React.useState('archive')
+  const [workspaceBackupId, setWorkspaceBackupId] = React.useState('')
+  const [importWorkspaceId, setImportWorkspaceId] = React.useState('')
   const [busy, setBusy] = React.useState('')
   const [notice, setNotice] = React.useState(null)
   const fileInputRef = React.useRef(null)
@@ -1368,6 +1397,44 @@ function SessionKitPanel(props) {
     }
   }
 
+  async function runWorkspaceBackup() {
+    if (busy !== '') return
+    if (workspaceBackupId === '') {
+      setNotice({
+        tone: 'error',
+        title: tr('panel.workspaceBackupFailed'),
+        lines: [tr('panel.workspaceBackupNoTarget')],
+      })
+      return
+    }
+    setBusy('workspace-backup')
+    setNotice(null)
+    try {
+      const result = await props.exportWorkspace({
+        workspaceId: workspaceBackupId,
+        mode,
+        includeAttachments,
+      })
+      downloadBlob(result.blob, result.filename)
+      setNotice({
+        tone: 'success',
+        title: tr('panel.workspaceBackupDone'),
+        lines: capNoticeLines(
+          [tr('panel.workspaceBackupSaved', { filename: result.filename }), ...result.warnings],
+          tr,
+        ),
+      })
+    } catch (error) {
+      setNotice({
+        tone: 'error',
+        title: tr('panel.workspaceBackupFailed'),
+        lines: [errorMessageOf(error, tr)],
+      })
+    } finally {
+      if (mountedRef.current) setBusy('')
+    }
+  }
+
   async function runImport(file) {
     if (busy !== '' || file === undefined || file === null) return
     if (file.size === 0) {
@@ -1378,11 +1445,23 @@ function SessionKitPanel(props) {
     setNotice(null)
     try {
       const target = props.targetOf()
-      const result = await props.importSelection(file, {
+      const selectedWorkspace =
+        importWorkspaceId === ''
+          ? undefined
+          : catalog.workspaces.find((workspace) => workspace.workspaceId === importWorkspaceId)
+      const hints = {
         filename: typeof file.name === 'string' ? file.name : 'session-kit.zip',
         restoreWorkspaceFiles,
-        ...target,
-      })
+        ...(importWorkspaceId !== ''
+          ? {
+              workspaceId: importWorkspaceId,
+              ...(selectedWorkspace !== undefined && selectedWorkspace.path !== ''
+                ? { cwd: selectedWorkspace.path }
+                : {}),
+            }
+          : target),
+      }
+      const result = await props.importSelection(file, hints)
       await props.refreshSessions()
       const next = await props.loadCatalog()
       if (mountedRef.current) {
@@ -1965,6 +2044,7 @@ function SessionKitPanel(props) {
 
   const busyExport = busy === 'export'
   const busyImport = busy === 'import'
+  const busyBackup = busy === 'workspace-backup'
 
   const noticeTone =
     notice === null ? T.success : notice.tone === 'error' ? T.error : notice.tone === 'warn' ? T.warn : T.success
@@ -2548,6 +2628,66 @@ function SessionKitPanel(props) {
     ),
   )
 
+  const workspaceSelectOptions = catalog.workspaces
+    .filter((workspace) => workspace.workspaceId !== '')
+    .map((workspace) => {
+      const parts = []
+      if (workspace.title !== '') parts.push(workspace.title)
+      if (workspace.path !== '') parts.push(workspace.path)
+      parts.push(tr('panel.groupCount', { count: workspace.sessionIds.length }))
+      return h('option', { key: workspace.workspaceId, value: workspace.workspaceId }, parts.join(' · '))
+    })
+
+  const workspaceBackupPanel = h(
+    'div',
+    { className: styles.toolCard },
+    h(
+      'div',
+      { className: styles.toolCardHeader },
+      h('h3', { className: styles.toolCardTitle }, tr('panel.workspaceBackupSection')),
+      h('p', { className: styles.toolCardHint }, tr('panel.workspaceBackupHint')),
+    ),
+    h(
+      'div',
+      { className: styles.fieldColumn },
+      h(
+        'label',
+        { className: styles.fieldLabel, htmlFor: 'session-kit-workspace-backup' },
+        tr('panel.workspaceBackupSelect'),
+      ),
+      h(
+        'select',
+        {
+          id: 'session-kit-workspace-backup',
+          className: styles.select,
+          value: workspaceBackupId,
+          disabled: busy !== '',
+          onChange: (event) => setWorkspaceBackupId(event.target.value),
+        },
+        h('option', { value: '' }, tr('panel.workspaceBackupPlaceholder')),
+        ...workspaceSelectOptions,
+      ),
+    ),
+    h('p', { className: styles.toolCardStatus }, tr('panel.workspaceBackupNote')),
+    h(
+      'div',
+      { className: styles.toolActions },
+      h(
+        'button',
+        {
+          type: 'button',
+          style: buttonStyle('secondary', busy !== '' || workspaceBackupId === ''),
+          disabled: busy !== '' || workspaceBackupId === '',
+          onClick: () => {
+            void runWorkspaceBackup()
+          },
+          'aria-busy': busyBackup ? 'true' : undefined,
+        },
+        busyBackup ? tr('panel.workspaceBackuping') : tr('panel.workspaceBackupButton'),
+      ),
+    ),
+  )
+
   const importOptions = h(
     'div',
     { className: styles.optionList, role: 'group', 'aria-label': tr('panel.importOptions') },
@@ -2568,6 +2708,27 @@ function SessionKitPanel(props) {
       id: 'session-kit-tabpanel-archive',
       'aria-labelledby': 'session-kit-tab-archive',
     },
+    h(
+      'div',
+      { className: styles.fieldColumn },
+      h(
+        'label',
+        { className: styles.fieldLabel, htmlFor: 'session-kit-import-workspace' },
+        tr('panel.importWorkspaceTarget'),
+      ),
+      h(
+        'select',
+        {
+          id: 'session-kit-import-workspace',
+          className: styles.select,
+          value: importWorkspaceId,
+          disabled: busy !== '',
+          onChange: (event) => setImportWorkspaceId(event.target.value),
+        },
+        h('option', { value: '' }, tr('panel.importWorkspaceDefault')),
+        ...workspaceSelectOptions,
+      ),
+    ),
     importOptions,
     h(
       'div',
@@ -2595,16 +2756,6 @@ function SessionKitPanel(props) {
     ),
     h('p', { className: styles.toolCardHint }, tr('panel.importHint')),
   )
-
-  const shareWorkspaceOptions = catalog.workspaces
-    .filter((workspace) => workspace.workspaceId !== '')
-    .map((workspace) =>
-      h(
-        'option',
-        { key: workspace.workspaceId, value: workspace.workspaceId },
-        workspace.title !== '' ? workspace.title + ' · ' + workspace.path : workspace.path,
-      ),
-    )
 
   const shareResultNode =
     shareResult === null
@@ -2675,7 +2826,7 @@ function SessionKitPanel(props) {
           className: styles.select,
         },
         h('option', { value: '' }, tr('panel.shareWorkspaceDefault')),
-        ...shareWorkspaceOptions,
+        ...workspaceSelectOptions,
       ),
       h('input', {
         type: 'text',
@@ -2747,6 +2898,7 @@ function SessionKitPanel(props) {
     'aside',
     { className: styles.toolsPanel, 'aria-label': tr('panel.tools') },
     exportPanel,
+    workspaceBackupPanel,
     importPanel,
   )
 
@@ -3072,6 +3224,30 @@ async function exportSelection(request) {
   }
 }
 
+/** Request a whole-workspace backup archive and return its bytes plus headers. */
+async function exportWorkspace(request) {
+  const response = await fetch(hostUrl('/export-workspace'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/zip' },
+    body: JSON.stringify({
+      workspaceId: request.workspaceId,
+      mode: request.mode,
+      includeAttachments: request.includeAttachments === true,
+    }),
+  })
+  if (!response.ok) {
+    const payload = await jsonBody(response)
+    throw requestFailure(payload, response.status)
+  }
+  const blob = await response.blob()
+  const filename = filenameOf(response)
+  return {
+    blob,
+    filename: filename === '' ? 'session-kit-workspace-backup.zip' : filename,
+    warnings: warningsOf(response),
+  }
+}
+
 /** Run one archive/unarchive/delete batch against the Host. */
 async function manageSelection(action, sessionIds, options) {
   if (action !== 'archive' && action !== 'unarchive' && action !== 'delete') {
@@ -3240,6 +3416,7 @@ function apply(ctx) {
           inject: () => ({
             loadCatalog: () => loadCatalog(),
             exportSelection: (request) => exportSelection(request),
+            exportWorkspace: (request) => exportWorkspace(request),
             importSelection: (file, hints) => importSelection(file, hints),
             importShare: (input, options) => importShareFromHost(input, options),
             manageSessions: (action, sessionIds, options) => manageSelection(action, sessionIds, options),

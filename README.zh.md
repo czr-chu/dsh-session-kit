@@ -1,12 +1,13 @@
 # dsh-session-kit
 
 **DeepSeek Harness 的会话管理、备份与迁移工具包。**
-Version **0.10.5** · 公开 beta · [English](README.md)
+Version **0.11.0** · 公开 beta · [English](README.md)
 
 dsh-session-kit 为 DeepSeek Harness（DSH）增加一个 **会话管理（Session manager）**
-面板和一个 <code>session_kit</code> agent 工具：浏览与检查会话、导出为可迁移的
-ZIP（可选携带工作区文件）、在另一台机器或另一个工作区导入为新会话、管理归档状态、
-通过 DSH 官方迁移升级旧格式日志，并把 DeepSeek 公开分享链接转成新的本地会话。
+面板和一个 <code>session_kit</code> agent 工具：按**工作区**备份整个项目（全部会话 +
+整个工作区文件树，只打包一次）、导出选中会话为可迁移 ZIP、在另一台机器或另一个工作区
+导入为新会话、管理归档状态、通过 DSH 官方迁移升级旧格式日志，并把 DeepSeek 公开分享链接
+转成新的本地会话。
 
 它面向需要在机器之间迁移 DSH、保留本地备份，或想得到一份更小的“纯对话”副本的用户，
 不要求你手工改动 DSH 的存储布局或重写会话文件。
@@ -18,6 +19,8 @@ ZIP（可选携带工作区文件）、在另一台机器或另一个工作区�
 
 ## 为什么需要它
 
+- **按项目备份，而不是猜文件。** 工作区是 DSH 的项目单位：一个 ZIP 带上该工作区的全部会话
+  和文件树，文件只出现一次。
 - **在机器之间搬会话。** 一个 ZIP 带上会话、会话引用的附件，以及可选的整个工作区树；
   导入只新建会话，绝不覆盖已有会话。
 - **拿到可用的备份，而不是字节堆。** *精简（compact）* 导出保留“看得见的对话”——
@@ -39,7 +42,17 @@ ZIP（可选携带工作区文件）、在另一台机器或另一个工作区�
 - 点击一行可查看 **存储大小**（含所有保留代际、排除 lock 文件）、格式状态与归档状态；
   列表本身不会打开冷会话日志。
 
-### 导出
+### 工作区备份（项目推荐）
+
+- 选择一个已有工作区，备份该工作区的**全部主会话 + 整棵工作区文件树**为一个 ZIP；
+  文件只收集一次，不按会话重复。
+- 归档的 `manifest.backup` 记录工作区 id、标题和源路径；只打包该根目录，敏感/构建/依赖目录和
+  符号链接按工作区规则排除。
+- 通过 **Import → Archive → Target workspace** 恢复：以目标目录为 cwd 新建会话、挂到目标
+  工作区，并安全恢复文件（不覆盖已有文件）。
+- 一个工作区就是一个项目时，这是推荐模型；混合多项目工作区的 per-session 文件推导仍是实验性功能。
+
+### 导出选中会话
 
 - **精简（compact）**：只保留对话主线——用户消息、可见的图片/文件块、每轮最终助手文本，
   再加上会话级配置、请求上下文与一个标题事件。工具调用/结果、推理、stream chunk、任务、
@@ -139,10 +152,10 @@ ZIP（可选携带工作区文件）、在另一台机器或另一个工作区�
 
 ~~~bash
 # 从 GitHub 安装（建议固定 release tag）
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.5
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.11.0
 
 # 或直接从 GitHub Release 的 tgz 安装
-# dsh plugin --profile web add 'https://github.com/czr-chu/dsh-session-kit/releases/download/v0.10.5/dsh-session-kit-0.10.5.tgz'
+# dsh plugin --profile web add 'https://github.com/czr-chu/dsh-session-kit/releases/download/v0.11.0/dsh-session-kit-0.11.0.tgz'
 
 # 从本地 checkout 安装（便于迭代）
 dsh plugin --profile web add ~/src/dsh-session-kit
@@ -155,7 +168,7 @@ dsh plugin --profile web list --depth 0
 一行。
 
 桌面版/Web 的 **插件 → 添加插件** 对话框可直接输入 GitHub 仓库地址
-（`https://github.com/czr-chu/dsh-session-kit#v0.10.5`）、Release 的 `.tgz`
+（`https://github.com/czr-chu/dsh-session-kit#v0.11.0`）、Release 的 `.tgz`
 直链，或绝对本地目录。仓库是公开的，Git 安装不需要 GitHub token；完整说明见
 [docs/install.md](docs/install.md)。
 
@@ -171,17 +184,20 @@ DSH 版本不满足时会通过 <code>engines.dsh</code> 在安装阶段被拒�
 
 1. **打开面板。** 重启 <code>dsh web</code> 并刷新页面后，点侧边栏 **Session manager**。
    列表按工作区分组，可用搜索框和全部/活动/已归档筛选。
-2. **导出。** 勾选一个或多个主对话，在右侧 Export 卡片选择 **精简** 或 **全量**，
-   点 **Export selected**；浏览器会下载一个 ZIP（agent 工具则写到
+2. **备份工作区（项目）。** 在 **Workspace backup** 卡片选择工作区，点 **Back up workspace**；
+   ZIP 包含该工作区的全部主会话和整个工作区文件树（只打包一次）。
+3. **导出选中会话（可选）。** 勾选会话，在 Export 卡片选择 **精简** 或 **全量**，点
+   **Export selected**；浏览器会下载 ZIP（agent 工具则写到
    <code>$DSH_HOME/session-kit/exports/</code>）。
-3. **导入会话包。** 在 Import 卡片切到 **Archive**，选择 ZIP 或裸 <code>.jsonl</code>，
-   可选恢复工作区文件，点 **Import archive**；导入的对话会成为新会话，不会覆盖已有会话。
-4. **管理。** 用行内操作归档/恢复或删除。删除会移入回收站；删除对话框同时提供实验性的
+4. **导入会话包。** 在 Import 卡片切到 **Archive**，选择 ZIP 或裸 <code>.jsonl</code>，
+   选择 **Target workspace**；恢复工作区备份时启用文件恢复，点 **Import archive**。
+   导入的对话会成为新会话，不会覆盖已有会话。
+5. **管理。** 用行内操作归档/恢复或删除。删除会移入回收站；删除对话框同时提供实验性的
    相关文件选择，以及独立的永久删除二次确认。
-5. **升级旧格式。** 带旧格式徽标的行可以单条或批量通过 DSH 官方迁移升级，旧代际文件保留。
-6. **导入 DeepSeek 分享。** 在 Import 卡片切到 **DeepSeek share**，粘贴链接或 id，
+6. **升级旧格式。** 带旧格式徽标的行可以单条或批量通过 DSH 官方迁移升级，旧代际文件保留。
+7. **导入 DeepSeek 分享。** 在 Import 卡片切到 **DeepSeek share**，粘贴链接或 id，
    选择工作区后导入。
-7. **或者直接让 agent 做。** <code>session_kit</code> 工具暴露同样的操作（见下方 action 表）。
+8. **或者直接让 agent 做。** <code>session_kit</code> 工具暴露同样的操作（见下方 action 表）。
 
 ## 包格式
 
@@ -301,13 +317,13 @@ npm test
 node --import tsx/esm --test dsh-session-kit/test/*.test.mjs
 ~~~
 
-预期：**225 个测试**，其中 5 个真实后端用例在纯 <code>node --test</code> 下 skip
+预期：**246 个测试**，其中 5 个真实后端用例在纯 <code>node --test</code> 下 skip
 （在通过 <code>tsx</code> 使用 DSH checkout 时会运行）。覆盖会话列表/读取、
 compact 构建、工作区文件收集与敏感排除、归档构建/导入（含 zip-slip 与 sha256 校验）、
 归档/回收站/永久删除语义、官方格式迁移，以及分享链接的规范化/构建/导入
 （可用时对真实本地 JSONL 后端验证）。
 
-项目文档：[插件规范符合性](docs/plugin-conformance.md) · [隐私审计](docs/privacy.md) · [架构](docs/architecture.md) · [安装与升级](docs/install.md) ·
+项目文档：[插件规范符合性](docs/plugin-conformance.md) · [工作区备份](docs/workspace-backup.md) · [隐私审计](docs/privacy.md) · [架构](docs/architecture.md) · [安装与升级](docs/install.md) ·
 [安全](docs/security.md)。
 
 ## 贡献与安全报告

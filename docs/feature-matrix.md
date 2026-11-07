@@ -33,15 +33,16 @@ as of this check; tests are the authoritative coverage.
 | F12 | ZIP / 裸 JSONL 导入为新会话；可选恢复工作区文件 | 稳定 | <code>lib/import.js</code>, <code>index.js</code> | <code>test/import.test.mjs</code>（20）；无 <code>/import</code> 路由级测试 | 不保留父/子会话血缘；子代理日志永不导入；要求格式版本一致（当前 v4） |
 | F13 | 子代理策略：默认不导出、永不导入 | 稳定 | <code>lib/export.js</code>, <code>lib/import.js</code> | <code>test/export.test.mjs</code>、<code>test/import.test.mjs</code> | 子代理转录不单独导出/导入；不恢复血缘 |
 | F14 | DeepSeek 分享链接导入（可选目标工作区） | 稳定（受限：仅公开链接；网络测试为 mock） | <code>lib/deepseek-share.js</code>/<code>:178</code>/<code>:337</code>/<code>:520</code>, <code>index.js</code>, <code>src/client/index.js</code> | <code>test/deepseek-share.test.mjs</code>（9，全部 mock 网络）、<code>test/index-share.test.mjs</code>（15） | 只能是 <code>chat.deepseek.com/share/&lt;id&gt;</code> 或裸 id；60 s 超时、32 MiB 响应上限；真实联网未自动化 |
-| F15 | Agent 工具 <code>session_kit</code>：list/export/import/archive/unarchive/delete/migrate/files/import_share | 稳定 | <code>index.js</code>（action enum 与 schema） | 各 <code>test/index-*.test.mjs</code> 中的 tool 用例 | 工具可在 <code>confirm:true</code> 下执行破坏性操作，没有插件级人工审批 UI |
-| F16 | 客户端面板整体（徽标、搜索、详情、删除/迁移对话框、分享卡片） | 稳定（受限：客户端无自动化测试） | <code>src/client/index.js</code> → 构建为 <code>lib/client.js</code> | 无仓库内自动化测试；0.10.5 在 DSH 0.2.2 做了真实浏览器面板/样式冒烟 | 无自动化浏览器测试；深层交互仍需手工回归 |
-| F17 | HTTP 路由信任栅栏、批量上限、错误映射 | 稳定 | <code>index.js</code>, <code>index.js</code> | route-level 测试覆盖 archive/unarchive/delete/migrate/files/session-detail/import-share 与 403/503/400 分支 | <code>/export</code> 与 <code>/import</code> 有手工 0.10 成功路径 smoke；尚无仓库内自动化路由测试 |
+| F15 | Agent 工具 <code>session_kit</code>：list/export/export_workspace/import/archive/unarchive/delete/migrate/files/import_share | 稳定 | <code>index.js</code>（action enum 与 schema） | 各 <code>test/index-*.test.mjs</code> 中的 tool 用例 | 工具可在 <code>confirm:true</code> 下执行破坏性操作，没有插件级人工审批 UI |
+| F16 | 客户端面板整体（徽标、搜索、详情、删除/迁移对话框、分享卡片、工作区备份） | 稳定（受限：客户端无自动化测试） | <code>src/client/index.js</code> → 构建为 <code>lib/client.js</code> | 无仓库内自动化测试；0.11.0 在 DSH 0.2.2 做了真实浏览器面板/样式/工作区备份冒烟 | 无自动化浏览器测试；深层交互仍需手工回归 |
+| F18 | 工作区级备份：一个 workspace 的全部会话 + 整棵工作区树只打包一次；导入到目标 workspace | 稳定 | <code>lib/workspace-backup.js</code>, <code>lib/export.js</code>, <code>index.js</code>, <code>src/client/index.js</code> | <code>test/workspace-backup.test.mjs</code>（7，含真实后端）、<code>test/index-workspace.test.mjs</code>（14）；真实 DSH 手工 e2e | 目标 workspace 必须已存在；不恢复归档/置顶状态；无会话的工作区不能按会话导出；文件仍受排除/大小上限约束 |
+| F17 | HTTP 路由信任栅栏、批量上限、错误映射 | 稳定 | <code>index.js</code> | route-level 测试覆盖 archive/unarchive/delete/migrate/files/session-detail/import-share 与 403/503/400 分支 | <code>/export</code> 与 <code>/import</code> 有手工 0.10 成功路径 smoke；尚无仓库内自动化路由测试 |
 
 ## Cross-cutting notes
 
-- Test totals: 16 files, 225 tests. Plain <code>node --test</code> runs 220 and
-  skips 5 guarded cases that need a DSH checkout through <code>tsx</code>; with
-  <code>tsx</code> the same 225 all pass. See <code>docs/self-assessment.md</code>.
+- Test totals: 18 files, 246 tests. Plain <code>node --test</code> runs 240 and
+  skips 6 guarded cases that need a DSH checkout through <code>tsx</code>; with
+  <code>tsx</code> the same 246 all pass. See <code>docs/self-assessment.md</code>.
 - Chat UI behavior is not part of the automated suite; treat F2/F16 as manually
   verified only.
 - Evidence is intentionally conservative: a feature is "稳定" only where the

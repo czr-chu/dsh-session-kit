@@ -149,6 +149,7 @@ let manageModule
 let migrateModule
 let filesModule
 let shareModule
+let workspaceBackupModule
 
 /**
  * Normalize the in-process test-only module injection seam.
@@ -158,7 +159,14 @@ let shareModule
  * so YAML cannot substitute helper modules. When present, a missing member
  * means "that helper is unavailable".
  * @param {{modules?: unknown} | undefined} internals - test-only apply argument.
- * @returns {{sessions?: object, manage?: object, migrate?: object, files?: object, share?: object} | undefined} override set.
+ * @returns {{
+ *   sessions?: object,
+ *   manage?: object,
+ *   migrate?: object,
+ *   files?: object,
+ *   share?: object,
+ *   workspaceBackup?: object,
+ * } | undefined} override set.
  */
 function moduleOverrides(internals) {
   const raw = internals !== null && typeof internals === 'object' ? internals : {}
@@ -170,6 +178,7 @@ function moduleOverrides(internals) {
     migrate: modules.migrate,
     files: modules.files,
     share: modules.share,
+    workspaceBackup: modules.workspaceBackup,
   }
 }
 
@@ -282,6 +291,28 @@ async function loadShare(overrides) {
     }
   }
   return shareModule
+}
+
+/**
+ * Resolve the workspace-level backup module lazily.
+ * @param {{workspaceBackup?: object} | undefined} overrides - module injection seam.
+ * @returns {Promise<object>} workspace-backup module namespace.
+ */
+async function loadWorkspaceBackup(overrides) {
+  if (overrides !== undefined) {
+    if (overrides.workspaceBackup === undefined || overrides.workspaceBackup === null) {
+      throw new SessionPortFormatError('unavailable', '工作区备份模块不可用')
+    }
+    return overrides.workspaceBackup
+  }
+  if (workspaceBackupModule === undefined) {
+    try {
+      workspaceBackupModule = await import('./lib/workspace-backup.js')
+    } catch (error) {
+      throw new SessionPortFormatError('unavailable', `工作区备份模块不可用：${errorText(error)}`)
+    }
+  }
+  return workspaceBackupModule
 }
 
 /**
@@ -435,6 +466,7 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
           deletePermanent: true,
           deleteSelectedFiles: true,
           shareImport: true,
+          workspaceBackup: true,
           attachments: helpers.servicesOf(ctx).attachments !== undefined,
           tool: 'session_kit',
         },
@@ -464,6 +496,15 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
           inputMaxLength: MAX_SHARE_INPUT_LENGTH,
           note: '仅接受 chat.deepseek.com/share/<id> 链接或裸分享 id；可选 workspaceId 指定目标工作区，否则使用 cwd 或部署默认目录',
         },
+        workspaceBackup: {
+          mode: 'workspace',
+          note: '按工作区备份：一个工作区 = 该工作区全部主会话 + 整棵工作区文件树，只打包一次（敏感文件/构建缓存排除、符号链接不跟随）；普通 export 仍按选中的会话打包。',
+          defaults: {
+            mode: settings.defaultMode,
+            includeAttachments: settings.includeAttachments,
+            includeSubagents: settings.includeSubagents,
+          },
+        },
         defaults: {
           mode: settings.defaultMode,
           includeAttachments: settings.includeAttachments,
@@ -487,6 +528,10 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
     }
     if (path === `${ROUTE_PREFIX}/export` && method === 'POST') {
       await handleExport(ctx, settings, overrides, req, res)
+      return
+    }
+    if (path === `${ROUTE_PREFIX}/export-workspace` && method === 'POST') {
+      await handleExportWorkspace(ctx, settings, overrides, req, res)
       return
     }
     if (path === `${ROUTE_PREFIX}/import` && method === 'POST') {
@@ -1227,6 +1272,84 @@ async function handleExport(ctx, settings, overrides, req, res) {
 }
 
 /**
+ * Never let a backup filename escape the plugin export directory or name a
+ * directory entry; a module-provided name is only trusted when it is one plain
+ * file name.
+ * @param {unknown} filename - module-provided file name.
+ * @returns {string} one safe file name.
+ */
+function safeBackupFilename(filename) {
+  const value = typeof filename === 'string' ? filename.trim() : ''
+  if (value === '' || value === '.' || value === '..' || value.includes('/') || value.includes('\\')) {
+    return 'workspace-backup.zip'
+  }
+  return value
+}
+
+/**
+ * `POST /session-kit/export-workspace` — back up one workspace as ONE ZIP.
+ *
+ * Body: `{ workspaceId: string, mode?: 'full'|'compact', includeAttachments?,
+ * includeSubagents?, workspaceExclude? }`. The backup contains every main
+ * session of that workspace plus the whole workspace file tree, packed once
+ * (sensitive files/build caches excluded, symlinks skipped). Session-scoped
+ * `/export` keeps its existing behavior.
+ * @param {object} ctx - the plugin context.
+ * @param {object} settings - resolved settings.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {import('node:http').IncomingMessage} req - request.
+ * @param {import('node:http').ServerResponse} res - response.
+ */
+async function handleExportWorkspace(ctx, settings, overrides, req, res) {
+  const payload = await readJsonBody(req, MAX_JSON_BODY_BYTES)
+  const workspaceId = typeof payload.workspaceId === 'string' ? payload.workspaceId.trim() : ''
+  if (workspaceId === '') {
+    throw new SessionPortFormatError('invalid-argument', '请求缺少 workspaceId（工作区 id）')
+  }
+  if (payload.mode !== undefined && payload.mode !== 'full' && payload.mode !== 'compact') {
+    throw new SessionPortFormatError('invalid-argument', 'mode 必须是 "full" 或 "compact"')
+  }
+  const backup = await loadWorkspaceBackup(overrides)
+  if (typeof backup.buildWorkspaceBackup !== 'function') {
+    throw new SessionPortFormatError('unavailable', '工作区备份模块不可用')
+  }
+  let result
+  try {
+    result = await backup.buildWorkspaceBackup(ctx, {
+      workspaceId,
+      mode: payload.mode ?? settings.defaultMode,
+      includeAttachments: booleanFlag(payload.includeAttachments, settings.includeAttachments),
+      includeSubagents: booleanFlag(payload.includeSubagents, settings.includeSubagents),
+      workspaceExclude: stringList(payload.workspaceExclude, settings.workspaceExclude),
+      ...(settings.workspaceMaxBytes !== undefined ? { workspaceMaxBytes: settings.workspaceMaxBytes } : {}),
+      maxExportBytes: settings.maxExportBytes,
+    })
+  } catch (error) {
+    if (error instanceof SessionPortFormatError) throw error
+    throw new SessionPortFormatError('workspace-backup-failed', `工作区备份失败：${errorText(error)}`)
+  }
+  const data = result?.data
+  if (!(data instanceof Uint8Array) || typeof result?.filename !== 'string') {
+    throw new SessionPortFormatError('workspace-backup-failed', '工作区备份模块没有返回 ZIP 数据或文件名')
+  }
+  const workspace = result.workspace !== null && typeof result.workspace === 'object' ? result.workspace : {}
+  const title = typeof workspace.title === 'string' ? workspace.title : ''
+  res.writeHead(200, {
+    'content-type': 'application/zip',
+    'content-length': String(data.length),
+    'content-disposition': 'attachment; filename="workspace-backup.zip"',
+    'cache-control': 'no-store',
+    'x-session-kit-filename': encodeURIComponent(safeBackupFilename(result.filename)),
+    'x-session-kit-warnings': encodeURIComponent(JSON.stringify(result.warnings ?? [])),
+    'x-session-kit-sessions': String(result.sessionCount ?? 0),
+    'x-session-kit-workspace-files': String(result.workspaceFileCount ?? 0),
+    'x-session-kit-workspace': encodeURIComponent(workspaceId),
+    'x-session-kit-workspace-title': encodeURIComponent(title),
+  })
+  res.end(Buffer.from(data))
+}
+
+/**
  * `POST /session-kit/import` — commit one uploaded archive as new sessions.
  * Query carries `cwd`, `workspaceId`, `restoreWorkspaceFiles`, `filename` hints.
  * @param {object} ctx - the plugin context.
@@ -1319,6 +1442,7 @@ function statusOf(error) {
     code === 'file-plan-failed' ||
     code === 'detail-failed' ||
     code === 'import-failed' ||
+    code === 'workspace-backup-failed' ||
     code === 'internal'
   )
     return 500
@@ -1355,21 +1479,33 @@ function registerTool(ctx, settings, overrides) {
           'action=files previews the workspace files a deletion would move for the selected sessions; the derivation is best effort (shell redirections, PTC scripts and files only mentioned in text cannot be discovered) and shared workspace files may be affected.',
           'action=delete with removeFiles:true requires selectedFiles (absolute paths from the files preview) and moves only those derived files; preview with action=files first and keep confirm:true. Without permanent:true nothing is erased.',
           'action=import_share imports a DeepSeek share conversation (chat.deepseek.com/share/<id> link or bare share id) as a NEW session; pass workspaceId to choose the target workspace, otherwise cwd or the deployment default directory is used.',
+          'action=export_workspace backs up ONE workspace as a single ZIP: every main session in that workspace plus its whole file tree (sensitive files/build caches excluded, symlinks not followed); workspaceId is required and the session-scoped export action keeps its behavior.',
         ].join(' '),
         parameters: {
           type: 'object',
           properties: {
             action: {
               type: 'string',
-              enum: ['list', 'export', 'import', 'archive', 'unarchive', 'delete', 'migrate', 'files', 'import_share'],
+              enum: [
+                'list',
+                'export',
+                'export_workspace',
+                'import',
+                'archive',
+                'unarchive',
+                'delete',
+                'migrate',
+                'files',
+                'import_share',
+              ],
               description:
-                "list: summarize sessions. export: save sessions as one ZIP. import: create new sessions from a ZIP or JSONL archive. archive/unarchive: toggle archived state. delete: move sessions to the trash directory. migrate: upgrade legacy session logs through DSH's official migration chain. files: preview the workspace files a deletion would move. import_share: import a DeepSeek share link as a new session.",
+                "list: summarize sessions. export: save selected sessions as one ZIP. export_workspace: back up one whole workspace (sessions + file tree) as one ZIP. import: create new sessions from a ZIP or JSONL archive. archive/unarchive: toggle archived state. delete: move sessions to the trash directory. migrate: upgrade legacy session logs through DSH's official migration chain. files: preview the workspace files a deletion would move. import_share: import a DeepSeek share link as a new session.",
             },
             mode: {
               type: 'string',
               enum: ['full', 'compact'],
               description:
-                'export only: full keeps complete logs; compact keeps only the conversation (default from plugin config).',
+                'export/export_workspace only: full keeps complete logs; compact keeps only the conversation (default from plugin config).',
             },
             sessionIds: {
               oneOf: [
@@ -1386,7 +1522,7 @@ function registerTool(ctx, settings, overrides) {
             workspaceId: {
               type: 'string',
               description:
-                'import_share only: target workspace id (resolved through the workspace registry); otherwise cwd or the deployment default directory is used.',
+                'import_share: target workspace id (resolved through the workspace registry); otherwise cwd or the deployment default directory is used. export_workspace: the workspace to back up (required).',
             },
             title: {
               type: 'string',
@@ -1394,7 +1530,12 @@ function registerTool(ctx, settings, overrides) {
             },
             includeSubagents: {
               type: 'boolean',
-              description: 'list/export only: include subagent transcript sessions (default false).',
+              description: 'list/export/export_workspace only: include subagent transcript sessions (default false).',
+            },
+            includeAttachments: {
+              type: 'boolean',
+              description:
+                'export/export_workspace only: pack referenced attachment bytes (default from plugin config).',
             },
             includeWorkspaceFiles: {
               type: 'boolean',
@@ -1404,7 +1545,8 @@ function registerTool(ctx, settings, overrides) {
             workspaceExclude: {
               type: 'array',
               items: { type: 'string' },
-              description: 'export only: extra workspace path patterns/directories to exclude from the packed tree.',
+              description:
+                'export/export_workspace only: extra workspace path patterns/directories to exclude from the packed tree.',
             },
             restoreWorkspaceFiles: {
               type: 'boolean',
@@ -1516,8 +1658,11 @@ function registerTool(ctx, settings, overrides) {
           if (action === 'import_share') {
             return runImportShareTool(ctx, overrides, helpers, args)
           }
+          if (action === 'export_workspace') {
+            return runWorkspaceExportTool(ctx, settings, overrides, args)
+          }
           throw new Error(
-            'session_kit: action 必须是 "list"、"export"、"import"、"archive"、"unarchive"、"delete"、"migrate"、"files" 或 "import_share"',
+            'session_kit: action 必须是 "list"、"export"、"export_workspace"、"import"、"archive"、"unarchive"、"delete"、"migrate"、"files" 或 "import_share"',
           )
         },
       }),
@@ -1787,6 +1932,77 @@ function exportToolText(path, exported) {
   }
   const lines = [`已导出到 ${path}（${parts.join('，')}，模式 ${exported.manifest.mode}）`]
   for (const warning of exported.warnings ?? []) lines.push(`注意：${warning}`)
+  return lines.join('\n')
+}
+
+/**
+ * Run the export_workspace tool action (build one workspace backup, write it to
+ * the plugin export directory, summarise the result).
+ * @param {object} ctx - the plugin context.
+ * @param {object} settings - resolved settings.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {object} args - model arguments.
+ * @returns {Promise<string>} summary text.
+ */
+async function runWorkspaceExportTool(ctx, settings, overrides, args) {
+  const workspaceId = typeof args.workspaceId === 'string' ? args.workspaceId.trim() : ''
+  if (workspaceId === '') {
+    throw new Error('session_kit: export_workspace 需要 workspaceId 参数（工作区 id）')
+  }
+  if (args.mode !== undefined && args.mode !== 'full' && args.mode !== 'compact') {
+    throw new Error('session_kit: mode 必须是 "full" 或 "compact"')
+  }
+  const backup = await loadWorkspaceBackup(overrides)
+  if (typeof backup.buildWorkspaceBackup !== 'function') {
+    throw new Error('session_kit: 工作区备份模块不可用')
+  }
+  let result
+  try {
+    result = await backup.buildWorkspaceBackup(ctx, {
+      workspaceId,
+      mode: args.mode ?? settings.defaultMode,
+      includeAttachments: booleanFlag(args.includeAttachments, settings.includeAttachments),
+      includeSubagents: booleanFlag(args.includeSubagents, settings.includeSubagents),
+      workspaceExclude: stringList(args.workspaceExclude, settings.workspaceExclude),
+      ...(settings.workspaceMaxBytes !== undefined ? { workspaceMaxBytes: settings.workspaceMaxBytes } : {}),
+      maxExportBytes: settings.maxExportBytes,
+    })
+  } catch (error) {
+    throw new Error(`session_kit: 工作区备份失败：${errorText(error)}`)
+  }
+  const data = result?.data
+  if (!(data instanceof Uint8Array) || typeof result?.filename !== 'string') {
+    throw new Error('session_kit: 工作区备份模块没有返回 ZIP 数据或文件名')
+  }
+  const directory = defaultExportDirectory()
+  await mkdir(directory, { recursive: true })
+  const path = join(directory, safeBackupFilename(result.filename))
+  await writeFile(path, Buffer.from(data))
+  return workspaceExportToolText(path, result)
+}
+
+/**
+ * Tool result text for the export_workspace action.
+ * @param {string} path - written archive path.
+ * @param {object} result - workspace backup outcome (archive fields + workspace metadata).
+ * @returns {string} summary text.
+ */
+function workspaceExportToolText(path, result) {
+  const workspace = result.workspace !== null && typeof result.workspace === 'object' ? result.workspace : {}
+  const title =
+    typeof workspace.title === 'string' && workspace.title !== ''
+      ? workspace.title
+      : String(workspace.workspaceId ?? '')
+  const parts = [
+    `${result.sessionCount ?? 0} 个会话`,
+    `${result.workspaceFileCount ?? 0} 个工作区文件（${result.workspaceBytes ?? 0} 字节）`,
+  ]
+  if (Number.isSafeInteger(result.attachmentCount) && result.attachmentCount > 0) {
+    parts.push(`${result.attachmentCount} 个附件`)
+  }
+  const mode = result.manifest?.mode ?? result.mode ?? 'full'
+  const lines = [`已备份工作区「${title}」到 ${path}（${parts.join('，')}，模式 ${mode}）`]
+  for (const warning of result.warnings ?? []) lines.push(`注意：${warning}`)
   return lines.join('\n')
 }
 

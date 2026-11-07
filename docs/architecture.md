@@ -15,6 +15,7 @@ lib/sessions.js          DSH service seam: list/read/title/mint/attach/write
 lib/compact.js           conversation-only ("compact") log synthesis
 lib/workspace-files.js   touched-file derivation + safe workspace tree walk
 lib/export.js            multi-session ZIP: manifest, session folders, attachments, workspaces
+lib/workspace-backup.js  one workspace: all sessions + one file tree, manifest.backup
 lib/import.js            archive preflight, new-session creation, workspace restore
 lib/manage.js            archive/unarchive, delete-to-trash with lineage and registry cleanup
 lib/format.js            canonical session JSONL + attachment ref helpers
@@ -37,6 +38,22 @@ dynamic state stay as minimal inline styles. The panel registers through
 and talks to the Host only through the fenced `/session-kit/*` routes.
 `npm run build:client` regenerates the committed artifact; CI rebuilds it and
 fails when the artifact differs.
+
+## Workspace backup
+
+DSH's file-owning unit is the workspace, not the session. The Workspace backup
+card and `session_kit action=export_workspace` resolve one workspace id through
+`ctx.workspaceRegistry`, take every session the registry lists for it (filtering
+missing ids), and call `buildArchive` with `includeWorkspaceFiles: true` and
+`backup: { kind: 'workspace', workspaceId, title, path }`. The collector is
+pinned to that one root, so the archive contains one `workspaces/<key>/` tree,
+not one tree per session. `POST /session-kit/export-workspace` streams it with
+`x-session-kit-workspace*` headers.
+
+Restore uses the normal import path with a selected target workspace: the ZIP's
+workspace tree is unpacked into the target cwd, sessions are created there, and
+`attachToWorkspace` joins them to that workspace. A target workspace must exist
+first; existing files are skipped, and archived/pinned state is not restored.
 
 ## Export model
 

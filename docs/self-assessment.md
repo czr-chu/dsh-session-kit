@@ -1,6 +1,6 @@
 # Public-release self-assessment
 
-Self-check for dsh-session-kit <code>0.10.5</code> (2026-11-07). The check was
+Self-check for dsh-session-kit <code>0.11.0</code> (2026-11-07). The check was
 code-and-test plus limited real <code>dsh web</code> spot checks; no live
 DeepSeek share API call and no real cross-machine restore. Evidence is marked
 by source:
@@ -68,7 +68,7 @@ From the plugin directory:
 node --test test/*.test.mjs
 ~~~
 
-Result: **225 tests, 220 passed, 0 failed, 5 skipped** (plain Node v22.23.2,
+Result: **246 tests, 240 passed, 0 failed, 5 skipped** (plain Node v22.23.2,
 about 0.26 s). The five skips are guarded tests that need a DSH repository
 checkout through <code>tsx</code>: compact-log product replay, two real JSONL
 persistence import cases, a real released v3 migration fixture, and the
@@ -80,12 +80,12 @@ From a DSH repository checkout:
 node --import tsx/esm --test dsh-session-kit/test/*.test.mjs
 ~~~
 
-Result: **225/225 passed, 0 skipped, 0 failed** (about 1.5 s). This run includes
+Result: **246/246 passed, 0 skipped, 0 failed** (about 1.5 s). This run includes
 the real persistence backend and product replay checks.
 
 Other checks: <code>node --check</code> passes for <code>index.js</code>,
 <code>src/client/index.js</code> and all <code>lib/*.js</code>; locale and package JSON
-parse; <code>npm pack --dry-run</code> reports 45 files, about 378 kB tarball (includes the README screenshot)
+parse; <code>npm pack --dry-run</code> reports 47 files, about 375 kB tarball (includes the README screenshot)
 
 ### 3.2 Real-backend and end-to-end evidence
 
@@ -113,13 +113,13 @@ parse; <code>npm pack --dry-run</code> reports 45 files, about 378 kB tarball (i
   22.7 MB to 0.35 MB. These measurements are from development records, not this
   self-check.
 
-### 3.3 Client build verification (0.10.5)
+### 3.3 Client build verification (0.11.0)
 
 - **[本次运行]** <code>npm ci</code> + <code>npm run build:client</code> produced
   <code>lib/client.js</code> and its source map; two consecutive builds were
   byte-identical (sha256 equal).
 - **[本次运行]** A disposable profile installed from the packed
-  <code>dsh-session-kit-0.10.5.tgz</code> on DSH **0.2.2-rc.1** loaded the built
+  <code>dsh-session-kit-0.11.0.tgz</code> on DSH **0.2.2-rc.1** loaded the built
   bundle: the Session manager panel opened, its one plugin style tag
   was injected, the CSS-module page/content classes had the expected computed
   layout (860 px content, 18 px gap, card padding), and there were no console,
@@ -161,6 +161,17 @@ parse; <code>npm pack --dry-run</code> reports 45 files, about 378 kB tarball (i
 - installation from the packed tarball, fresh-machine DSH boot, cross-machine
   restore, Windows/macOS filesystem behavior;
 - accessibility and non-Chinese/English locales.
+
+## 3.6 Workspace backup verification
+
+**[本次运行]** A disposable DSH 0.2.2 home with two workspaces was used: two
+synthetic sessions were imported into `ws-source`, an `a.txt` / `sub/b.txt`
+tree was created, and `POST /session-kit/export-workspace` produced one archive
+with `manifest.backup.kind = workspace`, two sessions and a single workspace
+tree. Importing that ZIP into `ws-target` with
+`workspaceId=ws-target&restoreWorkspaceFiles=1` restored both files, created
+two new sessions in the target directory and attached them to `ws-target`.
+The browser Workspace backup card downloaded the same ZIP successfully.
 
 ## 4. Feature status summary
 
@@ -279,7 +290,7 @@ The full matrix is in <code>docs/feature-matrix.md</code>. Summary:
     <code>node --test test/*.test.mjs</code> on Node 22/24 and
     <code>npm pack --dry-run</code>; the five real-backend cases still skip there,
     and no Playwright/browser job exists. There is also no release/publish workflow.
-20. **Documentation drift remains a maintenance risk.** The 0.10.5
+20. **Documentation drift remains a maintenance risk.** The 0.11.0
     public-release pass refreshed <code>docs/roadmap.md</code>, removed the
     nonexistent <code>docs/assets</code> entry from <code>package.json</code>,
     added issue templates and linked the self-assessment/feature matrix from the
@@ -310,13 +321,13 @@ Suggested pre-publication checklist:
    the candidate <code>npm pack</code> payload was inspected; re-verify it in the
    release workflow, and decide whether both README files should ship.
 5. **Docs**: <code>docs/roadmap.md</code> and README/install/Node requirements
-   were aligned for 0.10.5; state the experimental/permanent-delete limits in the
+   were aligned for 0.11.0; state the experimental/permanent-delete limits in the
    release notes.
 6. **Real-world QA**: on a clean machine and a second DSH instance, install from
    the pinned tag, export a synthetic archive, import it in a different
    workspace, restore files, exercise archive/trash/permanent delete, and test
    one real public share link with non-sensitive content.
-7. **Release mechanics**: tag <code>v0.10.5</code>, publish with provenance
+7. **Release mechanics**: tag <code>v0.11.0</code>, publish with provenance
    (<code>npm publish --provenance</code> or equivalent), attach release notes,
    and publish to the plugin index if intended.
 8. **Security/privacy**: document archive privacy (conversation text,

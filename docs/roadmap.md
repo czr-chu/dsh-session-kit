@@ -1,6 +1,6 @@
 # Roadmap
 
-Shipped through 0.10.5:
+Shipped through 0.11.0:
 
 - session/workspace browsing, search, status filters, archived badges and selection;
 - session detail (storage size across retained generations, format status, archived state);
@@ -14,7 +14,8 @@ Shipped through 0.10.5:
 - public-release documentation, security policy, CI and issue templates;
 - standard-schema `Config` validation, bundle icon and localized detail documents;
 - official-style tsdown/CSS Modules client bundle, reproducible artifact and CI format gate;
-- two-column Sessions/Tools panel layout with responsive stacking.
+- two-column Sessions/Tools panel layout with responsive stacking;
+- workspace-level backup/restore: all sessions + whole project file tree once.
 
 Next:
 

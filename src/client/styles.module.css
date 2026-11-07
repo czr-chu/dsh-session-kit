@@ -689,3 +689,17 @@
   font: 12px/18px var(--dsw-font-family, inherit);
   color: var(--dsw-alias-label-secondary);
 }
+.field-column {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.field-label {
+  font: 12px/18px var(--dsw-font-family, inherit);
+  color: var(--dsw-alias-label-secondary);
+}
+.field-column .select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}

@@ -6,6 +6,7 @@ DSH 存储格式的前提下管理会话。
 
 ## 主要功能
 
+- 在 **工作区备份** 卡片选择一个项目，一次备份该工作区的全部会话和文件树，并通过 Import → Archive → Target workspace 恢复。
 - 按工作区浏览会话，按标题、id、目录搜索，筛选活跃/已归档；展开行可看存储大小、
   格式状态、归档状态和推导出的相关文件列表。
 - 选择一个或多个会话导出为一个 ZIP。**精简** 保留可见对话与每轮最终回答；
@@ -26,7 +27,7 @@ DSH 存储格式的前提下管理会话。
 ## 安装
 
 ```sh
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.5
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.11.0
 ```
 
 安装或升级后重启 `dsh web`。插件不依赖任何 `@deepseek-ai/*` 运行时包，

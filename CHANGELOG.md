@@ -4,6 +4,25 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-11-08
+
+### Added
+
+- **Workspace-level backup/restore.** The panel's Workspace backup card and
+  `session_kit action=export_workspace` pack one workspace's main sessions plus
+  its whole file tree exactly once; `manifest.backup` records the workspace.
+  Import can target a chosen workspace, restore files, create new sessions and
+  attach them there.
+- `POST /session-kit/export-workspace`, workspace metadata in `/info`, and
+  workspace test coverage (core + route).
+- `docs/workspace-backup.md` and README guidance on using one workspace per
+  project.
+
+### Changed
+
+- Documentation now treats session-level touched-file editing as an experimental
+  fallback; workspace backup is the primary project backup path.
+
 ## [0.10.5] - 2026-11-07
 
 ### Added

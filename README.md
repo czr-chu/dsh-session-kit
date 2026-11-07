@@ -2,14 +2,14 @@
 
 **Session manager, backup, and migration toolkit for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).**
 
-Version **0.10.5** · public beta · [中文说明](README.zh.md)
+Version **0.11.0** · public beta · [中文说明](README.zh.md)
 
 dsh-session-kit adds a **Session manager** panel and a <code>session_kit</code> agent
-tool to DeepSeek Harness (DSH). It lists and inspects conversations, exports them
-as portable ZIP archives (optionally with workspace files), imports them as new
-sessions on another machine or workspace, manages archive state, upgrades old
-session logs through DSH's official migration, and turns public DeepSeek share
-links into new local conversations.
+tool to DeepSeek Harness (DSH). It backs up a whole **workspace** (every session
+plus the project files, collected once), exports selected conversations as
+portable archives, imports them as new sessions on another machine or workspace,
+manages archive state, upgrades old session logs through DSH's official
+migration, and turns public DeepSeek share links into new local conversations.
 
 It is built for people who migrate DSH between machines, keep local backups, or
 want a smaller conversation-only copy of a long session — without touching DSH's
@@ -22,6 +22,8 @@ storage layout or rewriting session files by hand.
 
 ## Why dsh-session-kit
 
+- **Back up a project, not guesses.** A workspace is DSH's project unit: one ZIP
+  carries every session in that workspace and its file tree exactly once.
 - **Move conversations between machines.** One ZIP carries sessions, their
   attachments and, optionally, the workspace trees they ran in. Import creates
   new sessions and never overwrites existing ones.
@@ -49,7 +51,20 @@ storage layout or rewriting session files by hand.
   excluded), format status and archived state. The list itself never opens cold
   session logs.
 
-### Export
+### Workspace backup (recommended for projects)
+
+- Choose one existing workspace and back up **all its main sessions + the whole
+  workspace tree** as one ZIP. Files are collected once, not per session.
+- The archive records `manifest.backup` with the workspace id, title and source
+  path; only that root is packed. Sensitive/build/dependency paths and symlinks
+  are excluded with the normal workspace rules.
+- Restore through **Import → Archive → Target workspace**, which creates new
+  sessions with the target cwd, attaches them to that workspace, and restores
+  the files without overwriting existing files.
+- This is the intended model when one workspace is one project. Session-level
+  file derivation remains experimental for mixed workspaces.
+
+### Export selected sessions
 
 - **Compact** mode: conversation spine only. User messages, visible image/file
   blocks and the final assistant text of every turn, plus session-level config,
@@ -177,10 +192,10 @@ a Web or Desktop deployment; a headless deployment still gets the
 
 ~~~bash
 # from GitHub (recommended: pin a release tag)
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.5
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.11.0
 
 # or directly from a GitHub Release tarball
-# dsh plugin --profile web add 'https://github.com/czr-chu/dsh-session-kit/releases/download/v0.10.5/dsh-session-kit-0.10.5.tgz'
+# dsh plugin --profile web add 'https://github.com/czr-chu/dsh-session-kit/releases/download/v0.11.0/dsh-session-kit-0.11.0.tgz'
 
 # from a local checkout (iterating on the plugin)
 dsh plugin --profile web add ~/src/dsh-session-kit
@@ -193,7 +208,7 @@ Restart <code>dsh web</code> after installing, then refresh the page. The sideba
 gets a **Session manager** row under Plugins.
 
 In the Desktop/Web **Plugins → Add plugin** dialog, enter either the GitHub
-repository URL (`https://github.com/czr-chu/dsh-session-kit#v0.10.5`), the
+repository URL (`https://github.com/czr-chu/dsh-session-kit#v0.11.0`), the
 Release `.tgz` URL, or an absolute local directory. The repository is public; no
 GitHub token is needed for a Git install. See [docs/install.md](docs/install.md)
 for the repository requirements and offline install.
@@ -212,22 +227,25 @@ An incompatible DSH version is refused at install time through
 1. **Open the panel.** After restarting <code>dsh web</code> and refreshing, click
    **Session manager** in the sidebar. Rows are grouped by workspace; use the
    search box and the all/active/archived filter.
-2. **Export.** Select one or more main conversations, then choose **compact** or
-   **full** in the Export card on the right and click **Export selected**. The
-   browser downloads one ZIP; the agent tool writes it under
+2. **Back up a workspace (project).** In **Workspace backup** choose the
+   workspace and click **Back up workspace**. The ZIP contains all its main
+   sessions and the workspace tree once.
+3. **Export selected sessions (optional).** Select conversations, choose
+   **compact** or **full** in the Export card, and click **Export selected**.
+   The browser downloads one ZIP; the agent tool writes it under
    <code>$DSH_HOME/session-kit/exports/</code> instead.
-3. **Import an archive.** In the Import card choose the **Archive** tab, pick a
-   ZIP or bare <code>.jsonl</code>, optionally enable workspace-file restore,
-   and click **Import archive**. Imported conversations appear as new sessions;
-   nothing existing is overwritten.
-4. **Manage.** Use the row actions to archive/unarchive or delete. Delete moves
+4. **Import an archive.** In the Import card choose **Archive**, pick a ZIP (or
+   bare <code>.jsonl</code>), choose the **Target workspace**, enable
+   workspace-file restore when restoring a backup, and click **Import archive**.
+   Imported conversations appear as new sessions; nothing existing is overwritten.
+5. **Manage.** Use the row actions to archive/unarchive or delete. Delete moves
    the session to the trash; the delete dialog also offers the experimental
    related-file selection and a separate permanent-erase confirmation.
-5. **Upgrade legacy rows.** A row with the legacy badge can be upgraded singly or
+6. **Upgrade legacy rows.** A row with the legacy badge can be upgraded singly or
    in a batch through DSH's official migration; the old generation is kept.
-6. **Import a DeepSeek share.** In the Import card choose the **DeepSeek share**
+7. **Import a DeepSeek share.** In the Import card choose the **DeepSeek share**
    tab, paste a share link or id, choose a workspace, and import.
-7. **Or ask the agent.** The <code>session_kit</code> tool exposes the same
+8. **Or ask the agent.** The <code>session_kit</code> tool exposes the same
    operations (see the action table below).
 
 ## Archive layout
@@ -364,7 +382,7 @@ npm test
 node --import tsx/esm --test dsh-session-kit/test/*.test.mjs
 ~~~
 
-Expected result: **225 tests**, with 5 guarded real-backend cases skipped under
+Expected result: **246 tests**, with 5 guarded real-backend cases skipped under
 plain <code>node --test</code> (they run when the DSH checkout is available
 through <code>tsx</code>). The suite covers session listing/reading, compact
 building, workspace file collection and sensitive exclusions, archive
@@ -374,7 +392,7 @@ normalization/build/import against a real local JSONL backend where available.
 
 Project docs: [architecture](docs/architecture.md) ·
 [install and upgrade](docs/install.md) · [security](docs/security.md) ·
-[plugin conformance](docs/plugin-conformance.md) ·
+[plugin conformance](docs/plugin-conformance.md) · [workspace backup](docs/workspace-backup.md) ·
 [self-assessment](docs/self-assessment.md) · [privacy audit](docs/privacy.md) ·
 [feature matrix](docs/feature-matrix.md) · [roadmap](docs/roadmap.md).
 
