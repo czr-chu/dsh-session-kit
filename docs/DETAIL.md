@@ -38,7 +38,7 @@ on-disk format by hand.
 ## Install
 
 ```sh
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.4
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.5
 ```
 
 Restart `dsh web` after installing or upgrading. The plugin has no

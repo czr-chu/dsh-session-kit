@@ -1,6 +1,6 @@
 # Roadmap
 
-Shipped through 0.10.4:
+Shipped through 0.10.5:
 
 - session/workspace browsing, search, status filters, archived badges and selection;
 - session detail (storage size across retained generations, format status, archived state);

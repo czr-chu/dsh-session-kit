@@ -4,6 +4,15 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.5] - 2026-11-07
+
+### Added
+
+- `docs/privacy.md`: repository data policy, full audit scope, findings, the
+  historical build-path remediation, and ongoing checks.
+- `scripts/privacy-check.mjs` and `npm run privacy:check`; CI runs the scan.
+- Explicit links from README, SECURITY, CONTRIBUTING and the conformance page.
+
 ## [0.10.4] - 2026-11-07
 
 ### Security

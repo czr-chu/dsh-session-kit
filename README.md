@@ -2,7 +2,7 @@
 
 **Session manager, backup, and migration toolkit for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).**
 
-Version **0.10.4** · public beta · [中文说明](README.zh.md)
+Version **0.10.5** · public beta · [中文说明](README.zh.md)
 
 dsh-session-kit adds a **Session manager** panel and a <code>session_kit</code> agent
 tool to DeepSeek Harness (DSH). It lists and inspects conversations, exports them
@@ -177,10 +177,10 @@ a Web or Desktop deployment; a headless deployment still gets the
 
 ~~~bash
 # from GitHub (recommended: pin a release tag)
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.4
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.5
 
 # or directly from a GitHub Release tarball
-# dsh plugin --profile web add 'https://github.com/czr-chu/dsh-session-kit/releases/download/v0.10.4/dsh-session-kit-0.10.4.tgz'
+# dsh plugin --profile web add 'https://github.com/czr-chu/dsh-session-kit/releases/download/v0.10.5/dsh-session-kit-0.10.5.tgz'
 
 # from a local checkout (iterating on the plugin)
 dsh plugin --profile web add ~/src/dsh-session-kit
@@ -193,7 +193,7 @@ Restart <code>dsh web</code> after installing, then refresh the page. The sideba
 gets a **Session manager** row under Plugins.
 
 In the Desktop/Web **Plugins → Add plugin** dialog, enter either the GitHub
-repository URL (`https://github.com/czr-chu/dsh-session-kit#v0.10.4`), the
+repository URL (`https://github.com/czr-chu/dsh-session-kit#v0.10.5`), the
 Release `.tgz` URL, or an absolute local directory. The repository is public; no
 GitHub token is needed for a Git install. See [docs/install.md](docs/install.md)
 for the repository requirements and offline install.
@@ -310,7 +310,7 @@ session detail, and 5000 selected files per delete.
 - These protections reduce risk but cannot guarantee that every sensitive file
   in a workspace is undiscoverable. Keep backups and review exports.
 
-More detail: [docs/security.md](docs/security.md).
+More detail: [docs/security.md](docs/security.md) and the [privacy audit](docs/privacy.md).
 
 ## Compatibility
 
@@ -375,8 +375,8 @@ normalization/build/import against a real local JSONL backend where available.
 Project docs: [architecture](docs/architecture.md) ·
 [install and upgrade](docs/install.md) · [security](docs/security.md) ·
 [plugin conformance](docs/plugin-conformance.md) ·
-[self-assessment](docs/self-assessment.md) · [feature matrix](docs/feature-matrix.md) ·
-[roadmap](docs/roadmap.md).
+[self-assessment](docs/self-assessment.md) · [privacy audit](docs/privacy.md) ·
+[feature matrix](docs/feature-matrix.md) · [roadmap](docs/roadmap.md).
 
 ## Contributing and reporting security issues
 

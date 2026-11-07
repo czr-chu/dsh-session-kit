@@ -42,7 +42,7 @@ absolute user paths, or unsanitized screenshots in a report; redact them.
 
 ## Security model
 
-The detailed model lives in [docs/security.md](docs/security.md). Summary:
+The detailed model lives in [docs/security.md](docs/security.md); the repository data audit is in [docs/privacy.md](docs/privacy.md). Summary:
 
 - **Local plugin, explicit actions.** Routes are fenced by the host's
   Connection service; nothing is exported, archived, migrated or deleted unless

@@ -99,4 +99,5 @@ inside DeepSeek Harness.
 - **Compatibility:** peer/engine range is `>=0.2.1-rc.3 <0.3.0-0`; the current
   release has been exercised on DSH 0.2.2-rc.1.
 - **Privacy:** no real sessions, credentials, absolute user paths or unscreened
-  screenshots belong in the repository, issues or release notes.
+  screenshots belong in the repository, issues or release notes. The audit and
+  historical build-path remediation are in [docs/privacy.md](privacy.md).

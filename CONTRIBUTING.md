@@ -117,3 +117,5 @@ metadata with the same expectations as the shipped plugin template:
 
 The external-bundle scope, official references and release checklist are in
 [docs/plugin-conformance.md](docs/plugin-conformance.md).
+
+See [docs/privacy.md](docs/privacy.md) for the data audit, the synthetic-fixture rules, and the historical build-path remediation.

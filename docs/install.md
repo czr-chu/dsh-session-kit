@@ -13,7 +13,7 @@
 
 ```bash
 # pinned release tag — reproducible and easy to audit
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.4
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.5
 
 # or track the main branch (not recommended for production)
 dsh plugin --profile web add github:czr-chu/dsh-session-kit
@@ -33,13 +33,13 @@ from `cordis.patch.yml`; published packages contain the built `lib/client.js`, s
 Every tagged release workflow attaches the packed tarball, for example:
 
 ```text
-https://github.com/czr-chu/dsh-session-kit/releases/download/v0.10.4/dsh-session-kit-0.10.4.tgz
+https://github.com/czr-chu/dsh-session-kit/releases/download/v0.10.5/dsh-session-kit-0.10.5.tgz
 ```
 
 Install the asset directly (the URL must end in `.tgz`):
 
 ```bash
-dsh plugin --profile web add 'https://github.com/czr-chu/dsh-session-kit/releases/download/v0.10.4/dsh-session-kit-0.10.4.tgz'
+dsh plugin --profile web add 'https://github.com/czr-chu/dsh-session-kit/releases/download/v0.10.5/dsh-session-kit-0.10.5.tgz'
 ```
 
 The Desktop/Web **Plugins → Add plugin** dialog accepts the same forms:
@@ -47,10 +47,10 @@ a package name, a GitHub repository URL, a Release `.tgz` URL, or an absolute
 local directory. For a tagged Git install enter:
 
 ```text
-https://github.com/czr-chu/dsh-session-kit#v0.10.4
+https://github.com/czr-chu/dsh-session-kit#v0.10.5
 ```
 
-or the shorthand `github:czr-chu/dsh-session-kit#v0.10.4`. Without a tag the
+or the shorthand `github:czr-chu/dsh-session-kit#v0.10.5`. Without a tag the
 default branch is installed.
 
 ### What the repository must provide
@@ -90,10 +90,10 @@ authenticated to GitHub. DSH does not store GitHub credentials.
 
 ```bash
 # SSH (the machine needs a working GitHub key)
-dsh plugin --profile web add git+ssh://git@github.com/<your-org>/dsh-session-kit.git#v0.10.4
+dsh plugin --profile web add git+ssh://git@github.com/<your-org>/dsh-session-kit.git#v0.10.5
 
 # HTTPS (a git credential helper must already hold a token)
-dsh plugin --profile web add https://github.com/<your-org>/dsh-session-kit.git#v0.10.4
+dsh plugin --profile web add https://github.com/<your-org>/dsh-session-kit.git#v0.10.5
 ```
 
 Never paste a token into a command line or commit it anywhere; use the platform
@@ -111,7 +111,7 @@ while iterating but not intended for production installs.
 ## Upgrade, uninstall and restart
 
 ```bash
-# upgrade to a newer pinned tag (replace <newer-tag>, e.g. #v0.10.4)
+# upgrade to a newer pinned tag (replace <newer-tag>, e.g. #v0.10.5)
 dsh plugin --profile web add github:czr-chu/dsh-session-kit#<newer-tag>
 # or, for a registry/git install:
 dsh plugin --profile web update dsh-session-kit
@@ -141,11 +141,11 @@ An entry may point at the public repository and a pinned commit:
   "name": "dsh-session-kit",
   "versions": [
     {
-      "version": "0.10.4",
+      "version": "0.10.5",
       "source": {
         "type": "git",
         "url": "https://github.com/czr-chu/dsh-session-kit",
-        "commit": "<full commit sha of the v0.10.4 tag>"
+        "commit": "<full commit sha of the v0.10.5 tag>"
       }
     }
   ]
