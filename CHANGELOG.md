@@ -4,6 +4,15 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.4] - 2026-11-07
+
+### Added
+
+- `docs/plugin-conformance.md`: the external-bundle versus monorepo-native
+  scope, the official `cordis-plugin-development` sources, the canonical
+  third-party package structure, a checklist, and the maintenance process.
+- README/CONTRIBUTING links to the conformance page.
+
 ## [0.9.3] - 2026-11-07
 
 ### Added

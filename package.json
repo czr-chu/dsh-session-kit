@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-kit",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "description": "DeepSeek Harness session manager: browse/search, size detail, archive, trash/permanent delete with selectable files, official format migration, DeepSeek share-link import into a chosen workspace, compact/full export with workspace files, and import as new sessions.",
   "type": "module",
   "main": "index.js",

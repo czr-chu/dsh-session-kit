@@ -113,3 +113,6 @@ metadata with the same expectations as the shipped plugin template:
   `files`; run `npm pack --dry-run` and inspect the packed list.
 - After installation, check the title, description and rendered icon in the
   Plugins page (or state that rendered display remains unverified).
+
+The external-bundle scope, official references and release checklist are in
+[docs/plugin-conformance.md](docs/plugin-conformance.md).
