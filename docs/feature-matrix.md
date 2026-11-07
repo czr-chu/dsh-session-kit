@@ -1,6 +1,6 @@
 # Feature matrix
 
-Evidence for dsh-session-kit <code>0.9.1</code>, collected 2026-11-07 by reading
+Evidence for dsh-session-kit <code>0.9.3</code>, collected 2026-11-07 by reading
 the code and running the repository test suite. Line numbers point at the source
 as of this check; tests are the authoritative coverage.
 
@@ -34,7 +34,7 @@ as of this check; tests are the authoritative coverage.
 | F13 | 子代理策略：默认不导出、永不导入 | 稳定 | <code>lib/export.js</code>, <code>lib/import.js:571</code> | <code>test/export.test.mjs</code>、<code>test/import.test.mjs</code> | 子代理转录不单独导出/导入；不恢复血缘 |
 | F14 | DeepSeek 分享链接导入（可选目标工作区） | 稳定（受限：仅公开链接；网络测试为 mock） | <code>lib/deepseek-share.js:75</code>/<code>:178</code>/<code>:337</code>/<code>:520</code>, <code>index.js:447</code>, <code>src/client/index.js</code> | <code>test/deepseek-share.test.mjs</code>（9，全部 mock 网络）、<code>test/index-share.test.mjs</code>（15） | 只能是 <code>chat.deepseek.com/share/&lt;id&gt;</code> 或裸 id；60 s 超时、32 MiB 响应上限；真实联网未自动化 |
 | F15 | Agent 工具 <code>session_kit</code>：list/export/import/archive/unarchive/delete/migrate/files/import_share | 稳定 | <code>index.js:1299</code>（action enum 与 schema） | 各 <code>test/index-*.test.mjs</code> 中的 tool 用例 | 工具可在 <code>confirm:true</code> 下执行破坏性操作，没有插件级人工审批 UI |
-| F16 | 客户端面板整体（徽标、搜索、详情、删除/迁移对话框、分享卡片） | 稳定（受限：客户端无自动化测试） | <code>src/client/index.js</code> → 构建为 <code>lib/client.js</code> | 无仓库内自动化测试；0.9.1 在 DSH 0.2.2 做了真实浏览器面板/样式冒烟 | 无自动化浏览器测试；深层交互仍需手工回归 |
+| F16 | 客户端面板整体（徽标、搜索、详情、删除/迁移对话框、分享卡片） | 稳定（受限：客户端无自动化测试） | <code>src/client/index.js</code> → 构建为 <code>lib/client.js</code> | 无仓库内自动化测试；0.9.3 在 DSH 0.2.2 做了真实浏览器面板/样式冒烟 | 无自动化浏览器测试；深层交互仍需手工回归 |
 | F17 | HTTP 路由信任栅栏、批量上限、错误映射 | 稳定 | <code>index.js:55-67</code>, <code>index.js:340-450</code> | route-level 测试覆盖 archive/unarchive/delete/migrate/files/session-detail/import-share 与 403/503/400 分支 | <code>/export</code> 仅测到缺参 400；<code>/import</code> 无路由级测试 |
 
 ## Cross-cutting notes

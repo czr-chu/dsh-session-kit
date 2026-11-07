@@ -4,6 +4,29 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.3] - 2026-11-07
+
+### Added
+
+- Display metadata now follows the official plugin checklist more closely:
+  Japanese, Spanish, French, German, Russian and Portuguese `locale/*.json`
+  files in addition to English and Chinese, plus an explicit `./icon` export.
+
+### Changed
+
+- Contributor guide documents the official display checklist: sentence-case
+  titles, localized descriptions, original/ licensed icon, runtime files in
+  `files`, and packed-file verification.
+
+## [0.9.2] - 2026-11-07
+
+### Changed
+
+- Source formatting follows the DSH convention: no semicolons, single quotes,
+  two-space indentation, trailing commas and 120-column lines.
+- Added `.editorconfig`, `.gitattributes`, a Prettier configuration and a
+  `format:check` CI gate. No behavior or bundle contract changes.
+
 ## [0.9.1] - 2026-11-07
 
 ### Fixed

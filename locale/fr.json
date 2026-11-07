@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Gestionnaire de sessions",
+    "description": "Parcourez, recherchez et gérez les sessions par espace de travail (filtre d'état, taille et fichiers associés, archivage/restauration, déplacement des fichiers associés vers la corbeille, suppression définitive, mise à niveau d'ancien format), importez des liens publics DeepSeek dans un espace choisi et exportez ou importez des archives avec les fichiers de l'espace de travail."
+  }
+}

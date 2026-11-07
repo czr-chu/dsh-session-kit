@@ -24,6 +24,8 @@ node --test test/*.test.mjs
 node --import tsx/esm --test dsh-session-kit/test/*.test.mjs
 ```
 
+Run `npm run format:check` before committing; the same check runs in CI.
+
 The real-backend tests are guarded: without the DSH TypeScript sources (and
 `tsx`) they self-skip, so the plain command stays green in any checkout. CI runs
 the plain command on Node 22 and 24; run the `tsx` variant locally when touching
@@ -96,3 +98,18 @@ license of this project. `lib/zip.js`, `lib/format.js` and
 `lib/attachments.js` are derived from
 [dsh-session-port](https://github.com/mswinandmc/dsh-session-port) (MIT); keep
 their attribution intact (see `NOTICE`).
+
+## Official display checklist
+
+Before installing or publishing a build, verify the plugin-manager display
+metadata with the same expectations as the shipped plugin template:
+
+- `locale/<language>.json` provides `meta.title` and `meta.description`;
+  English title/description use sentence case. The bundle ships English,
+  Chinese, Japanese, Spanish, French, German, Russian and Portuguese metadata.
+- The icon is original or redistributable, stays inside the package, is a valid
+  SVG/PNG/JPEG/WebP no larger than 256 KiB, and is listed in `files`.
+- Runtime files, the patch, locale resources and the icon are all covered by
+  `files`; run `npm pack --dry-run` and inspect the packed list.
+- After installation, check the title, description and rendered icon in the
+  Plugins page (or state that rendered display remains unverified).

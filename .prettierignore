@@ -1,0 +1,9 @@
+lib/
+node_modules/
+package-lock.json
+docs/
+*.md
+*.json
+*.yml
+*.yaml
+*.svg

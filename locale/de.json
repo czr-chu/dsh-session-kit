@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Sitzungsmanager",
+    "description": "Sitzungen nach Arbeitsbereich durchsuchen, filtern und verwalten (Statusfilter, Größe und zugehörige Dateien, Archivieren/Wiederherstellen, zugehörige Dateien in den Papierkorb verschieben, endgültiges Löschen, Upgrade alter Formate), öffentliche DeepSeek-Freigabelinks in einen gewählten Arbeitsbereich importieren und Archive mit Arbeitsbereichsdateien exportieren oder importieren."
+  }
+}

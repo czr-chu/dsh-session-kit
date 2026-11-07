@@ -1,11 +1,11 @@
-import { readFile } from 'node:fs/promises';
-import { dirname, relative, resolve, sep } from 'node:path';
-import { defineConfig } from 'tsdown';
-import { transform } from 'lightningcss';
+import { readFile } from 'node:fs/promises'
+import { dirname, relative, resolve, sep } from 'node:path'
+import { defineConfig } from 'tsdown'
+import { transform } from 'lightningcss'
 
-const PACKAGE_NAME = 'dsh-session-kit';
-const CSS_VIRTUAL_PREFIX = '\0session-kit-css:';
-const CSS_VIRTUAL_SUFFIX = '.mjs';
+const PACKAGE_NAME = 'dsh-session-kit'
+const CSS_VIRTUAL_PREFIX = '\0session-kit-css:'
+const CSS_VIRTUAL_SUFFIX = '.mjs'
 
 /**
  * Build one plugin-local CSS Module into a closure-factory export: the compiled
@@ -16,32 +16,34 @@ function cssModules() {
   return {
     name: 'session-kit-css-modules',
     resolveId(source, importer) {
-      if (!source.endsWith('.module.css')) return null;
-      const base = importer === undefined ? process.cwd() : dirname(importer);
-      const relativeId = relative(process.cwd(), resolve(base, source)).split(sep).join('/');
-      return CSS_VIRTUAL_PREFIX + relativeId + CSS_VIRTUAL_SUFFIX;
+      if (!source.endsWith('.module.css')) return null
+      const base = importer === undefined ? process.cwd() : dirname(importer)
+      const relativeId = relative(process.cwd(), resolve(base, source)).split(sep).join('/')
+      return CSS_VIRTUAL_PREFIX + relativeId + CSS_VIRTUAL_SUFFIX
     },
     async load(virtualId) {
-      if (!virtualId.startsWith(CSS_VIRTUAL_PREFIX)) return null;
-      const relativeId = virtualId.slice(CSS_VIRTUAL_PREFIX.length, -CSS_VIRTUAL_SUFFIX.length);
-      const fileId = resolve(process.cwd(), relativeId);
-      this.addWatchFile(fileId);
-      const source = await readFile(fileId);
+      if (!virtualId.startsWith(CSS_VIRTUAL_PREFIX)) return null
+      const relativeId = virtualId.slice(CSS_VIRTUAL_PREFIX.length, -CSS_VIRTUAL_SUFFIX.length)
+      const fileId = resolve(process.cwd(), relativeId)
+      this.addWatchFile(fileId)
+      const source = await readFile(fileId)
       const result = transform({
         filename: fileId,
         code: source,
         cssModules: { pattern: '[hash]_[local]' },
         minify: true,
-      });
-      const classMap = {};
-      for (const [local, entry] of Object.entries(result.exports ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
-        classMap[local] = entry.name;
+      })
+      const classMap = {}
+      for (const [local, entry] of Object.entries(result.exports ?? {}).sort(([left], [right]) =>
+        left.localeCompare(right),
+      )) {
+        classMap[local] = entry.name
       }
-      const css = JSON.stringify(result.code.toString());
+      const css = JSON.stringify(result.code.toString())
       return [
         `const css = ${css};`,
         `const tagId = ${JSON.stringify(PACKAGE_NAME + '/' + relativeId)};`,
-        'if (typeof document !== \'undefined\' && document.querySelector(\'style[data-plugin-css=\' + JSON.stringify(tagId) + \']\') === null) {',
+        "if (typeof document !== 'undefined' && document.querySelector('style[data-plugin-css=' + JSON.stringify(tagId) + ']') === null) {",
         "  const tag = document.createElement('style');",
         `  tag.dataset.plugin = ${JSON.stringify(PACKAGE_NAME)};`,
         '  tag.dataset.pluginCss = tagId;',
@@ -49,9 +51,9 @@ function cssModules() {
         '  document.head.appendChild(tag);',
         '}',
         `export default ${JSON.stringify(classMap)};`,
-      ].join('\n');
+      ].join('\n')
     },
-  };
+  }
 }
 
 export default defineConfig({
@@ -73,4 +75,4 @@ export default defineConfig({
     footer: 'return module.exports; } });',
     intro: 'var module = { exports: {} }; var exports = module.exports;',
   },
-});
+})
