@@ -11,6 +11,16 @@
 The plugin runs inside DeepSeek Harness and only reads services the host
 exposes; keep DSH itself up to date as well.
 
+## Build artifact path hygiene
+
+Bundled client artifacts and source maps are built from package-relative paths;
+`test/client-build.test.mjs` fails when a build-machine home path appears. A
+historical build artifact briefly contained a local absolute path. The
+repository's refs and commit history were rewritten to redact it, and the
+current release asset is clean. GitHub may retain unreachable commit objects in
+its cache; report a remaining historical SHA through a private security
+advisory and we will coordinate removal with GitHub Support.
+
 ## Reporting a vulnerability
 
 **Do not open a public issue for a vulnerability.** Report it privately through

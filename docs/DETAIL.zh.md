@@ -26,7 +26,7 @@ DSH 存储格式的前提下管理会话。
 ## 安装
 
 ```sh
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.3
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.4
 ```
 
 安装或升级后重启 `dsh web`。插件不依赖任何 `@deepseek-ai/*` 运行时包，

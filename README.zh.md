@@ -1,7 +1,7 @@
 # dsh-session-kit
 
 **DeepSeek Harness 的会话管理、备份与迁移工具包。**
-Version **0.10.3** · 公开 beta · [English](README.md)
+Version **0.10.4** · 公开 beta · [English](README.md)
 
 dsh-session-kit 为 DeepSeek Harness（DSH）增加一个 **会话管理（Session manager）**
 面板和一个 <code>session_kit</code> agent 工具：浏览与检查会话、导出为可迁移的
@@ -139,10 +139,10 @@ ZIP（可选携带工作区文件）、在另一台机器或另一个工作区�
 
 ~~~bash
 # 从 GitHub 安装（建议固定 release tag）
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.3
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.10.4
 
 # 或直接从 GitHub Release 的 tgz 安装
-# dsh plugin --profile web add 'https://github.com/czr-chu/dsh-session-kit/releases/download/v0.10.3/dsh-session-kit-0.10.3.tgz'
+# dsh plugin --profile web add 'https://github.com/czr-chu/dsh-session-kit/releases/download/v0.10.4/dsh-session-kit-0.10.4.tgz'
 
 # 从本地 checkout 安装（便于迭代）
 dsh plugin --profile web add ~/src/dsh-session-kit
@@ -155,7 +155,7 @@ dsh plugin --profile web list --depth 0
 一行。
 
 桌面版/Web 的 **插件 → 添加插件** 对话框可直接输入 GitHub 仓库地址
-（`https://github.com/czr-chu/dsh-session-kit#v0.10.3`）、Release 的 `.tgz`
+（`https://github.com/czr-chu/dsh-session-kit#v0.10.4`）、Release 的 `.tgz`
 直链，或绝对本地目录。仓库是公开的，Git 安装不需要 GitHub token；完整说明见
 [docs/install.md](docs/install.md)。
 
@@ -301,7 +301,7 @@ npm test
 node --import tsx/esm --test dsh-session-kit/test/*.test.mjs
 ~~~
 
-预期：**224 个测试**，其中 5 个真实后端用例在纯 <code>node --test</code> 下 skip
+预期：**225 个测试**，其中 5 个真实后端用例在纯 <code>node --test</code> 下 skip
 （在通过 <code>tsx</code> 使用 DSH checkout 时会运行）。覆盖会话列表/读取、
 compact 构建、工作区文件收集与敏感排除、归档构建/导入（含 zip-slip 与 sha256 校验）、
 归档/回收站/永久删除语义、官方格式迁移，以及分享链接的规范化/构建/导入

@@ -20,3 +20,11 @@ test('the client bundle carries the CSS Modules style injection', () => {
   assert.equal(map.file, 'client.js')
   assert.ok(map.sources.includes('../src/client/index.js'))
 })
+
+test('the client artifact does not embed build-machine absolute paths', () => {
+  const artifacts = [bundle, JSON.stringify(map.sources), ...(map.sourcesContent ?? [])]
+  for (const text of artifacts) {
+    assert.doesNotMatch(text, /\/home\/[A-Za-z0-9._-]+\//)
+    assert.doesNotMatch(text, /[A-Za-z]:\\\\Users\\\\/i)
+  }
+})
