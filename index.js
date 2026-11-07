@@ -149,19 +149,17 @@ let filesModule;
 let shareModule;
 
 /**
- * Normalize the test-only module injection seam.
+ * Normalize the in-process test-only module injection seam.
  *
- * A Loader YAML cannot express object values, so `modules` is inert in
- * production and exists so tests can drive the routes without a real
- * `lib/deepseek-share.js` / `lib/manage.js` / `lib/migrate.js` /
- * `lib/session-files.js` / `lib/sessions.js` (and so a composition can
- * substitute them). When present, a missing member means "that helper is
- * unavailable".
- * @param {unknown} config - raw Loader row config.
+ * This is **not** Loader row config: it is a separate third argument to
+ * `apply` that only tests pass. Production Loader calls `apply(ctx, config)`,
+ * so YAML cannot substitute helper modules. When present, a missing member
+ * means "that helper is unavailable".
+ * @param {{modules?: unknown} | undefined} internals - test-only apply argument.
  * @returns {{sessions?: object, manage?: object, migrate?: object, files?: object, share?: object} | undefined} override set.
  */
-function moduleOverrides(config) {
-  const raw = config !== null && typeof config === 'object' ? config : {};
+function moduleOverrides(internals) {
+  const raw = internals !== null && typeof internals === 'object' ? internals : {};
   const modules = raw.modules;
   if (modules === null || typeof modules !== 'object' || Array.isArray(modules)) return undefined;
   return {
@@ -288,10 +286,12 @@ async function loadShare(overrides) {
  * Cordis entry point.
  * @param {object} ctx - the plugin context.
  * @param {object} [config] - the Loader row's config (all fields optional).
+ * @param {{modules?: unknown}} [internals] - test-only module overrides; never
+ *   read from Loader config or YAML.
  */
-export function apply(ctx, config) {
+export function apply(ctx, config, internals) {
   const settings = resolveSettings(config);
-  const overrides = moduleOverrides(config);
+  const overrides = moduleOverrides(internals);
   registerRoutes(ctx, settings, overrides);
   registerTool(ctx, settings, overrides);
 }

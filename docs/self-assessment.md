@@ -1,6 +1,6 @@
 # Public-release self-assessment
 
-Self-check for dsh-session-kit <code>0.8.1</code> (2026-11-07). The check was
+Self-check for dsh-session-kit <code>0.8.2</code> (2026-11-07). The check was
 code-and-test plus limited real <code>dsh web</code> spot checks; no live
 DeepSeek share API call and no real cross-machine restore. Evidence is marked
 by source:
@@ -244,7 +244,7 @@ The full matrix is in <code>docs/feature-matrix.md</code>. Summary:
     <code>node --test test/*.test.mjs</code> on Node 22/24 and
     <code>npm pack --dry-run</code>; the five real-backend cases skip there, and
     no Playwright/browser job exists. There is also no release/publish workflow.
-20. **Documentation drift remains a maintenance risk.** The 0.8.1
+20. **Documentation drift remains a maintenance risk.** The 0.8.2
     public-release pass refreshed <code>docs/roadmap.md</code>, removed the
     nonexistent <code>docs/assets</code> entry from <code>package.json</code>,
     added issue templates and linked the self-assessment/feature matrix from the
@@ -275,13 +275,13 @@ Suggested pre-publication checklist:
    the candidate <code>npm pack</code> payload was inspected; re-verify it in the
    release workflow, and decide whether both README files should ship.
 5. **Docs**: <code>docs/roadmap.md</code> and README/install/Node requirements
-   were aligned for 0.8.1; state the experimental/permanent-delete limits in the
+   were aligned for 0.8.2; state the experimental/permanent-delete limits in the
    release notes.
 6. **Real-world QA**: on a clean machine and a second DSH instance, install from
    the pinned tag, export a synthetic archive, import it in a different
    workspace, restore files, exercise archive/trash/permanent delete, and test
    one real public share link with non-sensitive content.
-7. **Release mechanics**: tag <code>v0.8.1</code>, publish with provenance
+7. **Release mechanics**: tag <code>v0.8.2</code>, publish with provenance
    (<code>npm publish --provenance</code> or equivalent), attach release notes,
    and publish to the plugin index if intended.
 8. **Security/privacy**: document archive privacy (conversation text,

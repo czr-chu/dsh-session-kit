@@ -1,7 +1,7 @@
 /**
  * Unit tests for index.js DeepSeek share import (route + tool action).
  *
- * The share module is injected through the documented `config.modules` seam, so
+ * The share module is injected through the test-only third `apply` argument, so
  * no network request is made and no session is written: the mock records what
  * the Host passes to `importShare` and returns a canned outcome.
  */
@@ -119,7 +119,7 @@ function createHarness(options = {}) {
   };
   const modules = { sessions };
   if (options.omitShare !== true) modules.share = share;
-  apply(ctx, { ...(options.config ?? {}), modules });
+  apply(ctx, options.config ?? {}, { modules });
   return {
     state,
     async call(req) {

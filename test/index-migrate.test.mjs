@@ -1,10 +1,10 @@
 /**
  * Unit tests for index.js session-format migration (route + tool action).
  *
- * The Host half is driven through the documented `config.modules` injection
- * seam, so the route/tool branches (id parsing, all+confirm, batch cap,
- * per-id status/error results, legacyRemaining) run without a real
- * `lib/migrate.js` and without ever touching a real session log.
+ * The Host half is driven through the test-only third `apply` argument, so the
+ * route/tool branches (id parsing, all+confirm, batch cap, per-id status/error
+ * results, legacyRemaining) run without a real `lib/migrate.js` and without ever
+ * touching a real session log.
  */
 
 import assert from 'node:assert/strict';
@@ -110,9 +110,8 @@ function createHarness(options = {}) {
       return fn();
     },
   };
-  apply(ctx, {
+  apply(ctx, options.config ?? {}, {
     modules: options.omitMigrate === true ? { sessions } : { sessions, migrate },
-    ...(options.config ?? {}),
   });
   return {
     state,

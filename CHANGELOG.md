@@ -4,6 +4,14 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2026-11-07
+
+### Changed
+
+- The test-only helper-module injection moved from the public row config to a
+  separate third `apply` argument. Loader YAML (and the `Config` schema) can no
+  longer substitute helper modules.
+
 ## [0.8.1] - 2026-11-07
 
 Compliance and public-release polish.

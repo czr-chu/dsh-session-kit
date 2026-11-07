@@ -1,6 +1,6 @@
 # Feature matrix
 
-Evidence for dsh-session-kit <code>0.8.1</code>, collected 2026-11-07 by reading
+Evidence for dsh-session-kit <code>0.8.2</code>, collected 2026-11-07 by reading
 the code and running the repository test suite. Line numbers point at the source
 as of this check; tests are the authoritative coverage.
 

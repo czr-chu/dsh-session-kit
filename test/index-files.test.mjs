@@ -1,8 +1,8 @@
 /**
  * Unit tests for index.js related-files preview and delete-with-files.
  *
- * Route/tool branches are driven through the documented `config.modules`
- * injection seam, so no real session log or workspace file is read or moved:
+ * Route/tool branches are driven through the test-only third `apply` argument,
+ * so no real session log or workspace file is read or moved:
  * the module mocks record what the Host passes to `deriveSessionFilePlan` and
  * `deleteSession`.
  */
@@ -138,7 +138,7 @@ function createHarness(options = {}) {
   };
   const modules = { sessions, manage };
   if (options.omitFiles !== true) modules.files = files;
-  apply(ctx, { ...(options.config ?? {}), modules });
+  apply(ctx, options.config ?? {}, { modules });
   return {
     state,
     async call(req) {

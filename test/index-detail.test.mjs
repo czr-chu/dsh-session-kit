@@ -2,7 +2,7 @@
  * Unit tests for index.js session detail, selectable related files, and
  * permanent delete.
  *
- * The Host half runs against the documented `config.modules` seam so detail
+ * The Host half runs with the test-only third `apply` argument, so detail
  * lookups and delete options are recorded without touching a real session log or
  * workspace file.
  */
@@ -150,7 +150,7 @@ function createHarness(options = {}) {
       return fn();
     },
   };
-  apply(ctx, { ...(options.config ?? {}), modules: { sessions, manage, files } });
+  apply(ctx, options.config ?? {}, { modules: { sessions, manage, files } });
   return {
     state,
     async call(req) {

@@ -1,10 +1,10 @@
 /**
  * Unit tests for index.js session management (archive / unarchive / delete).
  *
- * The Host half is driven with a fake Cordis context and the documented
- * `config.modules` injection seam, so every route/tool branch (parsing, batch
- * cap, confirm requirement, per-id error results) is exercised without a real
- * `lib/manage.js`, filesystem trash, or DSH process.
+ * The Host half is driven with a fake Cordis context and the test-only third
+ * `apply` argument, so every route/tool branch (parsing, batch cap, confirm
+ * requirement, per-id error results) is exercised without a real `lib/manage.js`,
+ * filesystem trash, or DSH process.
  */
 
 import assert from 'node:assert/strict';
@@ -115,7 +115,7 @@ function createHarness(options = {}) {
     },
   };
   const modules = options.modules ?? { sessions, manage };
-  apply(ctx, { ...(options.config ?? {}), modules });
+  apply(ctx, options.config ?? {}, { modules });
   return {
     state,
     ctx,
@@ -353,7 +353,7 @@ test('management routes answer 503 when the management module is unavailable', a
       return [];
     },
   };
-  apply(harness.ctx, { modules: { sessions } });
+  apply(harness.ctx, {}, { modules: { sessions } });
   const res = await harness.call(jsonRequest('/session-kit/archive', { sessionIds: ['a'] }));
   assert.equal(res.statusCode, 503);
   assert.equal(jsonBody(res).code, 'unavailable');
