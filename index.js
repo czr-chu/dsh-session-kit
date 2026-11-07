@@ -63,6 +63,8 @@ export const MAX_FILE_BATCH = 100;
 export const MAX_DETAIL_BATCH = 100;
 /** Upper bound on one explicit selected-files list. */
 export const MAX_SELECTED_FILES = 5000;
+/** Upper bound on one share-link/input string. */
+export const MAX_SHARE_INPUT_LENGTH = 2048;
 /** Directory name under DSH_HOME that receives deleted session folders. */
 const TRASH_DIR_NAME = 'session-kit-trash';
 
@@ -71,17 +73,19 @@ let sessionsModule;
 let manageModule;
 let migrateModule;
 let filesModule;
+let shareModule;
 
 /**
  * Normalize the test-only module injection seam.
  *
  * A Loader YAML cannot express object values, so `modules` is inert in
  * production and exists so tests can drive the routes without a real
- * `lib/manage.js` / `lib/migrate.js` / `lib/session-files.js` / `lib/sessions.js`
- * (and so a composition can substitute them). When present, a missing member
- * means "that helper is unavailable".
+ * `lib/deepseek-share.js` / `lib/manage.js` / `lib/migrate.js` /
+ * `lib/session-files.js` / `lib/sessions.js` (and so a composition can
+ * substitute them). When present, a missing member means "that helper is
+ * unavailable".
  * @param {unknown} config - raw Loader row config.
- * @returns {{sessions?: object, manage?: object, migrate?: object, files?: object} | undefined} override set.
+ * @returns {{sessions?: object, manage?: object, migrate?: object, files?: object, share?: object} | undefined} override set.
  */
 function moduleOverrides(config) {
   const raw = config !== null && typeof config === 'object' ? config : {};
@@ -92,6 +96,7 @@ function moduleOverrides(config) {
     manage: modules.manage,
     migrate: modules.migrate,
     files: modules.files,
+    share: modules.share,
   };
 }
 
@@ -182,6 +187,28 @@ async function loadSessionFiles(overrides) {
     }
   }
   return filesModule;
+}
+
+/**
+ * Resolve the DeepSeek share-import module lazily.
+ * @param {{share?: object} | undefined} overrides - module injection seam.
+ * @returns {Promise<object>} deepseek-share module namespace.
+ */
+async function loadShare(overrides) {
+  if (overrides !== undefined) {
+    if (overrides.share === undefined || overrides.share === null) {
+      throw new SessionPortFormatError('unavailable', '分享导入模块不可用');
+    }
+    return overrides.share;
+  }
+  if (shareModule === undefined) {
+    try {
+      shareModule = await import('./lib/deepseek-share.js');
+    } catch (error) {
+      throw new SessionPortFormatError('unavailable', `分享导入模块不可用：${errorText(error)}`);
+    }
+  }
+  return shareModule;
 }
 
 /**
@@ -334,6 +361,7 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
           detail: true,
           deletePermanent: true,
           deleteSelectedFiles: true,
+          shareImport: true,
           attachments: helpers.servicesOf(ctx).attachments !== undefined,
           tool: 'session_kit',
         },
@@ -355,6 +383,13 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
           experimental: true,
           permanent: true,
           note: '会话相关文件只能尽力推导（deliverables/工具参数/结果 meta/工作目录线索）：shell 重定向、PTC 脚本、仅文本提到的文件无法发现；共享文件可能被一并移走；删除前需要二次确认；默认只移入回收站，permanent:true 才会永久删除且不可恢复',
+        },
+        share: {
+          provider: 'deepseek',
+          model: 'deepseek-chat',
+          endpoint: 'https://chat.deepseek.com/api/v0/share/content',
+          inputMaxLength: MAX_SHARE_INPUT_LENGTH,
+          note: '仅接受 chat.deepseek.com/share/<id> 链接或裸分享 id；可选 workspaceId 指定目标工作区，否则使用 cwd 或部署默认目录',
         },
         defaults: {
           mode: settings.defaultMode,
@@ -407,6 +442,10 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
     }
     if (path === `${ROUTE_PREFIX}/session-detail` && method === 'POST') {
       await handleSessionDetail(ctx, settings, overrides, req, res);
+      return;
+    }
+    if (path === `${ROUTE_PREFIX}/import-share` && method === 'POST') {
+      await handleImportShare(ctx, settings, overrides, req, res);
       return;
     }
     sendJson(res, 404, { ok: false, code: 'not-found', message: `没有这个接口：${method} ${path}` });
@@ -762,6 +801,136 @@ async function handleSessionFiles(ctx, settings, overrides, req, res) {
 }
 
 /**
+ * Read one optional string field from a JSON body.
+ * @param {unknown} value - raw value.
+ * @param {string} field - field name for the diagnostic.
+ * @param {{required?: boolean}} [options] - whether an absent/blank value is an error.
+ * @returns {string | undefined} trimmed string, or undefined when optional and absent.
+ * @throws {SessionPortFormatError} `invalid-body` for a wrong type or a missing required field.
+ */
+function optionalString(value, field, { required = false } = {}) {
+  if (value === undefined || value === null) {
+    if (required) throw new SessionPortFormatError('invalid-body', `请求缺少 ${field}（字符串）`);
+    return undefined;
+  }
+  if (typeof value !== 'string') {
+    throw new SessionPortFormatError('invalid-body', `${field} 必须是字符串`);
+  }
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    if (required) throw new SessionPortFormatError('invalid-body', `${field} 不能为空`);
+    return undefined;
+  }
+  return trimmed;
+}
+
+/**
+ * Resolve where an imported share conversation should land.
+ *
+ * An explicit `workspaceId` wins and resolves the workspace path through the
+ * registry (a missing/unknown workspace is `404 workspace-not-found`); otherwise
+ * the request `cwd` wins, then the deployment's resolved target directory.
+ * @param {object} ctx - the plugin context.
+ * @param {object} helpers - resolved sessions helper module.
+ * @param {string | undefined} workspaceId - requested workspace id.
+ * @param {string | undefined} cwd - requested working directory.
+ * @returns {Promise<{cwd?: string, workspaceId?: string, workspacePath?: string}>} resolved target.
+ * @throws {SessionPortFormatError} `workspace-not-found`, `unavailable`.
+ */
+async function resolveShareTarget(ctx, helpers, workspaceId, cwd) {
+  if (workspaceId !== undefined) {
+    const registry = helpers.servicesOf(ctx).workspaceRegistry;
+    if (registry === undefined || registry === null || typeof registry.get !== 'function') {
+      throw new SessionPortFormatError('unavailable', '工作区服务不可用，无法按工作区导入');
+    }
+    let workspace;
+    try {
+      workspace = await registry.get(workspaceId);
+    } catch (error) {
+      throw new SessionPortFormatError('workspace-not-found', `读取工作区 ${workspaceId} 失败：${errorText(error)}`);
+    }
+    if (workspace === undefined || workspace === null
+      || typeof workspace.path !== 'string' || workspace.path === '') {
+      throw new SessionPortFormatError('workspace-not-found', `找不到工作区 ${workspaceId}`);
+    }
+    return { workspaceId, workspacePath: workspace.path, cwd: workspace.path };
+  }
+  if (cwd !== undefined) return { cwd };
+  let target;
+  try {
+    target = await helpers.resolveTargetDirectory(ctx, {});
+  } catch {
+    target = undefined;
+  }
+  return target === undefined ? {} : { cwd: target };
+}
+
+/**
+ * `POST /session-kit/import-share` — import one DeepSeek share conversation as
+ * a NEW session.
+ *
+ * Body: `{ input: string, workspaceId?: string, cwd?: string, title?: string }`.
+ * `input` accepts only `chat.deepseek.com/share/<id>` links or a bare share id
+ * (arbitrary URL fetching is refused by the share module); `workspaceId`
+ * chooses the target workspace and otherwise `cwd`/the deployment default is
+ * used. Errors: 400 invalid-body/invalid-share, 404 workspace-not-found,
+ * 502 share-fetch/share-api/timeout, 503 module unavailable,
+ * 500 import-failed.
+ * @param {object} ctx - the plugin context.
+ * @param {object} settings - resolved settings.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {import('node:http').IncomingMessage} req - request.
+ * @param {import('node:http').ServerResponse} res - response.
+ */
+async function handleImportShare(ctx, settings, overrides, req, res) {
+  const payload = await readJsonBody(req, MAX_JSON_BODY_BYTES);
+  const input = optionalString(payload.input, 'input', { required: true });
+  if (input.length > MAX_SHARE_INPUT_LENGTH) {
+    throw new SessionPortFormatError(
+      'invalid-share',
+      `分享链接/ID 过长（上限 ${MAX_SHARE_INPUT_LENGTH} 字符）`,
+    );
+  }
+  const workspaceId = optionalString(payload.workspaceId, 'workspaceId');
+  const cwd = optionalString(payload.cwd, 'cwd');
+  const title = optionalString(payload.title, 'title');
+  const share = await loadShare(overrides);
+  if (typeof share.importShare !== 'function') {
+    throw new SessionPortFormatError('unavailable', '分享导入模块不可用');
+  }
+  const helpers = await loadSessions(overrides);
+  const target = await resolveShareTarget(ctx, helpers, workspaceId, cwd);
+  let result;
+  try {
+    result = await share.importShare(ctx, {
+      input,
+      ...(target.cwd !== undefined ? { cwd: target.cwd } : {}),
+      ...(target.workspaceId !== undefined ? { workspaceId: target.workspaceId } : {}),
+      ...(title !== undefined ? { title } : {}),
+    });
+  } catch (error) {
+    if (error instanceof SessionPortFormatError) throw error;
+    throw new SessionPortFormatError('import-failed', `导入分享会话失败：${errorText(error)}`);
+  }
+  if (result === undefined || result === null
+    || typeof result.sessionId !== 'string' || result.sessionId === '') {
+    throw new SessionPortFormatError('import-failed', '分享导入没有返回会话 id');
+  }
+  sendJson(res, 200, {
+    ok: true,
+    session: {
+      sessionId: result.sessionId,
+      ...(typeof result.title === 'string' ? { title: result.title } : {}),
+      ...(Number.isSafeInteger(result.eventCount) ? { eventCount: result.eventCount } : {}),
+    },
+    warnings: Array.isArray(result.warnings) ? result.warnings.map(String) : [],
+    ...(target.workspaceId !== undefined
+      ? { workspace: { workspaceId: target.workspaceId, path: target.workspacePath } }
+      : {}),
+  });
+}
+
+/**
  * `POST /session-kit/session-detail` — storage detail (size) for the selected
  * sessions.
  *
@@ -1081,12 +1250,13 @@ function sendJson(res, status, payload) {
 function statusOf(error) {
   const code = codeOf(error);
   if (code === 'unavailable') return 503;
-  if (code === 'not-found' || code === 'file-missing') return 404;
+  if (code === 'not-found' || code === 'file-missing' || code === 'workspace-not-found') return 404;
   if (code === 'too-large') return 413;
   if (code === 'active') return 409;
+  if (code === 'share-fetch' || code === 'share-api' || code === 'timeout') return 502;
   if (code === 'unsafe-location' || code === 'delete-failed' || code === 'migration-failed'
     || code === 'files-failed' || code === 'file-plan-failed' || code === 'detail-failed'
-    || code === 'internal') return 500;
+    || code === 'import-failed' || code === 'internal') return 500;
   return 400;
 }
 
@@ -1119,14 +1289,15 @@ function registerTool(ctx, settings, overrides) {
           'action=migrate upgrades legacy session logs through DSH\'s official migration chain; sessionIds are explicit ids, or "all" (which requires confirm:true). The old generation is kept and a failed session stays unchanged.',
           'action=files previews the workspace files a deletion would move for the selected sessions; the derivation is best effort (shell redirections, PTC scripts and files only mentioned in text cannot be discovered) and shared workspace files may be affected.',
           'action=delete with removeFiles:true requires selectedFiles (absolute paths from the files preview) and moves only those derived files; preview with action=files first and keep confirm:true. Without permanent:true nothing is erased.',
+          'action=import_share imports a DeepSeek share conversation (chat.deepseek.com/share/<id> link or bare share id) as a NEW session; pass workspaceId to choose the target workspace, otherwise cwd or the deployment default directory is used.',
         ].join(' '),
         parameters: {
           type: 'object',
           properties: {
             action: {
               type: 'string',
-              enum: ['list', 'export', 'import', 'archive', 'unarchive', 'delete', 'migrate', 'files'],
-              description: 'list: summarize sessions. export: save sessions as one ZIP. import: create new sessions from a ZIP or JSONL archive. archive/unarchive: toggle archived state. delete: move sessions to the trash directory. migrate: upgrade legacy session logs through DSH\'s official migration chain. files: preview the workspace files a deletion would move.',
+              enum: ['list', 'export', 'import', 'archive', 'unarchive', 'delete', 'migrate', 'files', 'import_share'],
+              description: 'list: summarize sessions. export: save sessions as one ZIP. import: create new sessions from a ZIP or JSONL archive. archive/unarchive: toggle archived state. delete: move sessions to the trash directory. migrate: upgrade legacy session logs through DSH\'s official migration chain. files: preview the workspace files a deletion would move. import_share: import a DeepSeek share link as a new session.',
             },
             mode: {
               type: 'string',
@@ -1139,6 +1310,18 @@ function registerTool(ctx, settings, overrides) {
                 { type: 'string', enum: ['all'] },
               ],
               description: 'export/archive: session ids, or "all" (archive only). unarchive/delete/files: explicit session ids ("all" is refused for safety). migrate: explicit ids, or "all" (requires confirm:true).',
+            },
+            input: {
+              type: 'string',
+              description: 'import_share only: a chat.deepseek.com/share/<id> link or a bare share id.',
+            },
+            workspaceId: {
+              type: 'string',
+              description: 'import_share only: target workspace id (resolved through the workspace registry); otherwise cwd or the deployment default directory is used.',
+            },
+            title: {
+              type: 'string',
+              description: 'import_share only: optional title override for the imported session.',
             },
             includeSubagents: {
               type: 'boolean',
@@ -1255,7 +1438,10 @@ function registerTool(ctx, settings, overrides) {
           if (action === 'files') {
             return runFilesTool(ctx, overrides, args);
           }
-          throw new Error('session_kit: action 必须是 "list"、"export"、"import"、"archive"、"unarchive"、"delete"、"migrate" 或 "files"');
+          if (action === 'import_share') {
+            return runImportShareTool(ctx, overrides, helpers, args);
+          }
+          throw new Error('session_kit: action 必须是 "list"、"export"、"import"、"archive"、"unarchive"、"delete"、"migrate"、"files" 或 "import_share"');
         },
       }),
     'session-kit: agent tool',
@@ -1410,6 +1596,67 @@ function filesToolText(plan) {
   }
   if (files.length > 20) lines.push(`…还有 ${files.length - 20} 个文件未列出`);
   for (const warning of warnings) lines.push(`注意：${warning}`);
+  return lines.join('\n');
+}
+
+/**
+ * Run the import_share tool action (resolve target -> share import -> summary).
+ * @param {object} ctx - the plugin context.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {object} helpers - resolved sessions helper module.
+ * @param {object} args - model arguments.
+ * @returns {Promise<string>} summary text.
+ */
+async function runImportShareTool(ctx, overrides, helpers, args) {
+  const input = typeof args.input === 'string' ? args.input.trim() : '';
+  if (input === '') {
+    throw new Error('session_kit: import_share 需要 input 参数（DeepSeek 分享链接或分享 id）');
+  }
+  if (input.length > MAX_SHARE_INPUT_LENGTH) {
+    throw new Error(`session_kit: 分享链接/ID 过长（上限 ${MAX_SHARE_INPUT_LENGTH} 字符）`);
+  }
+  const workspaceId = typeof args.workspaceId === 'string' && args.workspaceId.trim() !== ''
+    ? args.workspaceId.trim()
+    : undefined;
+  const cwd = typeof args.cwd === 'string' && args.cwd.trim() !== '' ? args.cwd.trim() : undefined;
+  const title = typeof args.title === 'string' && args.title.trim() !== '' ? args.title.trim() : undefined;
+  const share = await loadShare(overrides);
+  if (typeof share.importShare !== 'function') {
+    throw new Error('session_kit: 分享导入模块不可用');
+  }
+  const target = await resolveShareTarget(ctx, helpers, workspaceId, cwd);
+  let result;
+  try {
+    result = await share.importShare(ctx, {
+      input,
+      ...(target.cwd !== undefined ? { cwd: target.cwd } : {}),
+      ...(target.workspaceId !== undefined ? { workspaceId: target.workspaceId } : {}),
+      ...(title !== undefined ? { title } : {}),
+    });
+  } catch (error) {
+    throw new Error(`session_kit: 导入分享会话失败：${errorText(error)}`);
+  }
+  return shareToolText(result, target);
+}
+
+/**
+ * Tool result text for the import_share action.
+ * @param {object} result - share import outcome ({sessionId, title, eventCount, warnings}).
+ * @param {{workspaceId?: string, workspacePath?: string, cwd?: string}} target - resolved target.
+ * @returns {string} summary text.
+ */
+function shareToolText(result, target) {
+  const flags = [];
+  if (typeof result?.title === 'string' && result.title !== '') flags.push(`标题 ${result.title}`);
+  if (Number.isSafeInteger(result?.eventCount)) flags.push(`${result.eventCount} 条事件`);
+  const lines = [
+    `已导入分享会话：${String(result?.sessionId ?? '')}${flags.length > 0 ? `（${flags.join('，')}）` : ''}`,
+  ];
+  if (target.workspaceId !== undefined) lines.push(`工作区：${target.workspaceId}（${target.workspacePath}）`);
+  else if (target.cwd !== undefined) lines.push(`目标目录：${target.cwd}`);
+  for (const warning of Array.isArray(result?.warnings) ? result.warnings : []) {
+    lines.push(`注意：${String(warning)}`);
+  }
   return lines.join('\n');
 }
 

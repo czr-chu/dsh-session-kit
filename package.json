@@ -1,7 +1,7 @@
 {
   "name": "dsh-session-kit",
-  "version": "0.6.1",
-  "description": "DeepSeek Harness session manager: browse/search, session size detail, archive, delete-to-trash or permanent erase with selectable related files, official format migration, compact/full export with workspace files, and import as new sessions.",
+  "version": "0.7.0",
+  "description": "DeepSeek Harness session manager: browse/search, size detail, archive, trash/permanent delete with selectable files, official format migration, DeepSeek share-link import into a chosen workspace, compact/full export with workspace files, and import as new sessions.",
   "type": "module",
   "main": "index.js",
   "exports": {
@@ -55,7 +55,9 @@
     "files",
     "delete",
     "detail",
-    "permanent-delete"
+    "permanent-delete",
+    "deepseek-share",
+    "share-import"
   ],
   "license": "MIT",
   "scripts": {

@@ -33,6 +33,9 @@ DeepSeek Harness 会话管理与迁移插件：浏览/选择会话，按“精�
 - **旧格式升级（基于 DSH 官方迁移）**：列表标记“旧格式”会话，可单条或批量升级到当前格式；
   升级走官方 `persistence.open(id,'write')` 迁移链（与继续对话时的升级完全相同），旧代际文件保留，
   迁移失败的会话保持原样并在结果里给出官方原因。
+- **DeepSeek 分享链接导入**：粘贴 `https://chat.deepseek.com/share/<id>`（或裸 id），选择目标工作区，
+  即可把公开分享对话转成当前格式的新会话（复用分享导入映射：fragments、思考、搜索/引用），
+  只允许 chat.deepseek.com 的分享链接，不会抓取任意 URL。
 - **Agent 工具**：`session_kit` 支持 list/export/import/archive/unarchive/delete（delete 必须显式确认，且只移入回收站）。
 
 ## 安装
@@ -84,6 +87,8 @@ session-kit-<yyyymmdd-hhmmss>.zip
 - **删除相关文件是实验性且 best-effort**：shell 重定向、PTC/脚本产物、仅在文本中提到的文件无法可靠发现；
   共享文件可能被一并移动；敏感文件若被推导到也会移动。文件推导默认只移回收站，永久删除必须单独二次确认。
 - 永久删除无法恢复、不可回滚；失败时会报告已删/未删项。
+- 分享导入只处理 chat.deepseek.com 公开分享链接；需要网络访问该站点，私有/已删除分享会失败；
+  导入只会新建会话，不会覆盖已有会话。
 - 旧格式升级不是“强制转换”：DSH 的官方迁移会拒绝少数无法安全转换的旧日志（例如未闭合的 tool call、
   旧 subagent descriptor 版本），此时源文件不动、面板显示失败；这不是插件能绕过的。
 - 删除不是永久擦除：会话目录被移到 `session-kit-trash`，需要彻底清理时手动删除该目录；用户 fork 出来的子会话不会被连带删除。
@@ -91,7 +96,7 @@ session-kit-<yyyymmdd-hhmmss>.zip
 
 ## 实测（2026-10-31/11-01，DSH 0.2.1-rc.3）
 
-- 测试：`node --import tsx/esm --test dsh-session-kit/test/*.test.mjs` → **194/194 通过**
+- 测试：`node --import tsx/esm --test dsh-session-kit/test/*.test.mjs` → **218/218 通过**
   （含真实 JSONL 持久化后端、产品 replay、工作区文件/敏感排除/zip-slip/恢复、归档/删除/回收站、子代理血缘）。
 - 真实数据（49 个主对话）：精简日志文本为原日志的 **0.4%–1.2%**；7 个主对话归档
   **22.7 MB → 0.35 MB**，全部导入 `verified: true`。

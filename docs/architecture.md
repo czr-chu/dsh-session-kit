@@ -108,6 +108,16 @@ then moves the session directories; any failure rolls back the moved files and
 aborts before the sessions move. This is an approximation, never a complete
 touched-file index, and the UI requires a second confirmation.
 
+## DeepSeek share import
+
+`lib/deepseek-share.js` accepts only a `chat.deepseek.com/share/<id>` link or a
+bare share id, fetches the public content API with a timeout and a byte cap,
+normalizes fragments (REQUEST/RESPONSE/THINK/TOOL_* citations), builds a v4
+session log with turn/step pairs and the share importer's event skeleton, then
+hands the canonical JSONL to the existing import path. The chosen
+`workspaceId` (or cwd) becomes the new session's cwd and attach target, so the
+conversation lands in the requested workspace.
+
 ## Import model
 
 Import always creates new sessions (never mutates or deletes existing ones).

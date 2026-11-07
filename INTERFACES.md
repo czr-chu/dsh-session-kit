@@ -528,3 +528,59 @@ session and shows a checkbox per file. `POST /session-kit/delete` accepts:
 - A separate "permanent delete" control (off by default) opens a distinct red
   second-confirmation dialog warning that data cannot be recovered.
 - The file-deletion option is labeled experimental with a risk notice.
+## DeepSeek share-link import (0.7.0)
+
+Integrates the DeepSeek share importer (formerly the user-level
+`deepseek-share-to-dsh-session` skill) into the plugin.
+
+### lib/deepseek-share.js (NEW)
+
+```js
+export function parseShareInput(input)
+// -> { shareId, url } | throws code 'invalid-share'
+// Accepts https://chat.deepseek.com/share/<id>, a bare share id
+// [A-Za-z0-9_-]+, and rejects every other URL/domain.
+
+export async function fetchShare(shareId, { fetchImpl?, timeoutMs?, maxBytes? })
+// GET https://chat.deepseek.com/api/v0/share/content?share_id=...
+// Public API (no auth). Enforces a timeout and a response-byte cap; parses
+// code !== 0 as 'share-api'. -> { shareId, title, modelType, messages }
+// messages keep role/content/reasoning/timestamp/citation_map.
+
+export function buildShareSession(messages, {
+  cwd, title?, provider?, model?, historyModel?, reasoningEffort?,
+  agentPreset?, permissionPreset?, sandboxMode?, approvalPolicy?,
+  includeReasoning? = true,
+})
+// -> { header, events, jsonl, title, turns }
+// Same v4 event skeleton as the existing share importer: config headers,
+// turn/step pairs, system prompt omitted by default, user/assistant messages
+// with surfaceOp:'append', request/header + request/context, session/title.
+// Assistant reasoning blocks are kept only when includeReasoning is true.
+
+export async function importShare(ctx, {
+  input, cwd, workspaceId, title?, signal,
+}, { fetchImpl?, importArchiveImpl? } = {})
+// parse -> fetch -> build -> existing lib/import.js importArchive on the
+// produced canonical JSONL (bare .jsonl buffer) with cwd/workspaceId.
+// -> { sessionId, title, eventCount, workspaceId? , warnings }
+```
+
+### Routes / tool
+
+- POST /session-kit/import-share body
+  `{ input: string, workspaceId?: string, cwd?: string, title?: string }`
+  -> `{ ok: true, session: { sessionId, title, eventCount }, warnings }`
+  Resolves the workspace path from `workspaceRegistry.get(workspaceId)` when a
+  workspace is chosen, otherwise uses cwd / the deployment default. Errors:
+  400 invalid-share, 404 workspace-not-found, 502 share-fetch/share-api,
+  503 module unavailable, 500 import failure.
+- `session_kit` action `import_share` with `input`, optional `workspaceId`/`cwd`/`title`.
+- /info capabilities add `shareImport`.
+
+### Client
+
+- Import panel gains a "DeepSeek share link" card: URL/ID input, a workspace
+  select populated from the current workspace list (plus "default directory /
+  current workspace"), optional title, Import button, progress and result.
+- No arbitrary URL fetching: the Host accepts only share links/ids.

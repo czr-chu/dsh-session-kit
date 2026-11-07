@@ -14,8 +14,9 @@
  * (strong evidence preselected) and guarded by a separate second confirmation;
  * permanent delete adds a distinct red second confirmation because data cannot
  * be recovered. It also exports the selection as one ZIP through
- * `POST /session-kit/export` and imports an archive through
- * `POST /session-kit/import`.
+ * `POST /session-kit/export`, imports an archive through
+ * `POST /session-kit/import`, and imports a DeepSeek public share link through
+ * `POST /session-kit/import-share` into a chosen workspace.
  *
  * Hand-written ModuleLoader factory: no bundler, no JSX, no TypeScript, and the
  * only runtime import is `react`. Every Host string (titles, warnings,
@@ -160,6 +161,7 @@ window.__ModuleLoader__.load({
       'panel.detailFilesFailed': '相关文件预览失败：{reason}',
       'panel.detailFileItem': '{path}（{size}{weak}）',
       'panel.detailFileWeak': ' · 弱证据',
+      'panel.filesPreviewMore': '…另有 {count} 个文件',
       'panel.showDetail': '查看会话详情 {title}',
       'panel.hideDetail': '收起会话详情 {title}',
       'panel.statusFilter': '状态筛选',
@@ -205,6 +207,21 @@ window.__ModuleLoader__.load({
       'panel.importUnverified': '有会话写入后无法通过 DSH 读回校验，请检查警告。',
       'panel.importHint': '导入只会新建会话，不会覆盖已有会话。',
       'panel.openHint': '可在左侧会话列表中打开新会话。',
+      'panel.shareTitle': 'DeepSeek 分享链接导入',
+      'panel.shareHint': '粘贴 chat.deepseek.com 公开分享链接或分享 id，导入为新的 DSH 会话。',
+      'panel.sharePlaceholder': 'https://chat.deepseek.com/share/<id> 或分享 id',
+      'panel.shareWorkspace': '导入到工作区',
+      'panel.shareWorkspaceDefault': '默认目录 / 当前工作区',
+      'panel.shareTitleLabel': '标题（可选）',
+      'panel.shareImport': '导入分享',
+      'panel.shareImporting': '正在导入分享…',
+      'panel.shareSuccess': '分享已导入',
+      'panel.shareFailed': '分享导入失败',
+      'panel.shareSessionId': '新会话：{id}',
+      'panel.shareEventCount': '{count} 条事件',
+      'panel.shareEmptyInput': '请输入分享链接或分享 id。',
+      'panel.shareRiskPublic': '仅支持 chat.deepseek.com 的公开分享链接；内容来自公开链接。',
+      'panel.shareRiskNew': '导入会新建会话，不会覆盖已有会话。',
       'panel.noSelection': '请先勾选要导出的会话。',
       'panel.dismiss': '关闭',
       'error.network': '无法连接 DSH 主机，请确认页面连接正常后重试。',
@@ -332,6 +349,7 @@ window.__ModuleLoader__.load({
       'panel.detailFilesFailed': 'Related-file preview failed: {reason}',
       'panel.detailFileItem': '{path} ({size}{weak})',
       'panel.detailFileWeak': ' · weak evidence',
+      'panel.filesPreviewMore': '…and {count} more files',
       'panel.showDetail': 'Show session detail for {title}',
       'panel.hideDetail': 'Hide session detail for {title}',
       'panel.statusFilter': 'Status',
@@ -377,6 +395,21 @@ window.__ModuleLoader__.load({
       'panel.importUnverified': 'Some sessions were written but failed to read back; check the warnings.',
       'panel.importHint': 'Import only creates new sessions; it never overwrites an existing one.',
       'panel.openHint': 'Open the new sessions from the session list on the left.',
+      'panel.shareTitle': 'DeepSeek share link import',
+      'panel.shareHint': 'Paste a public chat.deepseek.com share link or share id to import it as a new DSH session.',
+      'panel.sharePlaceholder': 'https://chat.deepseek.com/share/<id> or a share id',
+      'panel.shareWorkspace': 'Import into workspace',
+      'panel.shareWorkspaceDefault': 'Default directory / current workspace',
+      'panel.shareTitleLabel': 'Title (optional)',
+      'panel.shareImport': 'Import share',
+      'panel.shareImporting': 'Importing share…',
+      'panel.shareSuccess': 'Share imported',
+      'panel.shareFailed': 'Share import failed',
+      'panel.shareSessionId': 'New session: {id}',
+      'panel.shareEventCount': '{count} events',
+      'panel.shareEmptyInput': 'Enter a share link or share id.',
+      'panel.shareRiskPublic': 'Only public chat.deepseek.com share links are supported; content comes from the public link.',
+      'panel.shareRiskNew': 'Import creates a new session and never overwrites an existing one.',
       'panel.noSelection': 'Select at least one session to export.',
       'panel.dismiss': 'Dismiss',
       'error.network': 'Cannot reach the DSH host. Check the page connection and try again.',
@@ -615,6 +648,19 @@ window.__ModuleLoader__.load({
         ...workspace.warnings,
       ];
       return { sessions, warnings, workspace };
+    }
+
+    /** Normalize the `POST /session-kit/import-share` payload. */
+    function normalizeShareImport(payload) {
+      const root = payload !== null && typeof payload === 'object' ? payload : {};
+      const data = root.data !== null && typeof root.data === 'object' && !Array.isArray(root.data) ? root.data : root;
+      const sessionRecord = data.session !== null && typeof data.session === 'object' ? data.session : {};
+      return {
+        sessionId: pickString(sessionRecord.sessionId ?? sessionRecord.id ?? data.sessionId ?? root.sessionId),
+        title: pickString(sessionRecord.title ?? data.title),
+        eventCount: pickNumber(sessionRecord.eventCount ?? data.eventCount),
+        warnings: Array.isArray(data.warnings) ? data.warnings.filter((line) => typeof line === 'string') : [],
+      };
     }
 
     /** Normalize the archive/unarchive/delete route payload. */
@@ -1020,6 +1066,26 @@ window.__ModuleLoader__.load({
       runningDot: { display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: T.success, marginRight: 6 },
       input: { margin: '2px 0 0', flex: 'none' },
       modeRow: { display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center' },
+      card: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        padding: '14px 16px',
+        border: `1px solid ${T.border}`,
+        borderRadius: T.radiusLg,
+        background: T.bgLayer1,
+      },
+      formRow: { display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
+      select: {
+        height: 32,
+        padding: '0 8px',
+        boxSizing: 'border-box',
+        borderRadius: T.radius,
+        border: `1px solid ${T.border}`,
+        background: T.bgLayer2,
+        color: T.labelPrimary,
+        font: `13px/20px ${T.font}`,
+      },
       modeLabel: { display: 'inline-flex', gap: 6, alignItems: 'flex-start', cursor: 'pointer', font: `13px/20px ${T.font}` },
       modeHint: { display: 'block', font: `12px/18px ${T.font}`, color: T.labelSecondary },
       actionsRow: { display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
@@ -1206,10 +1272,10 @@ window.__ModuleLoader__.load({
      * checkboxes, archive / restore / trash-delete actions, legacy-format
      * upgrade, export mode switch, export download, and archive import.
      * @param {{t: Function, loadCatalog: Function, exportSelection: Function,
-     *          importSelection: Function, manageSessions: Function,
-     *          previewSessionFiles: Function, loadSessionDetails: Function,
-     *          migrateSessions: Function, refreshSessions: Function,
-     *          targetOf: Function}} props
+     *          importSelection: Function, importShare: Function,
+     *          manageSessions: Function, previewSessionFiles: Function,
+     *          loadSessionDetails: Function, migrateSessions: Function,
+     *          refreshSessions: Function, targetOf: Function}} props
      *   slot translator and the Host operations injected by `apply`.
      */
     function SessionKitPanel(props) {
@@ -1230,6 +1296,11 @@ window.__ModuleLoader__.load({
       const [confirmMigrate, setConfirmMigrate] = React.useState(null);
       const [details, setDetails] = React.useState({});
       const [openDetail, setOpenDetail] = React.useState(null);
+      const [shareInput, setShareInput] = React.useState('');
+      const [shareWorkspaceId, setShareWorkspaceId] = React.useState('');
+      const [shareTitle, setShareTitle] = React.useState('');
+      const [shareBusy, setShareBusy] = React.useState(false);
+      const [shareResult, setShareResult] = React.useState(null);
       const [busy, setBusy] = React.useState('');
       const [notice, setNotice] = React.useState(null);
       const fileInputRef = React.useRef(null);
@@ -1452,6 +1523,42 @@ window.__ModuleLoader__.load({
         const file = event.target.files !== null && event.target.files.length > 0 ? event.target.files[0] : undefined;
         event.target.value = '';
         if (file !== undefined) void runImport(file);
+      }
+
+      /** Import one DeepSeek share link/id as a new session. */
+      async function runShareImport() {
+        if (shareBusy) return;
+        const input = shareInput.trim();
+        if (input === '') {
+          setShareResult({ phase: 'error', error: tr('panel.shareEmptyInput') });
+          return;
+        }
+        setShareBusy(true);
+        setShareResult({ phase: 'busy' });
+        try {
+          const options = {};
+          if (shareWorkspaceId !== '') {
+            options.workspaceId = shareWorkspaceId;
+          } else {
+            const target = props.targetOf();
+            if (target !== null && typeof target === 'object' && typeof target.cwd === 'string' && target.cwd !== '') {
+              options.cwd = target.cwd;
+            }
+          }
+          const title = shareTitle.trim();
+          if (title !== '') options.title = title;
+          const result = await props.importShare(input, options);
+          await props.refreshSessions();
+          const next = await props.loadCatalog();
+          if (!mountedRef.current) return;
+          setCatalog(next);
+          setShareResult({ phase: 'success', ...result });
+        } catch (error) {
+          if (!mountedRef.current) return;
+          setShareResult({ phase: 'error', error: errorMessageOf(error, tr) });
+        } finally {
+          if (mountedRef.current) setShareBusy(false);
+        }
       }
 
       /** Open the delete confirmation for the given session ids. */
@@ -2086,6 +2193,100 @@ window.__ModuleLoader__.load({
         ),
       );
 
+      const shareWorkspaceOptions = catalog.workspaces
+        .filter((workspace) => workspace.workspaceId !== '')
+        .map((workspace) => h(
+          'option',
+          { key: workspace.workspaceId, value: workspace.workspaceId },
+          workspace.title !== '' ? `${workspace.title} · ${workspace.path}` : workspace.path,
+        ));
+
+      const shareResultNode = shareResult === null ? null : h(
+        'div',
+        {
+          style: shareResult.phase === 'error' ? STYLES.notice(T.error) : STYLES.notice(T.success),
+          role: shareResult.phase === 'error' ? 'alert' : 'status',
+          'aria-live': 'polite',
+        },
+        shareResult.phase === 'error'
+          ? [
+              h('span', { key: 'title', style: STYLES.noticeTitle }, tr('panel.shareFailed')),
+              h('span', { key: 'error', style: STYLES.noticeLine }, shareResult.error),
+            ]
+          : shareResult.phase === 'success'
+            ? [
+                h('span', { key: 'title', style: STYLES.noticeTitle }, tr('panel.shareSuccess')),
+                h('span', { key: 'id', style: STYLES.noticeLine }, tr('panel.shareSessionId', { id: shareResult.sessionId })),
+                shareResult.title !== '' ? h('span', { key: 'session-title', style: STYLES.noticeLine }, shareResult.title) : null,
+                h('span', { key: 'count', style: STYLES.noticeLine }, tr('panel.shareEventCount', { count: shareResult.eventCount })),
+                ...shareResult.warnings.map((warning, index) => h('span', { key: `warning-${index}`, style: STYLES.noticeLine }, warning)),
+              ]
+            : [h('span', { key: 'busy', style: STYLES.noticeTitle }, tr('panel.shareImporting'))],
+      );
+
+      const shareCard = h(
+        'div',
+        { style: STYLES.card, role: 'group', 'aria-label': tr('panel.shareTitle') },
+        h(
+          'div',
+          { style: { display: 'flex', flexDirection: 'column', gap: 2 } },
+          h('span', { style: { font: `600 14px/22px ${T.font}`, color: T.labelPrimary } }, tr('panel.shareTitle')),
+          h('span', { style: STYLES.modeHint }, tr('panel.shareHint')),
+        ),
+        h(
+          'div',
+          { style: STYLES.formRow },
+          h('input', {
+            type: 'text',
+            value: shareInput,
+            placeholder: tr('panel.sharePlaceholder'),
+            'aria-label': tr('panel.sharePlaceholder'),
+            disabled: shareBusy,
+            onChange: (event) => setShareInput(event.target.value),
+            style: { ...STYLES.search, flex: '1 1 320px', minWidth: 220 },
+          }),
+          h(
+            'select',
+            {
+              value: shareWorkspaceId,
+              disabled: shareBusy,
+              'aria-label': tr('panel.shareWorkspace'),
+              onChange: (event) => setShareWorkspaceId(event.target.value),
+              style: STYLES.select,
+            },
+            h('option', { value: '' }, tr('panel.shareWorkspaceDefault')),
+            ...shareWorkspaceOptions,
+          ),
+          h('input', {
+            type: 'text',
+            value: shareTitle,
+            placeholder: tr('panel.shareTitleLabel'),
+            'aria-label': tr('panel.shareTitleLabel'),
+            disabled: shareBusy,
+            onChange: (event) => setShareTitle(event.target.value),
+            style: { ...STYLES.search, flex: '0 1 200px', minWidth: 150 },
+          }),
+          h(
+            'button',
+            {
+              type: 'button',
+              style: buttonStyle('secondary', shareBusy),
+              disabled: shareBusy,
+              onClick: () => { void runShareImport(); },
+              'aria-busy': shareBusy ? 'true' : undefined,
+            },
+            shareBusy ? tr('panel.shareImporting') : tr('panel.shareImport'),
+          ),
+        ),
+        h(
+          'div',
+          { style: { display: 'flex', flexDirection: 'column', gap: 2 } },
+          h('span', { style: STYLES.modeHint }, tr('panel.shareRiskPublic')),
+          h('span', { style: STYLES.modeHint }, tr('panel.shareRiskNew')),
+        ),
+        shareResultNode,
+      );
+
       let body;
       if (phase === 'loading') {
         body = h('div', { style: STYLES.emptyCard }, tr('panel.loading'));
@@ -2460,6 +2661,7 @@ window.__ModuleLoader__.load({
           modeRow,
           actions,
           importOptions,
+          shareCard,
           noticeCard,
           body,
           h('p', { style: STYLES.footnote }, tr('panel.importHint')),
@@ -2501,6 +2703,29 @@ window.__ModuleLoader__.load({
         throw requestFailure(payload, response.status);
       }
       return normalizeImportPayload(payload);
+    }
+
+    /** Import one DeepSeek share link/id as a new session. */
+    async function importShareFromHost(input, options) {
+      const requestBody = { input };
+      if (options !== null && typeof options === 'object') {
+        const workspaceId = typeof options.workspaceId === 'string' ? options.workspaceId.trim() : '';
+        const cwd = typeof options.cwd === 'string' ? options.cwd.trim() : '';
+        const title = typeof options.title === 'string' ? options.title.trim() : '';
+        if (workspaceId !== '') requestBody.workspaceId = workspaceId;
+        else if (cwd !== '') requestBody.cwd = cwd;
+        if (title !== '') requestBody.title = title;
+      }
+      const response = await fetch(hostUrl('/import-share'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+      const payload = await jsonBody(response);
+      if (!response.ok || payload === null || typeof payload !== 'object' || payload.ok !== true) {
+        throw requestFailure(payload, response.status);
+      }
+      return normalizeShareImport(payload);
     }
 
     /** Request one export archive and return its bytes plus headers. */
@@ -2682,6 +2907,7 @@ window.__ModuleLoader__.load({
               loadCatalog: () => loadCatalog(),
               exportSelection: (request) => exportSelection(request),
               importSelection: (file, hints) => importSelection(file, hints),
+              importShare: (input, options) => importShareFromHost(input, options),
               manageSessions: (action, sessionIds, options) => manageSelection(action, sessionIds, options),
               previewSessionFiles: (sessionIds) => previewSessionFiles(sessionIds),
               loadSessionDetails: (sessionIds) => loadSessionDetails(sessionIds),

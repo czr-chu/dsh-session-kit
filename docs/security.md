@@ -83,3 +83,10 @@ same path rules as the trash path (regular files only, inside the owning
 workspace root, no symlinks, never under the Harness home/session storage/trash),
 then unlinks the selected files and removes the verified session directories.
 There is no trash copy and no rollback; failures report what was already erased.
+## DeepSeek share import
+
+Only `chat.deepseek.com/share/<id>` links or bare share ids are accepted; the
+host never fetches an arbitrary URL. The request has a timeout and a 32 MiB
+response cap, rejects non-JSON and non-zero API codes, and the fetched content
+is treated as user content (public share). Importing creates a new session and
+never modifies an existing one.
