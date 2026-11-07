@@ -28,7 +28,7 @@ function cssModules() {
       this.addWatchFile(fileId)
       const source = await readFile(fileId)
       const result = transform({
-        filename: fileId,
+        filename: relativeId,
         code: source,
         cssModules: { pattern: '[hash]_[local]' },
         minify: true,
