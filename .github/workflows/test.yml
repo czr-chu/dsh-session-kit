@@ -17,7 +17,7 @@ jobs:
   test:
     name: node ${{ matrix.node }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -27,8 +27,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      # The plugin has zero runtime dependencies and no build step. The real
-      # DSH backend/persistence cases self-skip without a Harness checkout.
+          cache: npm
+      - name: install build tooling
+        run: npm ci
+      - name: build client bundle
+        run: npm run build:client
+      - name: committed artifact is up to date
+        run: git diff --exit-code -- lib/client.js lib/client.js.map
       - name: unit tests (self-contained)
         run: node --test test/*.test.mjs
       - name: published file list

@@ -1,19 +1,18 @@
 {
   "name": "dsh-session-kit",
-  "version": "0.8.2",
+  "version": "0.9.0",
   "description": "DeepSeek Harness session manager: browse/search, size detail, archive, trash/permanent delete with selectable files, official format migration, DeepSeek share-link import into a chosen workspace, compact/full export with workspace files, and import as new sessions.",
   "type": "module",
   "main": "index.js",
   "exports": {
     ".": "./index.js",
-    "./client": "./client.js",
+    "./client": "./lib/client.js",
     "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.js",
-    "client.js",
     "lib",
+    "index.js",
     "locale/*.json",
     "cordis.patch.yml",
     "README.md",
@@ -69,7 +68,9 @@
     "@deepseek-ai/dsh": ">=0.2.1-rc.3 <0.3.0-0"
   },
   "scripts": {
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "build:client": "tsdown --config tsdown.config.mjs",
+    "build": "npm run build:client"
   },
   "author": {
     "name": "CharlesChu",
@@ -85,5 +86,14 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "devDependencies": {
+    "lightningcss": "^1.33.0",
+    "tsdown": "^0.22.2"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh": {
+      "optional": true
+    }
   }
 }

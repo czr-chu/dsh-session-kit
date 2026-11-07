@@ -1,12 +1,11 @@
 # Contributing
 
-Thanks for helping improve dsh-session-kit. This plugin has **no build step and
-no runtime npm dependencies**: it is plain ESM JavaScript loaded by DSH, so a
-change is typically a source edit plus tests.
+Thanks for helping improve dsh-session-kit. The **host half is plain ESM**; the browser half is compiled from `src/client/` with tsdown and CSS Modules into the committed `lib/client.js`. Runtime dependencies remain zero; build tooling is development-only.
 
 ## Development environment
 
 - Node.js **22+** for the plugin's own tests (CI runs Node 22 and 24);
+- `npm ci && npm run build:client` before testing or packaging client changes;
 - DeepSeek Harness **0.2.1-rc.3+** to run the plugin in a real deployment
   (the DSH CLI itself requires Node 24.9+);
 - a Web or Desktop deployment for the browser panel; a headless deployment can
@@ -31,15 +30,15 @@ the plain command on Node 22 and 24; run the `tsx` variant locally when touching
 persistence, migrations, imports or the management modules.
 
 Never make a test depend on a real `$DSH_HOME`, real sessions, network access or
-a real `dsh web` process; use the documented `config.modules` injection seam and
-temporary directories.
+a real `dsh web` process; use the test-only third `apply` argument for helper
+module injection and temporary directories.
 
 ## Code structure
 
 | Path | Responsibility |
 | --- | --- |
 | `index.js` | Host half: `/session-kit/*` routes, `session_kit` agent tool, module resolution, error mapping. |
-| `client.js` | Browser half: session manager panel, detail/delete/import cards. |
+| `src/client/index.js` | Browser half: session manager panel, detail/delete/import cards. |
 | `lib/sessions.js` | Session listing/detail helpers, target-directory resolution, id minting, new-session writes. |
 | `lib/export.js`, `lib/import.js` | Archive builder/importer (manifest, checksums, attachments, workspace files). |
 | `lib/compact.js` | Compact ("visible conversation") export transform. |

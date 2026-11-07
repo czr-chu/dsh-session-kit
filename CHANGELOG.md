@@ -4,6 +4,24 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-11-07
+
+Official client build pipeline. No host API or user-facing feature changes.
+
+### Added
+
+- Browser half moved to `src/client/index.js` and `src/client/styles.module.css`
+  and built with tsdown + lightningcss into `lib/client.js` (closure-factory
+  handoff plus CSS Modules style injection).
+- Pinned development build tooling (`tsdown@0.22.2`, `lightningcss@1.33.0`) and
+  a committed, reproducible client artifact; CI rebuilds and diff-checks it.
+
+### Changed
+
+- `package.json` `./client` now resolves to the built `lib/client.js`;
+  published files include the bundle and source map, not the hand-written file.
+- Documentation and contributor guide describe the build step.
+
 ## [0.8.2] - 2026-11-07
 
 ### Changed

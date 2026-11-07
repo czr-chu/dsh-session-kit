@@ -18,20 +18,24 @@
  * `POST /session-kit/import`, and imports a DeepSeek public share link through
  * `POST /session-kit/import-share` into a chosen workspace.
  *
- * Hand-written ModuleLoader factory: no bundler, no JSX, no TypeScript, and the
- * only runtime import is `react`. Every Host string (titles, warnings,
- * error messages) reaches the DOM as a React text child, never as markup.
+ * Bundled by tsdown into the closure-factory artifact `lib/client.js`; static
+ * styles live in `styles.module.css` (CSS Modules) and the only runtime import
+ * is `react`. Every Host string (titles, warnings, error messages) reaches the
+ * DOM as a React text child, never as markup.
  *
  * @module dsh-session-kit/client
  */
 
-window.__ModuleLoader__.load({
-  id: 'dsh-session-kit',
-  factory(require) {
-    'use strict';
+import React from 'react';
+import cssStyles from './styles.module.css';
 
-    const React = require('react');
-    const h = React.createElement;
+/** Kebab-case CSS Module locals mapped to the camelCase names used below. */
+const styles = {};
+for (const [local, className] of Object.entries(cssStyles)) {
+  styles[local.replace(/-([a-z])/gu, (_, letter) => letter.toUpperCase())] = className;
+}
+
+const h = React.createElement;
 
     /** Dictionary namespace owned by this plugin. */
     const NS = 'session-kit';
@@ -955,7 +959,7 @@ window.__ModuleLoader__.load({
           height: pixels,
           'aria-hidden': 'true',
           focusable: 'false',
-          style: { display: 'block' },
+          className: styles.svgBlock,
         },
         h(
           'g',
@@ -969,199 +973,6 @@ window.__ModuleLoader__.load({
     // #endregion
 
     // #region styles
-
-    const STYLES = {
-      page: {
-        height: '100%',
-        overflowY: 'auto',
-        background: T.bgBase,
-        color: T.labelPrimary,
-        font: `14px/22px ${T.font}`,
-      },
-      content: {
-        maxWidth: 860,
-        margin: '0 auto',
-        padding: '28px 24px 56px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 18,
-      },
-      headerRow: { display: 'flex', alignItems: 'flex-start', gap: 12 },
-      heading: { margin: 0, font: `600 20px/28px ${T.font}` },
-      subtitle: { margin: '4px 0 0', font: `13px/20px ${T.font}`, color: T.labelSecondary },
-      toolbar: { display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
-      search: {
-        flex: '1 1 240px',
-        minWidth: 180,
-        height: 32,
-        padding: '0 10px',
-        boxSizing: 'border-box',
-        borderRadius: T.radius,
-        border: `1px solid ${T.border}`,
-        background: T.bgLayer1,
-        color: T.labelPrimary,
-        font: `13px/20px ${T.font}`,
-        outline: 'none',
-      },
-      counter: { font: `12px/18px ${T.font}`, color: T.labelSecondary },
-      group: { display: 'flex', flexDirection: 'column', gap: 6 },
-      groupHeader: { display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0' },
-      groupTitle: { font: `600 13px/20px ${T.font}`, color: T.labelPrimary },
-      groupPath: {
-        font: `12px/18px ${T.mono}`,
-        color: T.labelTertiary,
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
-        flex: '1 1 auto',
-        minWidth: 0,
-      },
-      groupCount: { font: `12px/18px ${T.font}`, color: T.labelSecondary, flex: 'none' },
-      rowWrapper: { display: 'flex', flexDirection: 'column', gap: 4 },
-      row: {
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 10,
-        padding: '8px 10px',
-        boxSizing: 'border-box',
-        border: `1px solid ${T.border}`,
-        borderRadius: T.radius,
-        background: T.bgLayer1,
-      },
-      rowMain: { display: 'flex', alignItems: 'flex-start', gap: 10, flex: '1 1 auto', minWidth: 0 },
-      rowDetailToggle: {
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 10,
-        flex: '1 1 auto',
-        minWidth: 0,
-        padding: 0,
-        border: 'none',
-        background: 'transparent',
-        color: 'inherit',
-        font: 'inherit',
-        textAlign: 'left',
-        cursor: 'pointer',
-      },
-      rowActions: { display: 'flex', alignItems: 'center', gap: 6, flex: 'none' },
-      rowDetail: {
-        padding: '8px 12px',
-        border: `1px solid ${T.border}`,
-        borderRadius: T.radius,
-        background: T.bgLayer2,
-      },
-      rowText: { display: 'flex', flexDirection: 'column', gap: 2, flex: '1 1 auto', minWidth: 0 },
-      rowTitle: { font: `13px/20px ${T.font}`, color: T.labelPrimary, wordBreak: 'break-word' },
-      rowMeta: {
-        font: `12px/18px ${T.mono}`,
-        color: T.labelSecondary,
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
-      },
-      badge: { display: 'inline-block', marginLeft: 8, padding: '0 6px', borderRadius: '999px', font: `11px/16px ${T.font}`, verticalAlign: 'middle', flex: 'none' },
-      badgeArchived: { background: T.bgLayer2, color: T.warn, border: `1px solid ${T.border}` },
-      badgeActive: { background: 'transparent', color: T.labelTertiary, border: `1px solid ${T.border}` },
-      badgeLegacy: { background: 'transparent', color: T.brand, border: `1px solid ${T.brand}` },
-      runningDot: { display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: T.success, marginRight: 6 },
-      input: { margin: '2px 0 0', flex: 'none' },
-      modeRow: { display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center' },
-      card: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 10,
-        padding: '14px 16px',
-        border: `1px solid ${T.border}`,
-        borderRadius: T.radiusLg,
-        background: T.bgLayer1,
-      },
-      formRow: { display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
-      select: {
-        height: 32,
-        padding: '0 8px',
-        boxSizing: 'border-box',
-        borderRadius: T.radius,
-        border: `1px solid ${T.border}`,
-        background: T.bgLayer2,
-        color: T.labelPrimary,
-        font: `13px/20px ${T.font}`,
-      },
-      modeLabel: { display: 'inline-flex', gap: 6, alignItems: 'flex-start', cursor: 'pointer', font: `13px/20px ${T.font}` },
-      modeHint: { display: 'block', font: `12px/18px ${T.font}`, color: T.labelSecondary },
-      actionsRow: { display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
-      notice: (tone) => ({
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 6,
-        padding: '12px 14px',
-        border: `1px solid ${T.border}`,
-        borderLeft: `3px solid ${tone}`,
-        borderRadius: T.radiusLg,
-        background: T.bgLayer1,
-      }),
-      noticeTitle: { font: `600 13px/20px ${T.font}`, color: T.labelPrimary },
-      noticeLine: { font: `12px/18px ${T.font}`, color: T.labelSecondary, wordBreak: 'break-word' },
-      emptyCard: {
-        padding: '18px 16px',
-        border: `1px solid ${T.border}`,
-        borderRadius: T.radiusLg,
-        background: T.bgLayer1,
-        font: `13px/20px ${T.font}`,
-        color: T.labelSecondary,
-      },
-      footnote: { margin: 0, font: `12px/18px ${T.font}`, color: T.labelSecondary },
-      overlay: {
-        position: 'fixed',
-        inset: 0,
-        zIndex: 2147483200,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 20,
-        background: 'rgba(0, 0, 0, 0.38)',
-      },
-      dialog: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 10,
-        width: '100%',
-        maxWidth: 480,
-        maxHeight: '72vh',
-        overflowY: 'auto',
-        padding: '18px 18px 16px',
-        boxSizing: 'border-box',
-        background: T.bgLayer1,
-        border: `1px solid ${T.border}`,
-        borderRadius: T.radiusLg,
-        boxShadow: 'var(--dsw-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.18))',
-        color: T.labelPrimary,
-        font: `13px/20px ${T.font}`,
-      },
-      dialogDanger: { border: `1px solid ${T.error}` },
-      dialogTitle: { margin: 0, font: `600 16px/24px ${T.font}` },
-      dialogTitleDanger: { margin: 0, font: `600 16px/24px ${T.font}`, color: T.error },
-      dialogBody: { margin: 0, font: `13px/20px ${T.font}`, color: T.labelSecondary },
-      dialogList: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 2,
-        maxHeight: 160,
-        overflowY: 'auto',
-        padding: '6px 8px',
-        border: `1px solid ${T.border}`,
-        borderRadius: T.radius,
-        background: T.bgLayer2,
-      },
-      dialogItem: {
-        font: `12px/18px ${T.mono}`,
-        color: T.labelPrimary,
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
-      },
-      dialogNote: { margin: 0, font: `12px/18px ${T.font}`, color: T.labelSecondary },
-      dialogActions: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 },
-    };
 
     /** Button style for one visual role. */
     function buttonStyle(role, disabled) {
@@ -1208,8 +1019,8 @@ window.__ModuleLoader__.load({
     function linesNode(lines) {
       return h(
         'div',
-        { style: { display: 'flex', flexDirection: 'column', gap: 2 } },
-        lines.map((line, index) => h('span', { key: `${index}-${line.slice(0, 12)}`, style: STYLES.noticeLine }, line)),
+        { className: styles.lines },
+        lines.map((line, index) => h('span', { key: `${index}-${line.slice(0, 12)}`, className: styles.noticeLine }, line)),
       );
     }
 
@@ -1221,11 +1032,11 @@ window.__ModuleLoader__.load({
       } = options;
       return h(
         'div',
-        { style: STYLES.overlay },
+        { className: styles.overlay },
         h(
           'div',
           {
-            style: danger === true ? { ...STYLES.dialog, ...STYLES.dialogDanger } : STYLES.dialog,
+            className: danger === true ? styles.dialog + ' ' + styles.dialogDanger : styles.dialog,
             role: 'dialog',
             'aria-modal': 'true',
             'aria-label': title,
@@ -1233,22 +1044,22 @@ window.__ModuleLoader__.load({
               if (event.key === 'Escape' && !busy) onCancel();
             },
           },
-          h('h2', { style: danger === true ? STYLES.dialogTitleDanger : STYLES.dialogTitle }, title),
-          h('p', { style: STYLES.dialogBody }, body),
+          h('h2', { className: danger === true ? styles.dialogTitleDanger : styles.dialogTitle }, title),
+          h('p', { className: styles.dialogBody }, body),
           control === undefined || control === null ? null : control,
           h(
             'div',
-            { style: STYLES.dialogList },
-            items.slice(0, 8).map((item, index) => h('div', { key: `${index}-${item.slice(0, 12)}`, style: STYLES.dialogItem }, item)),
+            { className: styles.dialogList },
+            items.slice(0, 8).map((item, index) => h('div', { key: `${index}-${item.slice(0, 12)}`, className: styles.dialogItem }, item)),
             items.length > 8
-              ? h('div', { key: 'more', style: STYLES.dialogItem }, tr(moreKey === undefined ? 'panel.confirmMore' : moreKey, { count: items.length - 8 }))
+              ? h('div', { key: 'more', className: styles.dialogItem }, tr(moreKey === undefined ? 'panel.confirmMore' : moreKey, { count: items.length - 8 }))
               : null,
           ),
           details === undefined || details === null ? null : details,
-          note === '' ? null : h('p', { style: STYLES.dialogNote }, note),
+          note === '' ? null : h('p', { className: styles.dialogNote }, note),
           h(
             'div',
-            { style: STYLES.dialogActions },
+            { className: styles.dialogActions },
             h(
               'button',
               { type: 'button', style: buttonStyle('secondary', busy), disabled: busy, autoFocus: true, onClick: onCancel },
@@ -1682,42 +1493,26 @@ window.__ModuleLoader__.load({
         const groups = deleteFileGroups(state);
         return h(
           'div',
-          { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+          { className: styles.fileSelection },
           linesNode(lines),
           state.preview === null || groups.length === 0 ? null : groups.map((group) => h(
             'div',
             {
               key: group.key,
-              style: {
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 4,
-                padding: '6px 8px',
-                border: `1px solid ${T.border}`,
-                borderRadius: T.radius,
-                background: T.bgLayer2,
-              },
+              className: styles.fileGroup,
             },
             h(
               'div',
-              { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+              { className: styles.fileGroupHeader },
               h('span', {
-                style: {
-                  flex: '1 1 auto',
-                  minWidth: 0,
-                  font: `600 12px/18px ${T.font}`,
-                  color: T.labelPrimary,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                },
+                className: styles.fileGroupTitle,
               }, tr('panel.fileGroupTitle', { title: group.title, count: group.files.length })),
               h('button', { type: 'button', style: { ...buttonStyle('ghost', false), height: 24, padding: '0 8px', font: `12px/18px ${T.font}` }, onClick: () => setGroupFileSelection(group, true) }, tr('panel.filesSelectAll')),
               h('button', { type: 'button', style: { ...buttonStyle('ghost', false), height: 24, padding: '0 8px', font: `12px/18px ${T.font}` }, onClick: () => setGroupFileSelection(group, false) }, tr('panel.filesClear')),
             ),
             group.files.map((file) => h(
               'label',
-              { key: file.path, style: { display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', font: `12px/18px ${T.font}` } },
+              { key: file.path, className: styles.fileOption },
               h('input', {
                 type: 'checkbox',
                 checked: state.selectedFiles.has(file.path),
@@ -1725,15 +1520,15 @@ window.__ModuleLoader__.load({
               }),
               h(
                 'span',
-                { style: { display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 } },
-                h('span', { style: { font: `12px/18px ${T.mono}`, color: T.labelPrimary, wordBreak: 'break-all' } }, tr('panel.filesItem', {
+                { className: styles.fileDetails },
+                h('span', { className: styles.filePath }, tr('panel.filesItem', {
                   path: file.relative !== '' ? file.relative : file.path,
                   size: formatBytes(file.bytes),
                 })),
-                file.weak ? h('span', { style: { font: `11px/16px ${T.font}`, color: T.warn } }, tr('panel.fileWeakHint')) : null,
+                file.weak ? h('span', { className: styles.fileWeak }, tr('panel.fileWeakHint')) : null,
                 file.evidence.length > 0
                   ? h('span', {
-                      style: { font: `11px/16px ${T.font}`, color: T.labelTertiary, wordBreak: 'break-word' },
+                      className: styles.fileEvidence,
                     }, tr('panel.fileEvidence', { evidence: file.evidence.join(', ').slice(0, 140) }))
                   : null,
               ),
@@ -1746,11 +1541,11 @@ window.__ModuleLoader__.load({
       function deleteDialogDetails(state) {
         const parts = [];
         if (state.permanent === true) {
-          parts.push(h('p', { style: { margin: 0, font: `12px/18px ${T.font}`, color: T.error } }, tr('panel.permanentRisk')));
+          parts.push(h('p', { className: styles.permanentRisk }, tr('panel.permanentRisk')));
         }
         if (state.removeFiles === true) parts.push(deleteFileSelectionNode(state));
         if (parts.length === 0) return null;
-        return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } }, ...parts);
+        return h('div', { className: styles.dialogParts }, ...parts);
       }
 
       /** First delete confirm: delete directly, or open the files/permanent second dialog. */
@@ -1977,12 +1772,12 @@ window.__ModuleLoader__.load({
 
       const header = h(
         'div',
-        { style: STYLES.headerRow },
+        { className: styles.headerRow },
         h(
           'div',
-          { style: { flex: '1 1 auto', minWidth: 0 } },
-          h('h1', { style: STYLES.heading }, tr('panel.title')),
-          h('p', { style: STYLES.subtitle }, tr('panel.subtitle')),
+          { className: styles.headerMain },
+          h('h1', { className: styles.heading }, tr('panel.title')),
+          h('p', { className: styles.subtitle }, tr('panel.subtitle')),
         ),
         h(
           'button',
@@ -1993,27 +1788,27 @@ window.__ModuleLoader__.load({
 
       const statusFilterRow = h(
         'div',
-        { style: STYLES.toolbar, role: 'group', 'aria-label': tr('panel.statusFilter') },
-        h('span', { style: STYLES.counter }, tr('panel.statusFilter')),
+        { className: styles.toolbar, role: 'group', 'aria-label': tr('panel.statusFilter') },
+        h('span', { className: styles.counter }, tr('panel.statusFilter')),
         h(
           'button',
           { type: 'button', style: filterButtonStyle(statusFilter === 'all'), 'aria-pressed': statusFilter === 'all', onClick: () => setStatusFilter('all') },
           tr('panel.statusAll'),
-          h('span', { style: { marginLeft: 6, color: T.labelSecondary } }, String(counts.all)),
+          h('span', { className: styles.filterCount }, String(counts.all)),
         ),
         h(
           'button',
           { type: 'button', style: filterButtonStyle(statusFilter === 'active'), 'aria-pressed': statusFilter === 'active', onClick: () => setStatusFilter('active') },
           tr('panel.statusActive'),
-          h('span', { style: { marginLeft: 6, color: T.labelSecondary } }, String(counts.active)),
+          h('span', { className: styles.filterCount }, String(counts.active)),
         ),
         h(
           'button',
           { type: 'button', style: filterButtonStyle(statusFilter === 'archived'), 'aria-pressed': statusFilter === 'archived', onClick: () => setStatusFilter('archived') },
           tr('panel.statusArchived'),
-          h('span', { style: { marginLeft: 6, color: T.labelSecondary } }, String(counts.archived)),
+          h('span', { className: styles.filterCount }, String(counts.archived)),
         ),
-        h('span', { style: { ...STYLES.counter, marginLeft: 10 } }, tr('panel.legacyCount', { count: legacyCount })),
+        h('span', { className: styles.counter + ' ' + styles.counterOffset }, tr('panel.legacyCount', { count: legacyCount })),
         h(
           'button',
           {
@@ -2029,19 +1824,19 @@ window.__ModuleLoader__.load({
 
       const searchRow = h(
         'div',
-        { style: STYLES.toolbar },
+        { className: styles.toolbar },
         h('input', {
           type: 'search',
           value: query,
           placeholder: tr('panel.search'),
           'aria-label': tr('panel.search'),
           onChange: (event) => setQuery(event.target.value),
-          style: STYLES.search,
+          className: styles.search,
         }),
         h('button', { type: 'button', style: buttonStyle('secondary', allVisible.length === 0), disabled: allVisible.length === 0, onClick: () => setMany(allVisible, true) }, tr('panel.selectAll')),
         h('button', { type: 'button', style: buttonStyle('secondary', allVisible.length === 0), disabled: allVisible.length === 0, onClick: () => setMany(allVisible, false) }, tr('panel.selectNone')),
-        h('span', { style: STYLES.counter }, tr('panel.selectedCount', { selected: selectedCount, total })),
-        h('span', { style: STYLES.counter }, tr('panel.searchCount', { matched: matchedCount, total })),
+        h('span', { className: styles.counter }, tr('panel.selectedCount', { selected: selectedCount, total })),
+        h('span', { className: styles.counter }, tr('panel.searchCount', { matched: matchedCount, total })),
         h(
           'button',
           { type: 'button', style: buttonStyle('secondary', selectedCount === 0 || busy !== ''), disabled: selectedCount === 0 || busy !== '', onClick: batchArchive },
@@ -2061,10 +1856,10 @@ window.__ModuleLoader__.load({
 
       const modeRow = h(
         'div',
-        { style: STYLES.modeRow, role: 'group', 'aria-label': tr('panel.exportOptions') },
+        { className: styles.modeRow, role: 'group', 'aria-label': tr('panel.exportOptions') },
         h(
           'label',
-          { style: STYLES.modeLabel },
+          { className: styles.modeLabel },
           h('input', {
             type: 'radio',
             name: 'session-kit-export-mode',
@@ -2077,12 +1872,12 @@ window.__ModuleLoader__.load({
             'span',
             null,
             tr('panel.modeCompact'),
-            h('span', { style: STYLES.modeHint }, tr('panel.modeCompactHint')),
+            h('span', { className: styles.modeHint }, tr('panel.modeCompactHint')),
           ),
         ),
         h(
           'label',
-          { style: STYLES.modeLabel },
+          { className: styles.modeLabel },
           h('input', {
             type: 'radio',
             name: 'session-kit-export-mode',
@@ -2095,12 +1890,12 @@ window.__ModuleLoader__.load({
             'span',
             null,
             tr('panel.modeFull'),
-            h('span', { style: STYLES.modeHint }, tr('panel.modeFullHint')),
+            h('span', { className: styles.modeHint }, tr('panel.modeFullHint')),
           ),
         ),
         h(
           'label',
-          { style: STYLES.modeLabel },
+          { className: styles.modeLabel },
           h('input', {
             type: 'checkbox',
             checked: includeAttachments,
@@ -2111,12 +1906,12 @@ window.__ModuleLoader__.load({
             'span',
             null,
             tr('panel.attachments'),
-            h('span', { style: STYLES.modeHint }, tr('panel.attachmentsHint')),
+            h('span', { className: styles.modeHint }, tr('panel.attachmentsHint')),
           ),
         ),
         h(
           'label',
-          { style: STYLES.modeLabel },
+          { className: styles.modeLabel },
           h('input', {
             type: 'checkbox',
             checked: includeWorkspaceFiles,
@@ -2127,12 +1922,12 @@ window.__ModuleLoader__.load({
             'span',
             null,
             tr('panel.workspaceFiles'),
-            h('span', { style: STYLES.modeHint }, tr('panel.workspaceFilesHint')),
+            h('span', { className: styles.modeHint }, tr('panel.workspaceFilesHint')),
           ),
         ),
         h(
           'label',
-          { style: STYLES.modeLabel },
+          { className: styles.modeLabel },
           h('input', {
             type: 'checkbox',
             checked: includeSubagents,
@@ -2143,14 +1938,14 @@ window.__ModuleLoader__.load({
             'span',
             null,
             tr('panel.subagents'),
-            h('span', { style: STYLES.modeHint }, tr('panel.subagentsHint')),
+            h('span', { className: styles.modeHint }, tr('panel.subagentsHint')),
           ),
         ),
       );
 
       const actions = h(
         'div',
-        { style: STYLES.actionsRow },
+        { className: styles.actionsRow },
         h(
           'button',
           { type: 'button', style: buttonStyle('primary', busy !== '' || selectedCount === 0), disabled: busy !== '' || selectedCount === 0, onClick: () => { void runExport(); }, 'aria-busy': busyExport ? 'true' : undefined },
@@ -2165,7 +1960,7 @@ window.__ModuleLoader__.load({
           ref: fileInputRef,
           type: 'file',
           accept: '.zip,.jsonl,application/zip,application/jsonl,application/x-ndjson',
-          style: { display: 'none' },
+          className: styles.hiddenInput,
           onChange: onFileChange,
           'aria-hidden': 'true',
           tabIndex: -1,
@@ -2174,10 +1969,10 @@ window.__ModuleLoader__.load({
 
       const importOptions = h(
         'div',
-        { style: STYLES.modeRow, role: 'group', 'aria-label': tr('panel.importOptions') },
+        { className: styles.modeRow, role: 'group', 'aria-label': tr('panel.importOptions') },
         h(
           'label',
-          { style: STYLES.modeLabel },
+          { className: styles.modeLabel },
           h('input', {
             type: 'checkbox',
             checked: restoreWorkspaceFiles,
@@ -2188,7 +1983,7 @@ window.__ModuleLoader__.load({
             'span',
             null,
             tr('panel.restoreWorkspaceFiles'),
-            h('span', { style: STYLES.modeHint }, tr('panel.restoreWorkspaceFilesHint')),
+            h('span', { className: styles.modeHint }, tr('panel.restoreWorkspaceFilesHint')),
           ),
         ),
       );
@@ -2204,38 +1999,39 @@ window.__ModuleLoader__.load({
       const shareResultNode = shareResult === null ? null : h(
         'div',
         {
-          style: shareResult.phase === 'error' ? STYLES.notice(T.error) : STYLES.notice(T.success),
+          className: styles.notice,
+          style: { borderLeftColor: shareResult.phase === 'error' ? T.error : T.success },
           role: shareResult.phase === 'error' ? 'alert' : 'status',
           'aria-live': 'polite',
         },
         shareResult.phase === 'error'
           ? [
-              h('span', { key: 'title', style: STYLES.noticeTitle }, tr('panel.shareFailed')),
-              h('span', { key: 'error', style: STYLES.noticeLine }, shareResult.error),
+              h('span', { key: 'title', className: styles.noticeTitle }, tr('panel.shareFailed')),
+              h('span', { key: 'error', className: styles.noticeLine }, shareResult.error),
             ]
           : shareResult.phase === 'success'
             ? [
-                h('span', { key: 'title', style: STYLES.noticeTitle }, tr('panel.shareSuccess')),
-                h('span', { key: 'id', style: STYLES.noticeLine }, tr('panel.shareSessionId', { id: shareResult.sessionId })),
-                shareResult.title !== '' ? h('span', { key: 'session-title', style: STYLES.noticeLine }, shareResult.title) : null,
-                h('span', { key: 'count', style: STYLES.noticeLine }, tr('panel.shareEventCount', { count: shareResult.eventCount })),
-                ...shareResult.warnings.map((warning, index) => h('span', { key: `warning-${index}`, style: STYLES.noticeLine }, warning)),
+                h('span', { key: 'title', className: styles.noticeTitle }, tr('panel.shareSuccess')),
+                h('span', { key: 'id', className: styles.noticeLine }, tr('panel.shareSessionId', { id: shareResult.sessionId })),
+                shareResult.title !== '' ? h('span', { key: 'session-title', className: styles.noticeLine }, shareResult.title) : null,
+                h('span', { key: 'count', className: styles.noticeLine }, tr('panel.shareEventCount', { count: shareResult.eventCount })),
+                ...shareResult.warnings.map((warning, index) => h('span', { key: `warning-${index}`, className: styles.noticeLine }, warning)),
               ]
-            : [h('span', { key: 'busy', style: STYLES.noticeTitle }, tr('panel.shareImporting'))],
+            : [h('span', { key: 'busy', className: styles.noticeTitle }, tr('panel.shareImporting'))],
       );
 
       const shareCard = h(
         'div',
-        { style: STYLES.card, role: 'group', 'aria-label': tr('panel.shareTitle') },
+        { className: styles.card, role: 'group', 'aria-label': tr('panel.shareTitle') },
         h(
           'div',
-          { style: { display: 'flex', flexDirection: 'column', gap: 2 } },
-          h('span', { style: { font: `600 14px/22px ${T.font}`, color: T.labelPrimary } }, tr('panel.shareTitle')),
-          h('span', { style: STYLES.modeHint }, tr('panel.shareHint')),
+          { className: styles.shareHeader },
+          h('span', { className: styles.shareTitleText }, tr('panel.shareTitle')),
+          h('span', { className: styles.modeHint }, tr('panel.shareHint')),
         ),
         h(
           'div',
-          { style: STYLES.formRow },
+          { className: styles.formRow },
           h('input', {
             type: 'text',
             value: shareInput,
@@ -2243,7 +2039,8 @@ window.__ModuleLoader__.load({
             'aria-label': tr('panel.sharePlaceholder'),
             disabled: shareBusy,
             onChange: (event) => setShareInput(event.target.value),
-            style: { ...STYLES.search, flex: '1 1 320px', minWidth: 220 },
+            className: styles.search,
+            style: { flex: '1 1 320px', minWidth: 220 },
           }),
           h(
             'select',
@@ -2252,7 +2049,7 @@ window.__ModuleLoader__.load({
               disabled: shareBusy,
               'aria-label': tr('panel.shareWorkspace'),
               onChange: (event) => setShareWorkspaceId(event.target.value),
-              style: STYLES.select,
+              className: styles.select,
             },
             h('option', { value: '' }, tr('panel.shareWorkspaceDefault')),
             ...shareWorkspaceOptions,
@@ -2264,7 +2061,8 @@ window.__ModuleLoader__.load({
             'aria-label': tr('panel.shareTitleLabel'),
             disabled: shareBusy,
             onChange: (event) => setShareTitle(event.target.value),
-            style: { ...STYLES.search, flex: '0 1 200px', minWidth: 150 },
+            className: styles.search,
+            style: { flex: '0 1 200px', minWidth: 150 },
           }),
           h(
             'button',
@@ -2280,22 +2078,22 @@ window.__ModuleLoader__.load({
         ),
         h(
           'div',
-          { style: { display: 'flex', flexDirection: 'column', gap: 2 } },
-          h('span', { style: STYLES.modeHint }, tr('panel.shareRiskPublic')),
-          h('span', { style: STYLES.modeHint }, tr('panel.shareRiskNew')),
+          { className: styles.lines },
+          h('span', { className: styles.modeHint }, tr('panel.shareRiskPublic')),
+          h('span', { className: styles.modeHint }, tr('panel.shareRiskNew')),
         ),
         shareResultNode,
       );
 
       let body;
       if (phase === 'loading') {
-        body = h('div', { style: STYLES.emptyCard }, tr('panel.loading'));
+        body = h('div', { className: styles.emptyCard }, tr('panel.loading'));
       } else if (phase === 'error') {
         body = h(
           'div',
-          { style: STYLES.notice(T.error), role: 'alert' },
-          h('span', { style: STYLES.noticeTitle }, tr('panel.loadFailed')),
-          h('span', { style: STYLES.noticeLine }, loadError),
+          { className: styles.notice, style: { borderLeftColor: T.error }, role: 'alert' },
+          h('span', { className: styles.noticeTitle }, tr('panel.loadFailed')),
+          h('span', { className: styles.noticeLine }, loadError),
           h(
             'span',
             null,
@@ -2303,9 +2101,9 @@ window.__ModuleLoader__.load({
           ),
         );
       } else if (catalog.sessions.length === 0) {
-        body = h('div', { style: STYLES.emptyCard }, tr('panel.empty'));
+        body = h('div', { className: styles.emptyCard }, tr('panel.empty'));
       } else if (groups.length === 0) {
-        body = h('div', { style: STYLES.emptyCard }, query.trim() !== ''
+        body = h('div', { className: styles.emptyCard }, query.trim() !== ''
           ? tr('panel.emptyFilter')
           : statusFilter !== 'all' ? tr('panel.emptyStatusFilter') : tr('panel.emptyFilter'));
       } else {
@@ -2313,10 +2111,10 @@ window.__ModuleLoader__.load({
           const state = groupSelection(group, selected);
           return h(
             'div',
-            { key: group.key === '' ? 'ungrouped' : group.key, style: STYLES.group, role: 'group', 'aria-label': group.title },
+            { key: group.key === '' ? 'ungrouped' : group.key, className: styles.group, role: 'group', 'aria-label': group.title },
             h(
               'div',
-              { style: STYLES.groupHeader },
+              { className: styles.groupHeader },
               h('input', {
                 type: 'checkbox',
                 checked: state.all,
@@ -2328,9 +2126,9 @@ window.__ModuleLoader__.load({
                 onChange: () => setMany(group.sessions.map((session) => session.id), !state.all),
                 'aria-label': tr('panel.selectGroup', { title: group.title }),
               }),
-              h('span', { style: STYLES.groupTitle }, group.title),
-              group.path === '' ? null : h('span', { style: STYLES.groupPath, title: group.path }, group.path),
-              h('span', { style: STYLES.groupCount }, tr('panel.groupCount', { count: group.sessions.length })),
+              h('span', { className: styles.groupTitle }, group.title),
+              group.path === '' ? null : h('span', { className: styles.groupPath, title: group.path }, group.path),
+              h('span', { className: styles.groupCount }, tr('panel.groupCount', { count: group.sessions.length })),
             ),
             group.sessions.map((session) => {
               const checked = selected.has(session.id);
@@ -2379,21 +2177,21 @@ window.__ModuleLoader__.load({
                                 ...(detail.filePreview.files.length > 5 ? [tr('panel.filesPreviewMore', { count: detail.filePreview.files.length - 5 })] : []),
                               ]),
                       ];
-                detailNode = h('div', { style: STYLES.rowDetail, 'data-session-detail': session.id }, linesNode(detailLines));
+                detailNode = h('div', { className: styles.rowDetail, 'data-session-detail': session.id }, linesNode(detailLines));
               }
               return h(
                 'div',
-                { key: session.id, style: STYLES.rowWrapper },
+                { key: session.id, className: styles.rowWrapper },
                 h(
                   'div',
-                  { style: { ...STYLES.row, opacity: archived ? 0.66 : 1 } },
+                  { className: styles.row, style: { opacity: archived ? 0.66 : 1 } },
                   h(
                     'div',
-                    { style: STYLES.rowMain },
+                    { className: styles.rowMain },
                     h('input', {
                       type: 'checkbox',
                       checked,
-                      style: STYLES.input,
+                      className: styles.input,
                       onChange: () => {
                         toggleSession(session.id);
                         void loadSessionDetail(session.id);
@@ -2404,7 +2202,7 @@ window.__ModuleLoader__.load({
                       'button',
                       {
                         type: 'button',
-                        style: STYLES.rowDetailToggle,
+                        className: styles.rowDetailToggle,
                         onClick: () => toggleSessionDetail(session.id),
                         'aria-expanded': detailOpen ? 'true' : 'false',
                         'aria-label': detailOpen
@@ -2413,35 +2211,35 @@ window.__ModuleLoader__.load({
                       },
                       h(
                         'span',
-                        { style: STYLES.rowText },
+                        { className: styles.rowText },
                         h(
                           'span',
-                          { style: STYLES.rowTitle },
-                          session.running ? h('span', { style: STYLES.runningDot, 'aria-hidden': 'true' }) : null,
+                          { className: styles.rowTitle },
+                          session.running ? h('span', { className: styles.runningDot, 'aria-hidden': 'true' }) : null,
                           displayTitle,
                           session.running ? ` (${tr('panel.running')})` : '',
                           h(
                             'span',
-                            { style: { ...STYLES.badge, ...(archived ? STYLES.badgeArchived : STYLES.badgeActive) } },
+                            { className: styles.badge + ' ' + (archived ? styles.badgeArchived : styles.badgeActive) },
                             archived ? tr('panel.statusBadgeArchived') : tr('panel.statusBadgeActive'),
                           ),
                           session.legacy
                             ? h(
                                 'span',
-                                { style: { ...STYLES.badge, ...STYLES.badgeLegacy } },
+                                { className: styles.badge + ' ' + styles.badgeLegacy },
                                 session.storedVersion > 0
                                   ? tr('panel.legacyBadge', { version: session.storedVersion })
                                   : tr('panel.legacyBadgePlain'),
                               )
                             : null,
                         ),
-                        h('span', { style: STYLES.rowMeta, title: session.id }, metaText),
+                        h('span', { className: styles.rowMeta, title: session.id }, metaText),
                       ),
                     ),
                   ),
                   h(
                     'span',
-                    { style: STYLES.rowActions },
+                    { className: styles.rowActions },
                     session.legacy
                       ? h(
                           'button',
@@ -2476,18 +2274,18 @@ window.__ModuleLoader__.load({
 
       const noticeCard = notice === null ? null : h(
         'div',
-        { style: STYLES.notice(noticeTone), role: notice.tone === 'error' ? 'alert' : 'status', 'aria-live': 'polite' },
+        { className: styles.notice, style: { borderLeftColor: noticeTone }, role: notice.tone === 'error' ? 'alert' : 'status', 'aria-live': 'polite' },
         h(
           'div',
-          { style: { display: 'flex', alignItems: 'center', gap: 8 } },
-          h('span', { style: { ...STYLES.noticeTitle, flex: '1 1 auto' } }, notice.title),
+          { className: styles.noticeHeader },
+          h('span', { className: styles.noticeTitle, style: { flex: '1 1 auto' } }, notice.title),
           h(
             'button',
             { type: 'button', style: { ...buttonStyle('ghost', false), height: 24, padding: '0 8px' }, onClick: () => setNotice(null), 'aria-label': tr('panel.dismiss') },
             '×',
           ),
         ),
-        notice.lines.map((line, index) => h('span', { key: `${index}-${line.slice(0, 12)}`, style: STYLES.noticeLine }, line)),
+        notice.lines.map((line, index) => h('span', { key: `${index}-${line.slice(0, 12)}`, className: styles.noticeLine }, line)),
       );
 
       const confirmDialog = confirmDelete === null ? null : confirmDialogNode({
@@ -2496,10 +2294,10 @@ window.__ModuleLoader__.load({
         body: tr('panel.confirmDeleteBody', { count: confirmDelete.sessionIds.length }),
         control: h(
           'div',
-          { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+          { className: styles.dialogParts },
           h(
             'label',
-            { style: STYLES.modeLabel },
+            { className: styles.modeLabel },
             h('input', {
               type: 'checkbox',
               checked: confirmDelete.removeFiles === true,
@@ -2510,13 +2308,13 @@ window.__ModuleLoader__.load({
               'span',
               null,
               tr('panel.removeFiles'),
-              h('span', { style: { ...STYLES.badge, marginLeft: 6, color: T.warn, border: `1px solid ${T.border}` } }, tr('panel.experimental')),
-              h('span', { style: STYLES.modeHint }, tr('panel.removeFilesHint')),
+              h('span', { className: styles.badge, style: { marginLeft: 6, color: T.warn, border: `1px solid ${T.border}` } }, tr('panel.experimental')),
+              h('span', { className: styles.modeHint }, tr('panel.removeFilesHint')),
             ),
           ),
           h(
             'label',
-            { style: { ...STYLES.modeLabel, color: T.error } },
+            { className: styles.modeLabel, style: { color: T.error } },
             h('input', {
               type: 'checkbox',
               checked: confirmDelete.permanent === true,
@@ -2527,7 +2325,7 @@ window.__ModuleLoader__.load({
               'span',
               null,
               tr('panel.permanentDelete'),
-              h('span', { style: { ...STYLES.modeHint, color: T.error } }, tr('panel.permanentRisk')),
+              h('span', { className: styles.modeHint, style: { color: T.error } }, tr('panel.permanentRisk')),
             ),
           ),
         ),
@@ -2651,10 +2449,10 @@ window.__ModuleLoader__.load({
 
       return h(
         'div',
-        { style: STYLES.page },
+        { className: styles.page },
         h(
           'div',
-          { style: STYLES.content },
+          { className: styles.content },
           header,
           statusFilterRow,
           searchRow,
@@ -2664,7 +2462,7 @@ window.__ModuleLoader__.load({
           shareCard,
           noticeCard,
           body,
-          h('p', { style: STYLES.footnote }, tr('panel.importHint')),
+          h('p', { className: styles.footnote }, tr('panel.importHint')),
         ),
         confirmDialog,
         filesDialog,
@@ -2940,6 +2738,6 @@ window.__ModuleLoader__.load({
     }
     // #endregion
 
-    return { inject, apply, name: NS };
-  },
-});
+export { inject, apply };
+export const name = NS;
+
