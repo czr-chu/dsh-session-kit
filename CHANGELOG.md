@@ -4,6 +4,19 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-11-07
+
+### Fixed
+
+- The CSS Modules build no longer embeds the build machine's absolute path in
+  the client bundle or source map; the style tag id is package-relative.
+- Added a committed-artifact regression test for the closure-factory handoff,
+  CSS injection, source map and `./client` export.
+
+### Changed
+
+- Test totals: 224 tests (219 pass plain, 5 guarded skips).
+
 ## [0.9.0] - 2026-11-07
 
 Official client build pipeline. No host API or user-facing feature changes.

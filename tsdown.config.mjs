@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { dirname, relative, resolve, sep } from 'node:path';
 import { defineConfig } from 'tsdown';
 import { transform } from 'lightningcss';
 
@@ -18,11 +18,13 @@ function cssModules() {
     resolveId(source, importer) {
       if (!source.endsWith('.module.css')) return null;
       const base = importer === undefined ? process.cwd() : dirname(importer);
-      return CSS_VIRTUAL_PREFIX + resolve(base, source) + CSS_VIRTUAL_SUFFIX;
+      const relativeId = relative(process.cwd(), resolve(base, source)).split(sep).join('/');
+      return CSS_VIRTUAL_PREFIX + relativeId + CSS_VIRTUAL_SUFFIX;
     },
     async load(virtualId) {
       if (!virtualId.startsWith(CSS_VIRTUAL_PREFIX)) return null;
-      const fileId = virtualId.slice(CSS_VIRTUAL_PREFIX.length, -CSS_VIRTUAL_SUFFIX.length);
+      const relativeId = virtualId.slice(CSS_VIRTUAL_PREFIX.length, -CSS_VIRTUAL_SUFFIX.length);
+      const fileId = resolve(process.cwd(), relativeId);
       this.addWatchFile(fileId);
       const source = await readFile(fileId);
       const result = transform({
@@ -38,7 +40,7 @@ function cssModules() {
       const css = JSON.stringify(result.code.toString());
       return [
         `const css = ${css};`,
-        `const tagId = ${JSON.stringify(PACKAGE_NAME + '/' + fileId)};`,
+        `const tagId = ${JSON.stringify(PACKAGE_NAME + '/' + relativeId)};`,
         'if (typeof document !== \'undefined\' && document.querySelector(\'style[data-plugin-css=\' + JSON.stringify(tagId) + \']\') === null) {',
         "  const tag = document.createElement('style');",
         `  tag.dataset.plugin = ${JSON.stringify(PACKAGE_NAME)};`,

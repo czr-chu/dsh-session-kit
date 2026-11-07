@@ -2,7 +2,7 @@
 
 **Session manager, backup, and migration toolkit for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).**
 
-Version **0.9.0** · public beta · [中文说明](README.zh.md)
+Version **0.9.1** · public beta · [中文说明](README.zh.md)
 
 dsh-session-kit adds a **Session manager** panel and a <code>session_kit</code> agent
 tool to DeepSeek Harness (DSH). It lists and inspects conversations, exports them
@@ -175,7 +175,7 @@ a Web or Desktop deployment; a headless deployment still gets the
 
 ~~~bash
 # from GitHub (recommended: pin a release tag)
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.9.0
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.9.1
 
 # from a local checkout (iterating on the plugin)
 dsh plugin --profile web add ~/src/dsh-session-kit
@@ -352,7 +352,7 @@ npm test
 node --import tsx/esm --test dsh-session-kit/test/*.test.mjs
 ~~~
 
-Expected result: **222 tests**, with 5 guarded real-backend cases skipped under
+Expected result: **224 tests**, with 5 guarded real-backend cases skipped under
 plain <code>node --test</code> (they run when the DSH checkout is available
 through <code>tsx</code>). The suite covers session listing/reading, compact
 building, workspace file collection and sensitive exclusions, archive
