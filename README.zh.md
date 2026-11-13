@@ -1,5 +1,7 @@
 # dsh-session-kit
 
+<img src="https://raw.githubusercontent.com/czr-chu/dsh-session-kit/main/assets/icon-512.png" width="72" align="right" alt="dsh-session-kit icon">
+
 **DeepSeek Harness 的会话管理、备份与迁移工具包。**
 Version **0.12.0** · 公开 beta · [English](README.md)
 
@@ -390,7 +392,7 @@ compact 构建、工作区文件收集与敏感排除、归档构建/导入（�
 归档/回收站/永久删除语义、工作区迁移、多工作区备份、官方格式迁移，以及分享链接的规范化/构建/导入
 （可用时对真实本地 JSONL 后端验证）。
 
-项目文档：[插件规范符合性](docs/plugin-conformance.md) · [工作区备份](docs/workspace-backup.md) · [隐私审计](docs/privacy.md) · [架构](docs/architecture.md) · [安装与升级](docs/install.md) ·
+项目文档：[插件规范符合性](docs/plugin-conformance.md) · [工作区备份](docs/workspace-backup.md) · [隐私审计](docs/privacy.md) · [架构](docs/architecture.md) · [安装与升级](docs/install.md) · [市场上架](docs/market-listing.md) ·
 [安全](docs/security.md) · [变更文档规范](docs/change-documentation.md) · [决策记录](docs/decisions/README.md)。
 
 ## 贡献与安全报告

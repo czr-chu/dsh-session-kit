@@ -13,6 +13,7 @@
   },
   "files": [
     "lib",
+    "assets",
     "index.js",
     "locale/*.json",
     "cordis.patch.yml",

@@ -1,5 +1,7 @@
 # dsh-session-kit
 
+<img src="https://raw.githubusercontent.com/czr-chu/dsh-session-kit/main/assets/icon-512.png" width="72" align="right" alt="dsh-session-kit icon">
+
 **Session manager, backup, and migration toolkit for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).**
 
 Version **0.12.0** · public beta · [中文说明](README.zh.md)
@@ -490,7 +492,8 @@ Project docs: [architecture](docs/architecture.md) ·
 [plugin conformance](docs/plugin-conformance.md) · [workspace backup](docs/workspace-backup.md) ·
 [self-assessment](docs/self-assessment.md) · [privacy audit](docs/privacy.md) ·
 [feature matrix](docs/feature-matrix.md) · [roadmap](docs/roadmap.md) ·
-[change documentation](docs/change-documentation.md) · [decision records](docs/decisions/README.md).
+[change documentation](docs/change-documentation.md) · [decision records](docs/decisions/README.md) ·
+[market listing](docs/market-listing.md).
 
 ## Contributing and reporting security issues
 
