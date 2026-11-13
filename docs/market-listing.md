@@ -12,6 +12,7 @@ catalog. Listing does **not** require an npm package: a GitHub-only entry may om
 - Manifest: `dsh.bundle.patch` points at `cordis.patch.yml`
 - Recommended install: `dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.12.0`
 - npm: **not published** under this name (see below)
+- Catalog PR: <https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/15048> (open)
 
 ## Submit the catalog entry
 
