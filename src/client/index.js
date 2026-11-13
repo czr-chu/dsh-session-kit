@@ -72,6 +72,10 @@ const zh = {
   'panel.workspaceBackupNoTarget': '请选择要备份的工作区。',
   'panel.workspaceBackupSaved': '已下载：{filename}',
   'panel.workspaceBackupNote': '包含该工作区的主会话与整个文件树；敏感文件与依赖/构建目录会被跳过。',
+  'panel.workspaceBackupSelectAll': '全选工作区',
+  'panel.workspaceBackupSelected': '已选择 {count} 个工作区',
+  'panel.workspaceBackupPartial': '已导出 {done} 个工作区，{failed} 个失败',
+  'panel.workspaceBackupFailedLine': '{workspace}：{message}',
   'panel.importWorkspaceTarget': '目标工作区',
   'panel.importWorkspaceDefault': '默认目录 / 当前工作区',
   'panel.loading': '正在加载会话列表…',
@@ -82,6 +86,14 @@ const zh = {
   'panel.selectAll': '全选',
   'panel.selectNone': '取消全选',
   'panel.selectedCount': '已选 {selected} / 共 {total}',
+  'panel.selectedHidden': '其中 {count} 个不在当前筛选结果中',
+  'panel.sortBy': '排序',
+  'panel.sortRecent': '最近更新',
+  'panel.sortCreated': '创建时间',
+  'panel.sortTitle': '标题',
+  'panel.sortPath': '目录',
+  'panel.loadMoreSessions': '显示更多（已显示 {shown}/{total}）',
+  'panel.shownSessions': '已显示 {shown}/{total} 个会话',
   'panel.groupUngrouped': '未分组',
   'panel.untitledWorkspace': '未命名工作区',
   'panel.groupCount': '{count} 个会话',
@@ -93,8 +105,55 @@ const zh = {
   'panel.emptyFilter': '没有匹配搜索条件的会话。',
   'panel.modeCompact': '精简',
   'panel.modeCompactHint': '仅保留主对话（用户消息与最终回答），体积更小。',
+  'panel.modeCompressed': '压缩',
+  'panel.modeCompressedHint': '保留全部事件与工具调用结构，去掉流式增量并截断超长输出。',
   'panel.modeFull': '全量',
   'panel.modeFullHint': '完整事件日志，可完整恢复工具调用与过程。',
+  'panel.trashSection': '回收站',
+  'panel.trashHint': '删除的会话先移入回收站；可把会话目录恢复原位，也可确认后永久清理。',
+  'panel.trashReload': '刷新回收站',
+  'panel.trashLoading': '正在读取回收站…',
+  'panel.trashEmpty': '回收站是空的。',
+  'panel.trashLoadFailed': '回收站读取失败',
+  'panel.trashSummary': '{count} 个操作，共 {size}',
+  'panel.trashOpMeta': '{sessions} 个会话 · {size}',
+  'panel.trashRestorable': '可恢复',
+  'panel.trashNotRestorable': '缺少清单',
+  'panel.trashArchived': '含归档 {count}',
+  'panel.trashPinned': '含置顶 {count}',
+  'panel.trashRestore': '恢复',
+  'panel.trashRestoring': '正在恢复…',
+  'panel.trashRestoredTitle': '已从回收站恢复',
+  'panel.trashRestoredCount': '已恢复 {count} 个会话',
+  'panel.trashRestoredLine': '{id} → {path}',
+  'panel.trashSkippedLine': '跳过 {id}：{reason}',
+  'panel.trashRestoreFailed': '恢复失败',
+  'panel.trashPurge': '永久清理',
+  'panel.trashPurgeAll': '全部清理',
+  'panel.trashPurgeTitle': '永久清理回收站',
+  'panel.trashPurgeBody': '将永久删除 {count} 个操作（{size}），其中的会话目录无法恢复。',
+  'panel.trashPurgeConfirm': '永久清理',
+  'panel.trashPurging': '正在清理…',
+  'panel.trashPurgedTitle': '回收站已清理',
+  'panel.trashPurgedLine': '已删除 {count} 个操作，释放 {size}',
+  'panel.trashPurgeFailed': '清理失败',
+  'panel.trashReasonTargetExists': '目标目录已存在',
+  'panel.trashReasonMissing': '源目录缺失',
+  'panel.trashReasonNoOriginal': '清单缺少原位置',
+  'panel.trashReasonUnsafe': '路径校验失败',
+  'panel.trashReasonMoveFailed': '移动失败',
+  'panel.trashReasonUnknown': '未知原因',
+  'panel.attachmentSection': '附件引用检查',
+  'panel.attachmentHint': '只读扫描最近 300 个会话，报告日志里引用但主机文件已不存在的附件；不会删除任何内容。',
+  'panel.attachmentCheck': '开始检查',
+  'panel.attachmentChecking': '检查中…',
+  'panel.attachmentDone': '附件引用检查完成',
+  'panel.attachmentClean': '没有发现无法解析的附件引用。',
+  'panel.attachmentSummary':
+    '扫描 {scanned}/{total} 个会话，共 {refs} 个引用；缺失 {missing} 个，无法验证 {unverifiable} 个',
+  'panel.attachmentMissingLine': '会话 {session}：{kind} {name}（缺失）',
+  'panel.attachmentKindImage': '图片',
+  'panel.attachmentKindFile': '文件',
   'panel.attachments': '包含附件',
   'panel.attachmentsHint': '导出图片与文件附件。',
   'panel.exportOptions': '导出选项',
@@ -105,6 +164,8 @@ const zh = {
   'panel.subagentsHint': '一并打包所选会话的子代理日志（仅备份；导入时默认跳过）。',
   'panel.restoreWorkspaceFiles': '恢复工作区文件到当前工作区',
   'panel.restoreWorkspaceFilesHint': '解压到当前工作区；同名文件不覆盖，冲突会列在结果提示里。',
+  'panel.skipDuplicates': '跳过本机已存在的原会话',
+  'panel.skipDuplicatesHint': '按归档中的原会话 id 判断；勾选后这些会话不再导入副本，未勾选只给警告。',
   'panel.workspaceRestored': '已恢复工作区文件 {count} 个（{size}）',
   'panel.workspaceSkipped': '跳过 {count} 个工作区文件',
   'panel.workspaceSkipLine': '跳过 {path}：{reason}',
@@ -134,6 +195,31 @@ const zh = {
   'panel.migrateNote': '迁移由 DSH 官方迁移链执行，不会删除旧日志。',
   'panel.migrateItem': '{title}（v{version}）',
   'panel.migrateItemPlain': '{title}（旧格式）',
+  'panel.moveToWorkspace': '迁移到工作区',
+  'panel.moveTitle': '迁移会话到工作区',
+  'panel.moveBody':
+    '把 {count} 个会话复制到目标工作区（生成新会话 id），读回验证后把源会话移入回收站。活动会话、子代理转录和旧格式会话会被跳过。',
+  'panel.moveTargetLabel': '目标工作区',
+  'panel.moveTargetPlaceholder': '选择目标工作区',
+  'panel.moveNoWorkspaces': '当前没有可选择的工作区。',
+  'panel.moveConfirm': '确认迁移',
+  'panel.moveBusy': '迁移中…',
+  'panel.moveNote':
+    '迁移不会丢失对话：新副本写入并读回验证后，源会话才移入回收站；旧 id 的链接会失效，源会话可从回收站恢复。',
+  'panel.moveDone': '已迁移 {count} 个会话',
+  'panel.movePartial': '迁移 {count} 个，跳过 {skipped} 个',
+  'panel.moveSourceTrashed': '{source} → {target}（源会话已移入回收站）',
+  'panel.moveSourceKept': '{source} → {target}（源会话未移入回收站，见警告）',
+  'panel.moveSkipLine': '跳过 {id}：{reason}',
+  'panel.moveFailed': '迁移失败',
+  'panel.tooManyMove': '一次最多迁移 {max} 个会话',
+  'panel.moveReasonActive': '活动会话',
+  'panel.moveReasonSubagent': '子代理转录',
+  'panel.moveReasonFormat': '旧格式',
+  'panel.moveReasonRead': '读取失败',
+  'panel.moveReasonWrite': '写入失败',
+  'panel.moveReasonVerify': '读回验证失败',
+  'panel.moveReasonUnknown': '未知原因',
   'panel.confirmMigrate': '确认升级',
   'panel.confirmMore': '…另有 {count} 个会话',
   'panel.removeFiles': '同时移走该会话涉及的文件（移到回收站，实验性）',
@@ -290,6 +376,10 @@ const en = {
   'panel.workspaceBackupSaved': 'Downloaded: {filename}',
   'panel.workspaceBackupNote':
     'Includes the workspace main sessions and the whole tree; sensitive files and dependency or build directories are skipped.',
+  'panel.workspaceBackupSelectAll': 'Select all workspaces',
+  'panel.workspaceBackupSelected': '{count} workspace(s) selected',
+  'panel.workspaceBackupPartial': 'Exported {done} workspace(s), {failed} failed',
+  'panel.workspaceBackupFailedLine': '{workspace}: {message}',
   'panel.importWorkspaceTarget': 'Target workspace',
   'panel.importWorkspaceDefault': 'Default directory / current workspace',
   'panel.loading': 'Loading sessions…',
@@ -300,6 +390,14 @@ const en = {
   'panel.selectAll': 'Select all',
   'panel.selectNone': 'Select none',
   'panel.selectedCount': '{selected} selected of {total}',
+  'panel.selectedHidden': '{count} selected item(s) are outside the current filter',
+  'panel.sortBy': 'Sort',
+  'panel.sortRecent': 'Recently updated',
+  'panel.sortCreated': 'Created',
+  'panel.sortTitle': 'Title',
+  'panel.sortPath': 'Directory',
+  'panel.loadMoreSessions': 'Show more ({shown}/{total} shown)',
+  'panel.shownSessions': '{shown}/{total} sessions shown',
   'panel.groupUngrouped': 'Ungrouped',
   'panel.untitledWorkspace': 'Untitled workspace',
   'panel.groupCount': '{count} sessions',
@@ -311,8 +409,58 @@ const en = {
   'panel.emptyFilter': 'No sessions match this search.',
   'panel.modeCompact': 'Compact',
   'panel.modeCompactHint': 'Main conversation only (user messages and final answers); smaller archives.',
+  'panel.modeCompressed': 'Compressed',
+  'panel.modeCompressedHint': 'Keeps every event and tool call, drops streamed deltas and truncates oversized output.',
   'panel.modeFull': 'Full',
   'panel.modeFullHint': 'Complete event log; keeps tool calls and process history.',
+  'panel.trashSection': 'Trash',
+  'panel.trashHint':
+    'Deleted sessions move to the trash first; restore the session directories or purge after confirmation.',
+  'panel.trashReload': 'Refresh trash',
+  'panel.trashLoading': 'Reading the trash…',
+  'panel.trashEmpty': 'The trash is empty.',
+  'panel.trashLoadFailed': 'Could not read the trash',
+  'panel.trashSummary': '{count} operations, {size}',
+  'panel.trashOpMeta': '{sessions} sessions · {size}',
+  'panel.trashRestorable': 'Restorable',
+  'panel.trashNotRestorable': 'Manifest missing',
+  'panel.trashArchived': 'archived {count}',
+  'panel.trashPinned': 'pinned {count}',
+  'panel.trashRestore': 'Restore',
+  'panel.trashRestoring': 'Restoring…',
+  'panel.trashRestoredTitle': 'Restored from trash',
+  'panel.trashRestoredCount': 'Restored {count} sessions',
+  'panel.trashRestoredLine': '{id} → {path}',
+  'panel.trashSkippedLine': 'Skipped {id}: {reason}',
+  'panel.trashRestoreFailed': 'Restore failed',
+  'panel.trashPurge': 'Purge',
+  'panel.trashPurgeAll': 'Purge all',
+  'panel.trashPurgeTitle': 'Permanently purge the trash',
+  'panel.trashPurgeBody':
+    'Permanently deletes {count} operations ({size}); their session directories cannot be recovered.',
+  'panel.trashPurgeConfirm': 'Purge permanently',
+  'panel.trashPurging': 'Purging…',
+  'panel.trashPurgedTitle': 'Trash purged',
+  'panel.trashPurgedLine': 'Removed {count} operations, freed {size}',
+  'panel.trashPurgeFailed': 'Purge failed',
+  'panel.trashReasonTargetExists': 'target directory already exists',
+  'panel.trashReasonMissing': 'source directory missing',
+  'panel.trashReasonNoOriginal': 'manifest lacks the original location',
+  'panel.trashReasonUnsafe': 'path validation failed',
+  'panel.trashReasonMoveFailed': 'move failed',
+  'panel.trashReasonUnknown': 'unknown reason',
+  'panel.attachmentSection': 'Attachment reference check',
+  'panel.attachmentHint':
+    'Read-only scan of up to 300 recent sessions; reports references whose host file is gone. Nothing is deleted.',
+  'panel.attachmentCheck': 'Run check',
+  'panel.attachmentChecking': 'Checking…',
+  'panel.attachmentDone': 'Attachment reference check finished',
+  'panel.attachmentClean': 'No unresolved attachment references were found.',
+  'panel.attachmentSummary':
+    'Scanned {scanned}/{total} sessions, {refs} references; {missing} missing, {unverifiable} unverifiable',
+  'panel.attachmentMissingLine': 'Session {session}: {kind} {name} (missing)',
+  'panel.attachmentKindImage': 'image',
+  'panel.attachmentKindFile': 'file',
   'panel.attachments': 'Include attachments',
   'panel.attachmentsHint': 'Pack referenced images and files.',
   'panel.exportOptions': 'Export options',
@@ -323,6 +471,9 @@ const en = {
   'panel.subagents': 'Include subagent sessions',
   'panel.subagentsHint': 'Pack subagent logs of the selected sessions (backup only; import skips them).',
   'panel.restoreWorkspaceFiles': 'Restore workspace files into the current workspace',
+  'panel.skipDuplicates': 'Skip sessions that already exist locally',
+  'panel.skipDuplicatesHint':
+    'Compares against the source session id in the archive; when unchecked, duplicates are only reported as warnings.',
   'panel.restoreWorkspaceFilesHint':
     'Extract into the current workspace; existing files are never overwritten and conflicts are listed.',
   'panel.workspaceRestored': 'Restored {count} workspace files ({size})',
@@ -354,6 +505,31 @@ const en = {
   'panel.migrateNote': "Migration runs through DSH's official migration chain and never deletes the old logs.",
   'panel.migrateItem': '{title} (v{version})',
   'panel.migrateItemPlain': '{title} (legacy format)',
+  'panel.moveToWorkspace': 'Move to workspace',
+  'panel.moveTitle': 'Move sessions to a workspace',
+  'panel.moveBody':
+    'Copy {count} session(s) into the target workspace under new ids, verify each copy, then move the sources to the trash. Live sessions, subagent transcripts and older-format logs are skipped.',
+  'panel.moveTargetLabel': 'Destination workspace',
+  'panel.moveTargetPlaceholder': 'Choose a destination workspace',
+  'panel.moveNoWorkspaces': 'No workspaces are available.',
+  'panel.moveConfirm': 'Move',
+  'panel.moveBusy': 'Moving…',
+  'panel.moveNote':
+    'A move keeps the conversation: the source is trashed only after the new copy reads back, old-id links stop working, and the source can be restored from the trash.',
+  'panel.moveDone': 'Moved {count} session(s)',
+  'panel.movePartial': 'Moved {count}, skipped {skipped}',
+  'panel.moveSourceTrashed': '{source} → {target} (source moved to trash)',
+  'panel.moveSourceKept': '{source} → {target} (source kept in place; see warnings)',
+  'panel.moveSkipLine': 'Skipped {id}: {reason}',
+  'panel.moveFailed': 'Move failed',
+  'panel.tooManyMove': 'At most {max} sessions can be moved at once',
+  'panel.moveReasonActive': 'live session',
+  'panel.moveReasonSubagent': 'subagent transcript',
+  'panel.moveReasonFormat': 'legacy format',
+  'panel.moveReasonRead': 'read failed',
+  'panel.moveReasonWrite': 'write failed',
+  'panel.moveReasonVerify': 'read-back verification failed',
+  'panel.moveReasonUnknown': 'unknown reason',
   'panel.confirmMigrate': 'Upgrade',
   'panel.confirmMore': '…and {count} more sessions',
   'panel.removeFiles': 'Also move related files (to trash, experimental)',
@@ -908,8 +1084,27 @@ function statusCounts(catalog) {
   return { all: catalog.sessions.length, active: catalog.sessions.length - archived, archived }
 }
 
+/** Allowed session sort keys (client-side; the Host returns the full catalog). */
+const SESSION_SORTS = new Set(['recent', 'created', 'title', 'path'])
+const GROUP_PAGE_SIZE = 25
+
+/** Compare two listed sessions for the selected sort key. */
+function compareSessions(left, right, sortBy) {
+  if (sortBy === 'title') {
+    const delta = left.title.localeCompare(right.title)
+    if (delta !== 0) return delta
+  } else if (sortBy === 'path') {
+    const delta = left.cwd.localeCompare(right.cwd)
+    if (delta !== 0) return delta
+  } else if (sortBy === 'created') {
+    const delta = (right.createdAt ?? 0) - (left.createdAt ?? 0)
+    if (delta !== 0) return delta
+  }
+  return recentKey(right) - recentKey(left)
+}
+
 /** Group sessions by workspace for rendering; empty groups are dropped. */
-function buildGroups(catalog, query, statusFilter, tr) {
+function buildGroups(catalog, query, statusFilter, tr, sortBy = 'recent') {
   const needle = query.trim().toLowerCase()
   const groups = []
   const byKey = new Map()
@@ -961,8 +1156,16 @@ function buildGroups(catalog, query, statusFilter, tr) {
     .filter((group) => group.sessions.length > 0)
     .map((group) => ({
       ...group,
-      sessions: group.sessions.slice().sort((left, right) => recentKey(right) - recentKey(left)),
+      sessions: group.sessions.slice().sort((left, right) => compareSessions(left, right, sortBy)),
     }))
+}
+
+/** Count selected ids that the current filter no longer shows. */
+function selectedCountOfHidden(selected, visible) {
+  const shown = new Set(visible)
+  let count = 0
+  for (const id of selected) if (!shown.has(id)) count += 1
+  return count
 }
 
 /** Every session id currently visible after filtering. */
@@ -1028,6 +1231,26 @@ function formatBytes(value) {
     unit += 1
   }
   return `${amount >= 100 ? Math.round(amount) : amount.toFixed(1)} ${units[unit]}`
+}
+
+/** `YYYY-MM-DD HH:mm` in local time, or the raw value when unparsable. */
+function formatDateTime(value) {
+  if (typeof value !== 'string' || value === '') return ''
+  const timestamp = Date.parse(value)
+  if (!Number.isFinite(timestamp)) return value
+  const date = new Date(timestamp)
+  const pad = (part) => String(part).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+/** Translate one Host skip reason into the dictionary wording. */
+function trashReasonOf(reason, tr) {
+  if (reason === 'target-exists') return tr('panel.trashReasonTargetExists')
+  if (reason === 'missing') return tr('panel.trashReasonMissing')
+  if (reason === 'no-original-location') return tr('panel.trashReasonNoOriginal')
+  if (reason === 'unsafe-location') return tr('panel.trashReasonUnsafe')
+  if (reason === 'move-failed') return tr('panel.trashReasonMoveFailed')
+  return tr('panel.trashReasonUnknown')
 }
 
 /** Deduplicate one notice line list and cap it so a noisy archive stays readable. */
@@ -1114,6 +1337,23 @@ function linesNode(lines) {
 }
 
 /** One modal confirmation surface shared by destructive and migration actions. */
+/** Keep Tab / Shift+Tab inside an open dialog. */
+function trapDialogFocus(event, container) {
+  const focusable = container.querySelectorAll(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )
+  if (focusable.length === 0) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
 function confirmDialogNode(options) {
   const {
     tr,
@@ -1146,6 +1386,7 @@ function confirmDialogNode(options) {
         'aria-label': title,
         onKeyDown: (event) => {
           if (event.key === 'Escape' && !busy) onCancel()
+          else if (event.key === 'Tab') trapDialogFocus(event, event.currentTarget)
         },
       },
       h('h2', { className: danger === true ? styles.dialogTitleDanger : styles.dialogTitle }, title),
@@ -1200,7 +1441,9 @@ function confirmDialogNode(options) {
  * @param {{t: Function, loadCatalog: Function, exportSelection: Function,
  *          exportWorkspace: Function, importSelection: Function, importShare: Function,
  *          manageSessions: Function, previewSessionFiles: Function,
- *          loadSessionDetails: Function, migrateSessions: Function,
+ *          loadSessionDetails: Function, migrateSessions: Function, moveSessions: Function,
+ *          loadTrash: Function, restoreTrash: Function, purgeTrash: Function,
+ *          checkAttachments: Function,
  *          refreshSessions: Function, targetOf: Function}} props
  *   slot translator and the Host operations injected by `apply`.
  */
@@ -1216,10 +1459,15 @@ function SessionKitPanel(props) {
   const [includeWorkspaceFiles, setIncludeWorkspaceFiles] = React.useState(true)
   const [includeSubagents, setIncludeSubagents] = React.useState(false)
   const [restoreWorkspaceFiles, setRestoreWorkspaceFiles] = React.useState(true)
+  const [skipDuplicates, setSkipDuplicates] = React.useState(false)
   const [statusFilter, setStatusFilter] = React.useState('all')
+  const [sortBy, setSortBy] = React.useState('recent')
+  const [groupLimit, setGroupLimit] = React.useState(GROUP_PAGE_SIZE)
   const [confirmDelete, setConfirmDelete] = React.useState(null)
   const [confirmFiles, setConfirmFiles] = React.useState(null)
   const [confirmMigrate, setConfirmMigrate] = React.useState(null)
+  const [moveRequest, setMoveRequest] = React.useState(null)
+  const [moveTarget, setMoveTarget] = React.useState('')
   const [details, setDetails] = React.useState({})
   const [openDetail, setOpenDetail] = React.useState(null)
   const [shareInput, setShareInput] = React.useState('')
@@ -1228,10 +1476,14 @@ function SessionKitPanel(props) {
   const [shareBusy, setShareBusy] = React.useState(false)
   const [shareResult, setShareResult] = React.useState(null)
   const [importTab, setImportTab] = React.useState('archive')
-  const [workspaceBackupId, setWorkspaceBackupId] = React.useState('')
+  const [workspaceBackupIds, setWorkspaceBackupIds] = React.useState(() => new Set())
   const [importWorkspaceId, setImportWorkspaceId] = React.useState('')
   const [busy, setBusy] = React.useState('')
   const [notice, setNotice] = React.useState(null)
+  const [trash, setTrash] = React.useState({ phase: 'idle', operations: [], warnings: [], trashRoot: '' })
+  const [trashBusy, setTrashBusy] = React.useState('')
+  const [trashConfirm, setTrashConfirm] = React.useState(null)
+  const [attachmentBusy, setAttachmentBusy] = React.useState(false)
   const fileInputRef = React.useRef(null)
   const mountedRef = React.useRef(true)
 
@@ -1272,13 +1524,162 @@ function SessionKitPanel(props) {
     }
   }
 
+  async function reloadTrash() {
+    setTrash((previous) => ({ ...previous, phase: 'loading' }))
+    try {
+      const listed = await props.loadTrash()
+      if (!mountedRef.current) return
+      setTrash({
+        phase: 'ready',
+        operations: listed.operations,
+        warnings: listed.warnings,
+        trashRoot: listed.trashRoot,
+      })
+    } catch (error) {
+      if (!mountedRef.current) return
+      setTrash((previous) => ({ ...previous, phase: 'error' }))
+      setNotice({ tone: 'error', title: tr('panel.trashLoadFailed'), lines: [errorMessageOf(error, tr)] })
+    }
+  }
+
+  async function restoreTrashOp(operation) {
+    if (trashBusy !== '') return
+    setTrashBusy('restore:' + operation.operationId)
+    setNotice(null)
+    try {
+      const result = await props.restoreTrash(operation.operationId)
+      const lines = [
+        tr('panel.trashRestoredCount', { count: result.restored.length }),
+        ...result.restored.map((entry) =>
+          tr('panel.trashRestoredLine', { id: pickString(entry.id), path: pickString(entry.path) }),
+        ),
+        ...result.skipped.map((entry) =>
+          tr('panel.trashSkippedLine', {
+            id: pickString(entry.id),
+            reason: trashReasonOf(entry.reason, tr),
+          }),
+        ),
+        ...result.warnings,
+      ]
+      if (mountedRef.current) {
+        setNotice({
+          tone: result.skipped.length === 0 ? 'success' : 'warn',
+          title: tr('panel.trashRestoredTitle'),
+          lines: capNoticeLines(lines, tr),
+        })
+      }
+      await reloadTrash()
+      await reload({ quiet: true })
+    } catch (error) {
+      if (mountedRef.current) {
+        setNotice({ tone: 'error', title: tr('panel.trashRestoreFailed'), lines: [errorMessageOf(error, tr)] })
+      }
+    } finally {
+      if (mountedRef.current) setTrashBusy('')
+    }
+  }
+
+  function askTrashPurge(operations) {
+    if (busy !== '' || trashBusy !== '' || operations.length === 0) return
+    setTrashConfirm({
+      operationIds: operations.map((operation) => operation.operationId),
+      sessionCount: operations.reduce(
+        (sum, operation) => sum + (Number.isFinite(operation.sessionCount) ? operation.sessionCount : 0),
+        0,
+      ),
+      bytes: operations.reduce((sum, operation) => sum + (Number.isFinite(operation.bytes) ? operation.bytes : 0), 0),
+    })
+  }
+
+  async function confirmTrashPurgeAction() {
+    const pending = trashConfirm
+    if (pending === null || trashBusy !== '') return
+    setTrashBusy('purge')
+    try {
+      const result = await props.purgeTrash(pending.operationIds)
+      if (mountedRef.current) {
+        setTrashConfirm(null)
+        setNotice({
+          tone: 'success',
+          title: tr('panel.trashPurgedTitle'),
+          lines: capNoticeLines(
+            [
+              tr('panel.trashPurgedLine', {
+                count: result.removed.length,
+                size: formatBytes(result.freedBytes),
+              }),
+              ...result.warnings,
+            ],
+            tr,
+          ),
+        })
+      }
+      await reloadTrash()
+    } catch (error) {
+      if (mountedRef.current) {
+        setNotice({ tone: 'error', title: tr('panel.trashPurgeFailed'), lines: [errorMessageOf(error, tr)] })
+      }
+    } finally {
+      if (mountedRef.current) setTrashBusy('')
+    }
+  }
+
+  async function runAttachmentReport() {
+    if (attachmentBusy) return
+    setAttachmentBusy(true)
+    setNotice(null)
+    try {
+      const report = await props.checkAttachments()
+      const lines = [
+        tr('panel.attachmentSummary', {
+          scanned: report.scannedSessions,
+          total: report.sessionTotal,
+          refs: report.totalReferences,
+          missing: report.missing.length,
+          unverifiable: report.unverifiable,
+        }),
+      ]
+      if (report.missing.length === 0) lines.push(tr('panel.attachmentClean'))
+      for (const item of report.missing.slice(0, 20)) {
+        const kind = item.kind === 'image' ? tr('panel.attachmentKindImage') : tr('panel.attachmentKindFile')
+        lines.push(
+          tr('panel.attachmentMissingLine', {
+            session: pickString(item.sessionId),
+            kind,
+            name: pickString(item.name) || pickString(item.attachmentId) || '?',
+          }),
+        )
+      }
+      if (report.missing.length > 20) lines.push(`…+${report.missing.length - 20}`)
+      lines.push(...report.warnings)
+      if (mountedRef.current) {
+        setNotice({
+          tone: report.missing.length === 0 ? 'success' : 'warn',
+          title: tr('panel.attachmentDone'),
+          lines: capNoticeLines(lines, tr),
+        })
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        setNotice({ tone: 'error', title: tr('panel.attachmentDone'), lines: [errorMessageOf(error, tr)] })
+      }
+    } finally {
+      if (mountedRef.current) setAttachmentBusy(false)
+    }
+  }
+
   React.useEffect(() => {
+    setGroupLimit(GROUP_PAGE_SIZE)
+  }, [query, statusFilter, sortBy])
+
+  React.useEffect(() => {
+    void reloadTrash()
     void reload()
   }, [])
 
   const groups = React.useMemo(
-    () => buildGroups(catalog, query, statusFilter, tr),
-    [catalog, query, statusFilter, props.t],
+    () => buildGroups(catalog, query, statusFilter, tr, sortBy),
+    [catalog, query, statusFilter, sortBy, props.t],
   )
   const allVisible = React.useMemo(() => visibleIds(groups), [groups])
   const counts = React.useMemo(() => statusCounts(catalog), [catalog])
@@ -1288,9 +1689,17 @@ function SessionKitPanel(props) {
   )
   const total = catalog.sessions.length
   const matchedCount = allVisible.length
+  const shownGroups = React.useMemo(
+    () => groups.map((group) => ({ ...group, shown: group.sessions.slice(0, groupLimit) })),
+    [groups, groupLimit],
+  )
+  const shownCount = shownGroups.reduce((sum, group) => sum + group.shown.length, 0)
+  const truncated = shownCount < matchedCount
+  const hiddenSelected = selectedCountOfHidden(selected, allVisible)
   const selectedCount = selected.size
   const BATCH_LIMIT = 500
   const MIGRATE_LIMIT = 100
+  const MOVE_LIMIT = 100
 
   /** Load one session's storage detail and derived files on demand and cache them. */
   async function loadSessionDetail(sessionId) {
@@ -1399,7 +1808,8 @@ function SessionKitPanel(props) {
 
   async function runWorkspaceBackup() {
     if (busy !== '') return
-    if (workspaceBackupId === '') {
+    const workspaceIds = [...workspaceBackupIds]
+    if (workspaceIds.length === 0) {
       setNotice({
         tone: 'error',
         title: tr('panel.workspaceBackupFailed'),
@@ -1409,26 +1819,36 @@ function SessionKitPanel(props) {
     }
     setBusy('workspace-backup')
     setNotice(null)
+    const saved = []
+    const failed = []
     try {
-      const result = await props.exportWorkspace({
-        workspaceId: workspaceBackupId,
-        mode,
-        includeAttachments,
-      })
-      downloadBlob(result.blob, result.filename)
+      for (const workspaceId of workspaceIds) {
+        const workspace = catalog.workspaces.find((entry) => entry.workspaceId === workspaceId)
+        const label = workspace !== undefined && workspace.title !== '' ? workspace.title : workspaceId
+        try {
+          const result = await props.exportWorkspace({ workspaceId, mode, includeAttachments })
+          downloadBlob(result.blob, result.filename)
+          saved.push({ label, filename: result.filename, warnings: result.warnings })
+        } catch (error) {
+          failed.push({ label, message: errorMessageOf(error, tr) })
+        }
+        if (!mountedRef.current) return
+      }
+      const lines = []
+      for (const entry of saved) {
+        lines.push(tr('panel.workspaceBackupSaved', { filename: entry.filename }))
+        for (const warning of entry.warnings) lines.push(warning)
+      }
+      for (const entry of failed) {
+        lines.push(tr('panel.workspaceBackupFailedLine', { workspace: entry.label, message: entry.message }))
+      }
       setNotice({
-        tone: 'success',
-        title: tr('panel.workspaceBackupDone'),
-        lines: capNoticeLines(
-          [tr('panel.workspaceBackupSaved', { filename: result.filename }), ...result.warnings],
-          tr,
-        ),
-      })
-    } catch (error) {
-      setNotice({
-        tone: 'error',
-        title: tr('panel.workspaceBackupFailed'),
-        lines: [errorMessageOf(error, tr)],
+        tone: failed.length > 0 ? 'warn' : 'success',
+        title:
+          failed.length > 0
+            ? tr('panel.workspaceBackupPartial', { done: saved.length, failed: failed.length })
+            : tr('panel.workspaceBackupDone'),
+        lines: capNoticeLines(lines, tr),
       })
     } finally {
       if (mountedRef.current) setBusy('')
@@ -1452,6 +1872,7 @@ function SessionKitPanel(props) {
       const hints = {
         filename: typeof file.name === 'string' ? file.name : 'session-kit.zip',
         restoreWorkspaceFiles,
+        skipDuplicates,
         ...(importWorkspaceId !== ''
           ? {
               workspaceId: importWorkspaceId,
@@ -2042,6 +2463,95 @@ function SessionKitPanel(props) {
     requestMigrateConfirm(ids)
   }
 
+  /** Open the workspace-move dialog for the currently selected sessions. */
+  function requestMoveConfirm() {
+    const sessionIds = selectedForAction('move')
+    if (sessionIds.length === 0) {
+      setNotice({ tone: 'error', title: tr('panel.actionFailed'), lines: [tr('panel.noSelection')] })
+      return
+    }
+    if (sessionIds.length > MOVE_LIMIT) {
+      setNotice({
+        tone: 'error',
+        title: tr('panel.moveFailed'),
+        lines: [tr('panel.tooManyMove', { max: MOVE_LIMIT })],
+      })
+      return
+    }
+    if (catalog.workspaces.length === 0) {
+      setNotice({ tone: 'warn', title: tr('panel.moveTitle'), lines: [tr('panel.moveNoWorkspaces')] })
+      return
+    }
+    const byId = new Map(catalog.sessions.map((session) => [session.id, session]))
+    const items = sessionIds.map((id) => {
+      const session = byId.get(id)
+      return session !== undefined && session.title !== '' ? session.title : id
+    })
+    setMoveTarget(catalog.workspaces[0].id)
+    setMoveRequest({ sessionIds: [...sessionIds], items })
+  }
+
+  /** Localized reason for one skipped move entry. */
+  function moveReasonText(reason) {
+    const keys = {
+      active: 'panel.moveReasonActive',
+      subagent: 'panel.moveReasonSubagent',
+      'format-version': 'panel.moveReasonFormat',
+      'read-failed': 'panel.moveReasonRead',
+      'write-failed': 'panel.moveReasonWrite',
+      'verify-failed': 'panel.moveReasonVerify',
+    }
+    return tr(keys[reason] ?? 'panel.moveReasonUnknown')
+  }
+
+  /** Copy the selected sessions into a workspace, then refresh the catalog. */
+  async function runMove(sessionIds, workspaceId) {
+    if (busy !== '' || workspaceId === '') return
+    setBusy('move')
+    setNotice(null)
+    try {
+      const result = await props.moveSessions(workspaceId, sessionIds)
+      const moved = Array.isArray(result.moved) ? result.moved : []
+      const skipped = Array.isArray(result.skipped) ? result.skipped : []
+      await reload({ quiet: true })
+      await props.refreshSessions()
+      setSelected(new Set())
+      const lines = []
+      for (const entry of moved) {
+        lines.push(
+          tr(entry.sourceTrashed === true ? 'panel.moveSourceTrashed' : 'panel.moveSourceKept', {
+            source: String(entry.sourceId ?? ''),
+            target: String(entry.sessionId ?? ''),
+          }),
+        )
+      }
+      for (const entry of skipped) {
+        lines.push(
+          tr('panel.moveSkipLine', {
+            id: String(entry.id ?? ''),
+            reason: moveReasonText(entry.reason),
+          }),
+        )
+      }
+      for (const warning of Array.isArray(result.warnings) ? result.warnings : []) lines.push(String(warning))
+      setNotice({
+        tone: skipped.length > 0 ? 'warn' : 'success',
+        title:
+          skipped.length > 0
+            ? tr('panel.movePartial', { count: moved.length, skipped: skipped.length })
+            : tr('panel.moveDone', { count: moved.length }),
+        lines: capNoticeLines(lines, tr),
+      })
+    } catch (error) {
+      setNotice({ tone: 'error', title: tr('panel.moveFailed'), lines: [errorMessageOf(error, tr)] })
+    } finally {
+      if (mountedRef.current) {
+        setBusy('')
+        setMoveRequest(null)
+      }
+    }
+  }
+
   const busyExport = busy === 'export'
   const busyImport = busy === 'import'
   const busyBackup = busy === 'workspace-backup'
@@ -2110,7 +2620,7 @@ function SessionKitPanel(props) {
           : tr('panel.emptyFilter'),
     )
   } else {
-    body = groups.map((group) => {
+    body = shownGroups.map((group) => {
       const state = groupSelection(group, selected)
       return h(
         'div',
@@ -2142,7 +2652,7 @@ function SessionKitPanel(props) {
           group.path === '' ? null : h('span', { className: styles.groupPath, title: group.path }, group.path),
           h('span', { className: styles.groupCount }, tr('panel.groupCount', { count: group.sessions.length })),
         ),
-        group.sessions.map((session) => {
+        group.shown.map((session) => {
           const checked = selected.has(session.id)
           const archived = session.archived === true
           const rowBusy = busy !== ''
@@ -2406,6 +2916,24 @@ function SessionKitPanel(props) {
       className: styles.search,
     }),
     h(
+      'label',
+      { className: styles.sortField },
+      h('span', { className: styles.sortLabel }, tr('panel.sortBy')),
+      h(
+        'select',
+        {
+          className: styles.select,
+          value: sortBy,
+          onChange: (event) => setSortBy(SESSION_SORTS.has(event.target.value) ? event.target.value : 'recent'),
+          'aria-label': tr('panel.sortBy'),
+        },
+        h('option', { value: 'recent' }, tr('panel.sortRecent')),
+        h('option', { value: 'created' }, tr('panel.sortCreated')),
+        h('option', { value: 'title' }, tr('panel.sortTitle')),
+        h('option', { value: 'path' }, tr('panel.sortPath')),
+      ),
+    ),
+    h(
       'div',
       { className: styles.selectActions },
       h(
@@ -2442,6 +2970,9 @@ function SessionKitPanel(props) {
             'aria-label': tr('panel.selectedCount', { selected: selectedCount, total }),
           },
           h('span', { className: styles.selectionInfo }, tr('panel.selectedCount', { selected: selectedCount, total })),
+          hiddenSelected > 0
+            ? h('span', { className: styles.selectionHidden }, tr('panel.selectedHidden', { count: hiddenSelected }))
+            : null,
           h(
             'div',
             { className: styles.selectionActions },
@@ -2482,6 +3013,16 @@ function SessionKitPanel(props) {
               'button',
               {
                 type: 'button',
+                style: buttonStyle('secondary', busy !== ''),
+                disabled: busy !== '',
+                onClick: requestMoveConfirm,
+              },
+              tr('panel.moveToWorkspace'),
+            ),
+            h(
+              'button',
+              {
+                type: 'button',
                 style: buttonStyle('dangerGhost', busy !== ''),
                 disabled: busy !== '',
                 onClick: batchDelete,
@@ -2503,6 +3044,26 @@ function SessionKitPanel(props) {
     h('div', { className: styles.sessionsToolbar }, searchRow, statusFilterRow),
     selectionBar,
     body,
+    truncated
+      ? h(
+          'div',
+          { className: styles.loadMoreRow },
+          h(
+            'span',
+            { className: styles.loadMoreInfo },
+            tr('panel.shownSessions', { shown: shownCount, total: matchedCount }),
+          ),
+          h(
+            'button',
+            {
+              type: 'button',
+              style: buttonStyle('secondary', false),
+              onClick: () => setGroupLimit((current) => current + GROUP_PAGE_SIZE),
+            },
+            tr('panel.loadMoreSessions', { shown: shownCount, total: matchedCount }),
+          ),
+        )
+      : null,
   )
 
   const checkRow = (checked, disabled, onChange, label, hint) =>
@@ -2539,6 +3100,26 @@ function SessionKitPanel(props) {
         { className: styles.modeCardText },
         h('span', { className: styles.modeCardTitle }, tr('panel.modeCompact')),
         h('span', { className: styles.modeHint }, tr('panel.modeCompactHint')),
+      ),
+    ),
+    h(
+      'label',
+      {
+        className: mode === 'compressed' ? styles.modeCard + ' ' + styles.modeCardActive : styles.modeCard,
+      },
+      h('input', {
+        type: 'radio',
+        name: 'session-kit-export-mode',
+        value: 'compressed',
+        checked: mode === 'compressed',
+        disabled: busy !== '',
+        onChange: () => setMode('compressed'),
+      }),
+      h(
+        'span',
+        { className: styles.modeCardText },
+        h('span', { className: styles.modeCardTitle }, tr('panel.modeCompressed')),
+        h('span', { className: styles.modeHint }, tr('panel.modeCompressedHint')),
       ),
     ),
     h(
@@ -2628,15 +3209,17 @@ function SessionKitPanel(props) {
     ),
   )
 
-  const workspaceSelectOptions = catalog.workspaces
-    .filter((workspace) => workspace.workspaceId !== '')
-    .map((workspace) => {
-      const parts = []
-      if (workspace.title !== '') parts.push(workspace.title)
-      if (workspace.path !== '') parts.push(workspace.path)
-      parts.push(tr('panel.groupCount', { count: workspace.sessionIds.length }))
-      return h('option', { key: workspace.workspaceId, value: workspace.workspaceId }, parts.join(' · '))
+  const backupWorkspaces = catalog.workspaces.filter((workspace) => workspace.workspaceId !== '')
+  const backupAllSelected =
+    backupWorkspaces.length > 0 && backupWorkspaces.every((workspace) => workspaceBackupIds.has(workspace.workspaceId))
+  const toggleBackupWorkspace = (workspaceId, checked) => {
+    setWorkspaceBackupIds((previous) => {
+      const next = new Set(previous)
+      if (checked) next.add(workspaceId)
+      else next.delete(workspaceId)
+      return next
     })
+  }
 
   const workspaceBackupPanel = h(
     'div',
@@ -2650,23 +3233,41 @@ function SessionKitPanel(props) {
     h(
       'div',
       { className: styles.fieldColumn },
-      h(
-        'label',
-        { className: styles.fieldLabel, htmlFor: 'session-kit-workspace-backup' },
-        tr('panel.workspaceBackupSelect'),
-      ),
-      h(
-        'select',
-        {
-          id: 'session-kit-workspace-backup',
-          className: styles.select,
-          value: workspaceBackupId,
-          disabled: busy !== '',
-          onChange: (event) => setWorkspaceBackupId(event.target.value),
-        },
-        h('option', { value: '' }, tr('panel.workspaceBackupPlaceholder')),
-        ...workspaceSelectOptions,
-      ),
+      h('span', { className: styles.fieldLabel }, tr('panel.workspaceBackupSelect')),
+      backupWorkspaces.length === 0
+        ? h('p', { className: styles.toolCardStatus }, tr('panel.workspaceBackupNoTarget'))
+        : h(
+            'div',
+            { className: styles.optionList, role: 'group', 'aria-label': tr('panel.workspaceBackupSelect') },
+            checkRow(
+              backupAllSelected,
+              busy !== '',
+              (event) => {
+                setWorkspaceBackupIds(
+                  event.target.checked
+                    ? new Set(backupWorkspaces.map((workspace) => workspace.workspaceId))
+                    : new Set(),
+                )
+              },
+              tr('panel.workspaceBackupSelectAll'),
+              tr('panel.workspaceBackupSelected', { count: workspaceBackupIds.size }),
+            ),
+            ...backupWorkspaces.map((workspace) =>
+              h(
+                'div',
+                { key: workspace.workspaceId },
+                checkRow(
+                  workspaceBackupIds.has(workspace.workspaceId),
+                  busy !== '',
+                  (event) => toggleBackupWorkspace(workspace.workspaceId, event.target.checked),
+                  workspace.title !== '' ? workspace.title : workspace.workspaceId,
+                  [workspace.path, tr('panel.groupCount', { count: workspace.sessionIds.length })]
+                    .filter((part) => part !== '')
+                    .join(' · '),
+                ),
+              ),
+            ),
+          ),
     ),
     h('p', { className: styles.toolCardStatus }, tr('panel.workspaceBackupNote')),
     h(
@@ -2676,8 +3277,8 @@ function SessionKitPanel(props) {
         'button',
         {
           type: 'button',
-          style: buttonStyle('secondary', busy !== '' || workspaceBackupId === ''),
-          disabled: busy !== '' || workspaceBackupId === '',
+          style: buttonStyle('secondary', busy !== '' || workspaceBackupIds.size === 0),
+          disabled: busy !== '' || workspaceBackupIds.size === 0,
           onClick: () => {
             void runWorkspaceBackup()
           },
@@ -2697,6 +3298,13 @@ function SessionKitPanel(props) {
       (event) => setRestoreWorkspaceFiles(event.target.checked),
       tr('panel.restoreWorkspaceFiles'),
       tr('panel.restoreWorkspaceFilesHint'),
+    ),
+    checkRow(
+      skipDuplicates,
+      busy !== '',
+      (event) => setSkipDuplicates(event.target.checked),
+      tr('panel.skipDuplicates'),
+      tr('panel.skipDuplicatesHint'),
     ),
   )
 
@@ -2894,12 +3502,163 @@ function SessionKitPanel(props) {
     importTab === 'archive' ? archivePanel : sharePanel,
   )
 
+  const trashOperations = Array.isArray(trash.operations) ? trash.operations : []
+  const trashTotalBytes = trashOperations.reduce(
+    (sum, operation) => sum + (Number.isFinite(operation.bytes) ? operation.bytes : 0),
+    0,
+  )
+  const trashPanel = h(
+    'div',
+    { className: styles.toolCard },
+    h(
+      'div',
+      { className: styles.toolCardHeader },
+      h('h3', { className: styles.toolCardTitle }, tr('panel.trashSection')),
+      h('p', { className: styles.toolCardHint }, tr('panel.trashHint')),
+    ),
+    h(
+      'p',
+      { className: styles.toolCardStatus },
+      trashOperations.length === 0
+        ? trash.phase === 'loading'
+          ? tr('panel.trashLoading')
+          : tr('panel.trashEmpty')
+        : tr('panel.trashSummary', {
+            count: trashOperations.length,
+            size: formatBytes(trashTotalBytes),
+          }),
+    ),
+    ...(Array.isArray(trash.warnings) ? trash.warnings : []).map((warning, index) =>
+      h('p', { key: `trash-warning-${index}`, className: styles.toolCardStatus, style: { color: T.warn } }, warning),
+    ),
+    trashOperations.length === 0
+      ? null
+      : h(
+          'div',
+          { className: styles.trashList },
+          trashOperations.map((operation) => {
+            const archivedCount = Array.isArray(operation.archived) ? operation.archived.length : 0
+            const pinnedCount = Array.isArray(operation.pinned) ? operation.pinned.length : 0
+            const restoring = trashBusy === 'restore:' + operation.operationId
+            const restorable = operation.restorable === true
+            const meta = [
+              tr('panel.trashOpMeta', {
+                sessions: Number.isFinite(operation.sessionCount) ? operation.sessionCount : 0,
+                size: formatBytes(Number.isFinite(operation.bytes) ? operation.bytes : 0),
+              }),
+            ]
+            if (archivedCount > 0) meta.push(tr('panel.trashArchived', { count: archivedCount }))
+            if (pinnedCount > 0) meta.push(tr('panel.trashPinned', { count: pinnedCount }))
+            return h(
+              'div',
+              { key: operation.operationId, className: styles.trashOp },
+              h(
+                'div',
+                { className: styles.trashOpHead },
+                h(
+                  'span',
+                  { className: styles.trashOpTitle },
+                  formatDateTime(pickString(operation.createdAt)) || operation.operationId,
+                ),
+                h(
+                  'span',
+                  { className: restorable ? styles.badge : styles.badge + ' ' + styles.badgeLegacy },
+                  restorable ? tr('panel.trashRestorable') : tr('panel.trashNotRestorable'),
+                ),
+              ),
+              h('span', { className: styles.trashOpMeta }, meta.join(' · ')),
+              h(
+                'div',
+                { className: styles.trashOpActions },
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    style: rowButtonStyle('ghost', !restorable || trashBusy !== ''),
+                    disabled: !restorable || trashBusy !== '',
+                    onClick: () => {
+                      void restoreTrashOp(operation)
+                    },
+                  },
+                  restoring ? tr('panel.trashRestoring') : tr('panel.trashRestore'),
+                ),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    style: rowButtonStyle('dangerGhost', trashBusy !== ''),
+                    disabled: trashBusy !== '',
+                    onClick: () => askTrashPurge([operation]),
+                  },
+                  tr('panel.trashPurge'),
+                ),
+              ),
+            )
+          }),
+        ),
+    h(
+      'div',
+      { className: styles.toolActions },
+      h(
+        'button',
+        {
+          type: 'button',
+          style: buttonStyle('ghost', false),
+          disabled: trashBusy !== '' || trash.phase === 'loading',
+          onClick: () => {
+            void reloadTrash()
+          },
+        },
+        tr('panel.trashReload'),
+      ),
+      h(
+        'button',
+        {
+          type: 'button',
+          style: buttonStyle('dangerGhost', trashOperations.length === 0 || trashBusy !== ''),
+          disabled: trashOperations.length === 0 || trashBusy !== '',
+          onClick: () => askTrashPurge(trashOperations),
+        },
+        tr('panel.trashPurgeAll'),
+      ),
+    ),
+  )
+
+  const attachmentPanel = h(
+    'div',
+    { className: styles.toolCard },
+    h(
+      'div',
+      { className: styles.toolCardHeader },
+      h('h3', { className: styles.toolCardTitle }, tr('panel.attachmentSection')),
+      h('p', { className: styles.toolCardHint }, tr('panel.attachmentHint')),
+    ),
+    h(
+      'div',
+      { className: styles.toolActions },
+      h(
+        'button',
+        {
+          type: 'button',
+          style: buttonStyle('secondary', attachmentBusy),
+          disabled: attachmentBusy,
+          onClick: () => {
+            void runAttachmentReport()
+          },
+        },
+        attachmentBusy ? tr('panel.attachmentChecking') : tr('panel.attachmentCheck'),
+      ),
+    ),
+  )
+
   const toolsPanel = h(
     'aside',
     { className: styles.toolsPanel, 'aria-label': tr('panel.tools') },
     exportPanel,
     workspaceBackupPanel,
     importPanel,
+    trashPanel,
+    attachmentPanel,
   )
 
   const mainGrid = h('div', { className: styles.mainGrid }, sessionsPanel, toolsPanel)
@@ -3124,6 +3883,77 @@ function SessionKitPanel(props) {
           },
         })
 
+  const moveDialog =
+    moveRequest === null
+      ? null
+      : confirmDialogNode({
+          tr,
+          title: tr('panel.moveTitle'),
+          body: tr('panel.moveBody', { count: moveRequest.sessionIds.length }),
+          items: moveRequest.items,
+          control: h(
+            'div',
+            { className: styles.fieldColumn },
+            h(
+              'label',
+              { className: styles.fieldLabel, htmlFor: 'session-kit-move-target' },
+              tr('panel.moveTargetLabel'),
+            ),
+            h(
+              'select',
+              {
+                id: 'session-kit-move-target',
+                className: styles.select,
+                value: moveTarget,
+                disabled: busy !== '',
+                onChange: (event) => setMoveTarget(event.target.value),
+              },
+              h('option', { value: '' }, tr('panel.moveTargetPlaceholder')),
+              ...catalog.workspaces.map((workspace) =>
+                h(
+                  'option',
+                  { key: workspace.id, value: workspace.id },
+                  workspace.title !== '' ? `${workspace.title} — ${workspace.path}` : workspace.path,
+                ),
+              ),
+            ),
+          ),
+          note: tr('panel.moveNote'),
+          confirmRole: 'primary',
+          confirmLabel: tr('panel.moveConfirm'),
+          busyLabel: tr('panel.moveBusy'),
+          busy: busy !== '',
+          busyAction: busy === 'move',
+          confirmDisabled: moveTarget === '',
+          onCancel: () => setMoveRequest(null),
+          onConfirm: () => {
+            void runMove(moveRequest.sessionIds, moveTarget)
+          },
+        })
+
+  const trashDialog =
+    trashConfirm === null
+      ? null
+      : confirmDialogNode({
+          tr,
+          title: tr('panel.trashPurgeTitle'),
+          body: tr('panel.trashPurgeBody', {
+            count: trashConfirm.operationIds.length,
+            size: formatBytes(trashConfirm.bytes),
+          }),
+          items: trashConfirm.operationIds,
+          danger: true,
+          confirmRole: 'danger',
+          confirmLabel: tr('panel.trashPurgeConfirm'),
+          busyLabel: tr('panel.trashPurging'),
+          busy: trashBusy !== '',
+          busyAction: trashBusy === 'purge',
+          onCancel: () => setTrashConfirm(null),
+          onConfirm: () => {
+            void confirmTrashPurgeAction()
+          },
+        })
+
   return h(
     'div',
     { className: styles.page },
@@ -3139,6 +3969,8 @@ function SessionKitPanel(props) {
     confirmDialog,
     filesDialog,
     migrateDialog,
+    moveDialog,
+    trashDialog,
   )
 }
 // #endregion
@@ -3146,6 +3978,25 @@ function SessionKitPanel(props) {
 // #region host operations (apply-world closures)
 
 /** Read and normalize the workspace/session catalog. */
+/** Read-only dangling attachment reference report from the Host. */
+async function loadAttachmentReport() {
+  const payload = await requestJson('/attachment-report?limit=300')
+  if (payload === null || typeof payload !== 'object') {
+    throw new Error('附件报告响应无效')
+  }
+  return {
+    scannedSessions: pickNumber(payload.scannedSessions),
+    sessionTotal: pickNumber(payload.sessionTotal),
+    totalReferences: pickNumber(payload.totalReferences),
+    missing: Array.isArray(payload.missing)
+      ? payload.missing.filter((entry) => entry !== null && typeof entry === 'object')
+      : [],
+    unverifiable: pickNumber(payload.unverifiable),
+    truncated: payload.truncated === true,
+    warnings: Array.isArray(payload.warnings) ? payload.warnings.map(String) : [],
+  }
+}
+
 async function loadCatalog() {
   const payload = await requestJson('/list')
   return normalizeCatalog(payload)
@@ -3158,10 +4009,12 @@ async function importSelection(file, hints) {
   const cwd = hints !== null && typeof hints === 'object' ? pickString(hints.cwd) : ''
   const workspaceId = hints !== null && typeof hints === 'object' ? pickString(hints.workspaceId) : ''
   const restoreWorkspaceFiles = hints !== null && typeof hints === 'object' && hints.restoreWorkspaceFiles === true
+  const skipDuplicates = hints !== null && typeof hints === 'object' && hints.skipDuplicates === true
   if (filename !== '') params.set('filename', filename)
   if (cwd !== '') params.set('cwd', cwd)
   if (workspaceId !== '') params.set('workspaceId', workspaceId)
   params.set('restoreWorkspaceFiles', restoreWorkspaceFiles ? '1' : '0')
+  if (skipDuplicates) params.set('skipDuplicates', '1')
   const query = params.toString()
   const response = await fetch(hostUrl(query === '' ? '/import' : `/import?${query}`), {
     method: 'POST',
@@ -3288,6 +4141,63 @@ async function manageSelection(action, sessionIds, options) {
   return normalizeManagePayload(payload, sessionIds)
 }
 
+/** Read the trash inventory (`GET /session-kit/trash`). */
+async function loadTrashInventory() {
+  const response = await fetch(hostUrl('/trash'), { headers: { accept: 'application/json' } })
+  const payload = await jsonBody(response)
+  if (!response.ok || payload === null || typeof payload !== 'object' || payload.ok !== true) {
+    throw requestFailure(payload, response.status)
+  }
+  return {
+    trashRoot: pickString(payload.trashRoot),
+    operations: Array.isArray(payload.operations)
+      ? payload.operations.filter(
+          (operation) =>
+            operation !== null && typeof operation === 'object' && typeof operation.operationId === 'string',
+        )
+      : [],
+    warnings: Array.isArray(payload.warnings) ? payload.warnings.filter((line) => typeof line === 'string') : [],
+  }
+}
+
+/** Restore one trash operation, optionally a subset of its sessions. */
+async function restoreTrashBatch(operationId, sessionIds) {
+  const requestBody = { operationId }
+  if (Array.isArray(sessionIds) && sessionIds.length > 0) requestBody.sessionIds = sessionIds
+  const response = await fetch(hostUrl('/trash-restore'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify(requestBody),
+  })
+  const payload = await jsonBody(response)
+  if (!response.ok || payload === null || typeof payload !== 'object' || payload.ok !== true) {
+    throw requestFailure(payload, response.status)
+  }
+  return {
+    restored: Array.isArray(payload.restored) ? payload.restored : [],
+    skipped: Array.isArray(payload.skipped) ? payload.skipped : [],
+    warnings: Array.isArray(payload.warnings) ? payload.warnings.filter((line) => typeof line === 'string') : [],
+  }
+}
+
+/** Permanently erase the given trash operations after the caller confirmed. */
+async function purgeTrashBatch(operationIds) {
+  const response = await fetch(hostUrl('/trash-purge'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({ operationIds, confirm: true }),
+  })
+  const payload = await jsonBody(response)
+  if (!response.ok || payload === null || typeof payload !== 'object' || payload.ok !== true) {
+    throw requestFailure(payload, response.status)
+  }
+  return {
+    removed: Array.isArray(payload.removed) ? payload.removed : [],
+    freedBytes: pickNumber(payload.freedBytes),
+    warnings: Array.isArray(payload.warnings) ? payload.warnings.filter((line) => typeof line === 'string') : [],
+  }
+}
+
 /** Preview the workspace files the Host would move for the given sessions. */
 async function previewSessionFiles(sessionIds) {
   const response = await fetch(hostUrl('/session-files'), {
@@ -3352,6 +4262,25 @@ async function migrateSelection(sessionIds) {
     throw requestFailure(payload, response.status)
   }
   return normalizeMigratePayload(payload, sessionIds)
+}
+
+/**
+ * Copy sessions into a workspace through the Host's copy-then-trash route.
+ * @param {string} workspaceId destination workspace id
+ * @param {string[]} sessionIds source session ids
+ * @returns {Promise<object>} the Host payload (`moved`, `skipped`, `warnings`)
+ */
+async function moveToWorkspace(workspaceId, sessionIds) {
+  const response = await fetch(hostUrl('/move'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({ workspaceId, sessionIds, confirm: true }),
+  })
+  const payload = await jsonBody(response)
+  if (!response.ok || payload === null || typeof payload !== 'object' || payload.ok !== true) {
+    throw requestFailure(payload, response.status)
+  }
+  return payload
 }
 
 /** Refresh the client session catalog after an import. */
@@ -3423,6 +4352,11 @@ function apply(ctx) {
             previewSessionFiles: (sessionIds) => previewSessionFiles(sessionIds),
             loadSessionDetails: (sessionIds) => loadSessionDetails(sessionIds),
             migrateSessions: (sessionIds) => migrateSelection(sessionIds),
+            moveSessions: (workspaceId, sessionIds) => moveToWorkspace(workspaceId, sessionIds),
+            loadTrash: () => loadTrashInventory(),
+            restoreTrash: (operationId, sessionIds) => restoreTrashBatch(operationId, sessionIds),
+            purgeTrash: (operationIds) => purgeTrashBatch(operationIds),
+            checkAttachments: () => loadAttachmentReport(),
             refreshSessions: () => refreshSessionList(ctx),
             targetOf: () => importTargetOf(ctx),
           }),

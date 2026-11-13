@@ -703,3 +703,80 @@
   min-width: 0;
   box-sizing: border-box;
 }
+
+.trash-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.trash-op {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm, 6px);
+  background: var(--dsw-alias-bg-layer-2, Canvas);
+}
+.trash-op-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.trash-op-title {
+  font: 500 13px/20px var(--dsw-font-family, inherit);
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
+.trash-op-meta {
+  font: 12px/18px var(--dsw-font-family, inherit);
+  color: var(--dsw-alias-label-secondary);
+}
+.trash-op-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* P6: sort control, hidden-selection note and progressive pagination. */
+.sort-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.sort-label {
+  color: var(--dsw-alias-text-secondary, #6b7280);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.selection-hidden {
+  color: var(--dsw-alias-text-secondary, #6b7280);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.load-more-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 4px 2px;
+  flex-wrap: wrap;
+}
+
+.load-more-info {
+  color: var(--dsw-alias-text-secondary, #6b7280);
+  font-size: 12px;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}

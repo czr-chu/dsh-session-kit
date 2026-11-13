@@ -145,6 +145,9 @@ function makePersistence() {
         },
       }
     },
+    async list() {
+      return [...sessions.values()].map((session) => ({ header: structuredClone(session.header) }))
+    },
   }
 }
 
@@ -153,7 +156,7 @@ function makePersistence() {
  * @param {object} options - persistence, attachments, verify hook and flags.
  * @returns {object} helper module mock.
  */
-function makeImportDeps({ persistence, attachments, verifyFails = false, writes, workspaceFiles } = {}) {
+function makeImportDeps({ persistence, attachments, verifyFails = false, writes, workspaceFiles, registry } = {}) {
   const calls = writes ?? { written: [] }
   const deps = {
     calls,
@@ -197,6 +200,7 @@ function makeImportDeps({ persistence, attachments, verifyFails = false, writes,
             return { session: { id }, events: [] }
           },
         },
+        ...(registry !== undefined ? { workspaceRegistry: registry } : {}),
       }
     },
     ...(workspaceFiles !== undefined ? { workspaceFiles } : {}),
@@ -401,6 +405,81 @@ test('rejects duplicate source session ids', async () => {
   await assert.rejects(
     () => importArchive({}, { buffer: zip, deps }),
     (error) => error.code === 'duplicate-session',
+  )
+})
+
+test('restores archived/pinned flags and reports per-session progress', async () => {
+  const archive = pluginZipWithWorkspaces({
+    sessions: [
+      { header: makeHeader('arch-src'), events: [], archived: true, pinned: true },
+      { header: makeHeader('plain-src'), events: [] },
+    ],
+  })
+  const calls = []
+  const registry = {
+    async archiveSession(id, options) {
+      calls.push(['archive', id, options])
+    },
+    async pinSession(id) {
+      calls.push(['pin', id])
+    },
+  }
+  const deps = makeImportDeps({ persistence: makePersistence(), registry })
+  const progress = []
+  const result = await importArchive(
+    {},
+    {
+      buffer: archive,
+      cwd: '/target/ws',
+      deps,
+      onProgress: (entry) => progress.push(entry),
+    },
+  )
+
+  assert.equal(result.sessions.length, 2)
+  assert.equal(calls.length, 2)
+  assert.equal(calls[0][0], 'archive')
+  assert.equal(calls[0][2].stopActivity, false)
+  assert.equal(calls[1][0], 'pin')
+  assert.equal(calls[0][1], result.sessions[0].sessionId)
+  assert.equal(progress.length, 2)
+  assert.deepEqual(
+    progress.map((entry) => [entry.index, entry.total, entry.sessionId]),
+    [
+      [1, 2, result.sessions[0].sessionId],
+      [2, 2, result.sessions[1].sessionId],
+    ],
+  )
+  assert.equal(progress[0].sourceId, 'arch-src')
+  assert.equal(progress[1].sourceId, 'plain-src')
+})
+
+test('warns about a local duplicate and skips it when skipDuplicates is set', async () => {
+  const archive = pluginZipWithWorkspaces({
+    sessions: [{ header: makeHeader(SOURCE_ID), events: [] }],
+  })
+  const persistence = makePersistence()
+  await persistence.create(makeHeader(SOURCE_ID))
+
+  const imported = await importArchive(
+    {},
+    { buffer: archive, cwd: '/target/ws', deps: makeImportDeps({ persistence }) },
+  )
+  assert.equal(imported.sessions.length, 1)
+  assert.ok(imported.warnings.some((warning) => warning.includes(SOURCE_ID) && warning.includes('已存在')))
+
+  await assert.rejects(
+    () =>
+      importArchive(
+        {},
+        {
+          buffer: archive,
+          cwd: '/target/ws',
+          skipDuplicates: true,
+          deps: makeImportDeps({ persistence }),
+        },
+      ),
+    (error) => error.code === 'no-session' && /跳过重复项/u.test(error.message),
   )
 })
 
@@ -614,6 +693,8 @@ function pluginZipWithWorkspaces({ sessions, workspaces = [], files = {}, manife
       eventCount: events.length,
       log: logName,
       attachments: [],
+      ...(session.archived === true ? { archived: true } : {}),
+      ...(session.pinned === true ? { pinned: true } : {}),
     })
   }
   for (const [name, data] of Object.entries(files)) {

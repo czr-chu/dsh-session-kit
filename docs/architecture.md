@@ -9,6 +9,35 @@ that manages, exports and re-imports conversations.
 the Connection trust check exactly like the shipped open-in-app plugin, plus a
 `session_kit` agent tool. It owns no storage of its own.
 
+| Surface | Routes |
+| --- | --- |
+| Read | `GET /session-kit/info`, `GET /session-kit/list`, `POST /session-kit/session-detail`, `POST /session-kit/session-files`, `GET /session-kit/attachment-report` |
+| Archive | `POST /session-kit/export`, `POST /session-kit/export-workspace`, `POST /session-kit/import`, `POST /session-kit/import-share` |
+| Manage | `POST /session-kit/archive`, `POST /session-kit/unarchive`, `POST /session-kit/delete`, `POST /session-kit/migrate`, `POST /session-kit/move` |
+| Trash | `GET /session-kit/trash`, `POST /session-kit/trash-restore`, `POST /session-kit/trash-purge` |
+
+The tool exposes the same operations as actions: `list`, `export`,
+`export_workspace`, `import`, `archive`, `unarchive`, `delete`, `migrate`,
+`files`, `detail`, `import_share`, `trash_list`, `trash_restore`, `trash_purge`,
+`move`, `attachment_report`. Routes and actions share one scope parser
+(`parseSessionIdList`), so `sessionIds` is trimmed and de-duplicated everywhere
+and `'all'` is accepted only where the action documents it. `detail` mirrors
+`POST /session-kit/session-detail` for agents (same 100-id cap, same per-id
+error tolerance, no writes).
+
+A fenced rejection answers a JSON envelope
+(`{ ok: false, code: 'forbidden' | 'unauthorized' }`) with the rejection status,
+so a client can branch on `code`; every other failure uses the same
+`{ ok, code, message }` shape. A batch that fails for every id reports the first
+failure's status (404 not-found / 409 active / 503 unavailable / 500).
+
+`index.js` resolves its helper modules through a test-only third `apply`
+argument (never Loader config): `sessions`, `manage`, `migrate`, `files`,
+`share`, `workspaceBackup`, `export`, `import`, `trash`, `move`, `attachmentReport`. A missing member means
+"unavailable" for the routes that need it. Modules resolved *inside* another lib
+module stay outside that seam: `lib/workspace-backup.js` imports
+`lib/export.js`, and `lib/deepseek-share.js` imports `lib/import.js`, directly.
+
 ```text
 index.js                 routes + agent tool + config
 lib/sessions.js          DSH service seam: list/read/title/mint/attach/write
@@ -18,9 +47,12 @@ lib/export.js            multi-session ZIP: manifest, session folders, attachmen
 lib/workspace-backup.js  one workspace: all sessions + one file tree, manifest.backup
 lib/import.js            archive preflight, new-session creation, workspace restore
 lib/manage.js            archive/unarchive, delete-to-trash with lineage and registry cleanup
+lib/move.js              copy a session into another workspace, verify, then trash the source
+lib/trash.js             trash operation manifest inventory, restore and permanent purge
 lib/format.js            canonical session JSONL + attachment ref helpers
 lib/zip.js               dependency-free ZIP reader/writer
 lib/attachments.js       attachment packing/restore
+lib/attachment-report.js read-only missing/unverifiable attachment reference scan
 ```
 
 Every DSH capability is read through `ctx.get(...)` (sessionQuery,
@@ -39,16 +71,35 @@ and talks to the Host only through the fenced `/session-kit/*` routes.
 `npm run build:client` regenerates the committed artifact; CI rebuilds it and
 fails when the artifact differs.
 
+The panel loads the whole catalog once, groups sessions by workspace, and keeps
+selection in a `Set`. Rendering is progressive: each group initially shows
+`GROUP_PAGE_SIZE = 25` rows and a "show more" button grows every group window by
+25; filtering/sorting changes reset it. A sort selector
+(recent/created/title/path) orders sessions inside each group. Group checkboxes
+select all filtered sessions, including rows the window has not rendered yet,
+and the selection bar reports how many selected ids sit outside the current
+filter. Dialogs trap Tab/Shift+Tab, close on Escape and use
+`role="dialog"`/`aria-modal`. See
+[decisions/0005](decisions/0005-panel-usability.md).
+
 ## Workspace backup
 
 DSH's file-owning unit is the workspace, not the session. The Workspace backup
-card and `session_kit action=export_workspace` resolve one workspace id through
-`ctx.workspaceRegistry`, take every session the registry lists for it (filtering
-missing ids), and call `buildArchive` with `includeWorkspaceFiles: true` and
+card and `session_kit action=export_workspace` resolve workspace ids through
+`ctx.workspaceRegistry`, take every session the registry lists for each
+(filtering missing ids), and call `buildArchive` with
+`includeWorkspaceFiles: true` and
 `backup: { kind: 'workspace', workspaceId, title, path }`. The collector is
-pinned to that one root, so the archive contains one `workspaces/<key>/` tree,
-not one tree per session. `POST /session-kit/export-workspace` streams it with
-`x-session-kit-workspace*` headers.
+pinned to that workspace root, so each archive contains one
+`workspaces/<key>/` tree, not one tree per session.
+
+One request produces one ZIP. The panel supports a multi-select of workspaces and
+calls the route once per selected workspace, downloading each ZIP separately; the
+tool accepts `workspaceIds` (max 20) and writes one file per workspace. A failed
+workspace does not abort the rest; results are reported per workspace. The
+route `POST /session-kit/export-workspace` itself stays single-workspace and
+streams the ZIP with `x-session-kit-workspace*` headers. See
+[decisions/0004](decisions/0004-multi-workspace-backup.md).
 
 Restore uses the normal import path with a selected target workspace: the ZIP's
 workspace tree is unpacked into the target cwd, sessions are created there, and
@@ -77,6 +128,21 @@ stream chunks, jobs, subagent events and workspace events are dropped. Event
 `seq` values are renumbered and the title's `messageSeqs` are remapped so the
 result is a valid v4 log that DSH can replay and continue.
 
+`compressed` sits between `full` and `compact` (`lib/compressed.js`): every
+event keeps its type, order and `seq` (so the log is still valid v4), while
+`stream`/`chunks`/`deltas` arrays become `[]` and strings over 8 KiB are cut
+with a visible marker; an event still over 16 KiB has its string budget halved
+and is pruned again. The header is cloned verbatim. The log is stored as
+`sessions/<id>/session.compressed.v4.jsonl`; import treats it as a normal log.
+See [decisions/0001](decisions/0001-compressed-export-mode.md).
+
+The written header keeps the canonical fields in a fixed order and passes
+through any other header field verbatim (`headerLineOf` in `lib/format.js`), so
+an export does not drop metadata a newer DSH adds. Import does not propagate
+those extra fields: it rebuilds a minimal header for the new session. The
+manifest and each `sessions/<id>/meta.json` also carry the registry's
+`archived`/`pinned` flags when set, so a round trip can restore them.
+
 ## Listing model
 
 `/session-kit/list` never opens a cold session log. Titles come from the
@@ -99,6 +165,50 @@ directory, real non-symlink directory). User-visible fork/seeded children are
 not part of the lineage closure and survive. Workspace membership, pins and the
 archive flag are cleaned afterwards; cleanup failures are logged, not reported
 as a failed delete.
+
+Every delete also writes `operation.json` in the operation directory **before**
+the first move: kind/version, `createdAt`, root session, one entry per moved
+session (`originalDir`, `cwd`, `createdAt`, `formatVersion`), the derived
+`sessionsRoot`, and the pre-delete `archived` / `pinned` snapshots. A failed move
+rolls the whole batch back and removes the manifest, so a manifest always
+describes a complete operation. `lib/trash.js` reads that manifest for the
+Trash card and the `trash_list` action (`{trashDir}` only, up to 500
+operations); a legacy directory without a manifest is listed but marked
+`restorable: false` with a warning.
+
+`trash_restore` validates the operation id as a plain directory name inside the
+trash root, checks the manifest kind/version, and only moves a session back when
+its recorded `originalDir` still lies inside the recorded `sessionsRoot`
+(anti-tamper) and no live target exists; an existing target is skipped, never
+overwritten. A restored directory is re-attached through
+`registry.resolveByPath(...).attachSession(id)`, then archived/pinned state is
+replayed best-effort. Partial restores rewrite the manifest; a fully restored
+operation with no `files/` subtree is removed. `trash_purge` requires
+`confirm: true`, accepts explicit ids or `all` (optionally `olderThanDays`) and
+`rm -rf`s only validated operation directories, returning removed ids and freed
+bytes. Attachments are not touched by purge (the attachment store has no delete
+API), and subagent transcripts are never imported.
+
+## Workspace move model
+
+DSH derives workspace membership from the session header's `cwd`
+(`WorkspaceEntity.attachSession` requires that realpath), so a session cannot be
+re-labelled into another workspace in place. `POST /session-kit/move` (tool
+action `move`) therefore performs a **copy-then-trash** move per session
+(`lib/move.js`): preflight the source (skip live/running sessions, subagent
+transcripts and older-format logs before any write), copy it as a new session
+with `cwd` = destination workspace path, read the copy back through
+`sessionQuery.readSession`, attach it to the destination, replay
+archived/pinned state best-effort, and only then move the source directory into
+the trash (the same `deleteSession` path and `operation.json` manifest as a
+normal delete). A copy that cannot be read back leaves the source untouched; a
+failed trash move keeps the copy and reports `sourceTrashed: false`. The batch
+is per-session tolerant (100-session cap) and requires `confirm: true`.
+Consequences: the moved session has a new id (old links stop working; restoring
+the trash brings the old id back), event payloads are copied verbatim,
+subagent transcripts are not copied (they travel with the source into the
+trash), and attachment bytes stay shared through the content-addressed store.
+See [decisions/0003](decisions/0003-workspace-move.md).
 
 ## Format migration model
 
@@ -154,6 +264,33 @@ The header is rewritten (new id, no parent/origin, cwd = chosen directory),
 delivery markers and inherited end-seed markers are rewritten for the new owner,
 attachments are restored into the content-addressed store, and each session is
 read back through `sessionQuery.readSession` as a post-write verification.
-Subagent-origin transcripts are skipped. With `restoreWorkspaceFiles`, the
-archived workspace trees are extracted under the selected directory after
-path-traversal/absolute-path/symlink rejection; existing files are skipped.
+Subagent-origin transcripts are skipped. Before writing, a duplicate preflight
+compares each source id with `persistence.list()`: duplicates are still imported
+as new-id copies with a warning, unless `skipDuplicates` filters them (all
+filtered → `no-session`). After verification, `archived`/`pinned` carried by the
+manifest or `meta.json` are re-applied to the new id through the workspace
+registry; a registry failure is a per-session warning, never a rollback. With
+`restoreWorkspaceFiles`, the archived workspace trees are extracted under the
+selected directory after path-traversal/absolute-path/symlink rejection;
+existing files are skipped.
+
+`POST /session-kit/import?progress=ndjson` writes the same operation as
+newline-delimited JSON: one `{event:"session", index, total, sessionId, mode,
+verified, warnings}` line per committed session, then `{event:"done", ok:true,
+...result}` or `{event:"error", ok:false, code, message}`. Headers are flushed
+before the archive is committed, so late failures end with an `error` line. The
+default response remains a single JSON object.
+
+## Attachment reference report
+
+`lib/attachment-report.js` is a read-only diagnostic. It scans up to 300
+sessions (newest first), collects each log's image/file attachment references
+and checks the provider's host path with `stat()`. Each reference is classified
+`ok`, `missing` (path absent/not a file) or `unverifiable` (no attachment
+service, no host-path method, or empty path); bytes are never read. It returns
+`{scannedSessions, sessionTotal, limit, truncated, totalReferences, missing,
+unverifiable, warnings}` through `GET /session-kit/attachment-report` and the
+`attachment_report` tool action (limit ≤ 300, positive integer). It deletes,
+rewrites and repacks nothing, and it is not an orphan enumeration: the
+attachment store has no list/delete API in the supported surface, so only
+references that no longer resolve can be reported safely.

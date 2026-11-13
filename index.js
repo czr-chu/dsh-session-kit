@@ -9,23 +9,36 @@
  * Two faces over the same operations in `lib/export.js`, `lib/import.js` and
  * `lib/manage.js`:
  *
- *  - the authenticated browser routes the client half calls
- *    (GET /session-kit/{info,list}, POST /session-kit/{export,import,archive,
- *    unarchive,delete}), fenced by the Connection service exactly like every
- *    other plugin-owned route; and
- *  - one agent tool (`session_kit`) with list / export / import / archive /
- *    unarchive / delete actions.
+ *  - the authenticated browser routes the client half calls —
+ *    GET /session-kit/{info,list} and
+ *    POST /session-kit/{export,export-workspace,import,archive,unarchive,
+ *    delete,migrate,session-files,session-detail,import-share,move,
+ *    trash,trash-restore,trash-purge} — fenced by the
+ *    Connection service exactly like every other plugin-owned route; a fenced
+ *    rejection answers `{ok:false, code:'forbidden'|'unauthorized'}` like any
+ *    other failure; and
+ *  - one agent tool (`session_kit`) with list / export / export_workspace /
+ *    import / archive / unarchive / delete / migrate / files / detail /
+ *    trash_list / trash_restore / trash_purge / move / attachment_report /
+ *    import_share actions.
+ *
+ * Both faces share one `parseSessionIdList` for scope parsing (`'all'` where
+ * meaningful, trimming, de-duplication, batch caps) instead of each handler
+ * re-implementing it.
  *
  * Export/import options carried over the routes and the tool:
- * `includeWorkspaceFiles` (pack whole workspace trees), `includeSubagents`
- * (keep subagent transcripts; default false), `workspaceExclude` (extra
- * workspace path patterns) and `restoreWorkspaceFiles` (unpack the archive's
- * workspaces/ tree into the target directory).
+ * `includeAttachments` (pack referenced attachments), `includeWorkspaceFiles`
+ * (pack whole workspace trees), `includeSubagents` (keep subagent transcripts;
+ * default false), `workspaceExclude` (extra workspace path patterns) and
+ * `restoreWorkspaceFiles` (unpack the archive's workspaces/ tree into the
+ * target directory).
  *
  * Management semantics: archive/unarchive go through the workspace registry;
  * delete only moves session directories into `<DSH_HOME>/session-kit-trash`
  * (never a permanent erase) and requires an explicit id list. Batches are
- * capped at {@link MAX_MANAGE_BATCH} sessions and report one result per id.
+ * capped at {@link MAX_MANAGE_BATCH} sessions and report one result per id; a
+ * fully failed batch answers with the first failure's status (404 / 409 / 503 /
+ * 500).
  *
  * The plugin imports no DSH package: session-query, persistence, attachments,
  * workspaces, presets and the working directory are read off `ctx` through the
@@ -39,9 +52,12 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 
 import { errorText } from './lib/attachments.js'
-import { buildArchive, defaultExportDirectory } from './lib/export.js'
+// `defaultExportDirectory` is a pure path helper (DSH_HOME + fixed subpath), so
+// it stays a static import while the archive builder itself is resolved lazily
+// through `loadExport`. Routing the helper through the injection seam would
+// force every test double to reimplement a path rule that has no dependencies.
+import { defaultExportDirectory } from './lib/export.js'
 import { SessionPortFormatError } from './lib/format.js'
-import { importArchive, readImportFile } from './lib/import.js'
 
 /** Cordis plugin name used by Loader diagnostics. */
 export const name = 'dsh-session-kit'
@@ -116,8 +132,8 @@ export const Config = {
         issues.push({ message: 'trashDir must be a non-empty string', path: ['trashDir'] })
       }
       const mode = value.defaultMode
-      if (mode !== undefined && mode !== 'full' && mode !== 'compact') {
-        issues.push({ message: 'defaultMode must be "full" or "compact"', path: ['defaultMode'] })
+      if (mode !== undefined && !EXPORT_MODE_VALUES.has(mode)) {
+        issues.push({ message: 'defaultMode must be "full", "compact" or "compressed"', path: ['defaultMode'] })
       }
       return issues.length === 0 ? { value } : { issues }
     },
@@ -136,8 +152,15 @@ export const MAX_MIGRATE_BATCH = 100
 export const MAX_FILE_BATCH = 100
 /** Upper bound on one session-detail batch. */
 export const MAX_DETAIL_BATCH = 100
+/** Upper bound on one workspace-move batch (mirrors `lib/move.js`). */
+export const MAX_MOVE_BATCH = 100
+/** Upper bound on one multi-workspace backup batch (each workspace is one ZIP). */
+export const MAX_WORKSPACE_BATCH = 20
 /** Upper bound on one explicit selected-files list. */
 export const MAX_SELECTED_FILES = 5000
+/** Export modes every route and tool action accepts. */
+const EXPORT_MODE_VALUES = new Set(['full', 'compact', 'compressed'])
+
 /** Upper bound on one share-link/input string. */
 export const MAX_SHARE_INPUT_LENGTH = 2048
 /** Directory name under DSH_HOME that receives deleted session folders. */
@@ -150,6 +173,11 @@ let migrateModule
 let filesModule
 let shareModule
 let workspaceBackupModule
+let exportModule
+let importModule
+let trashModule
+let moveModule
+let attachmentReportModule
 
 /**
  * Normalize the in-process test-only module injection seam.
@@ -158,6 +186,12 @@ let workspaceBackupModule
  * `apply` that only tests pass. Production Loader calls `apply(ctx, config)`,
  * so YAML cannot substitute helper modules. When present, a missing member
  * means "that helper is unavailable".
+ *
+ * Every helper `index.js` resolves itself is injectable: the six session
+ * helpers plus `export` (archive builder) and `import` (archive reader).
+ * Modules resolved inside another lib module stay outside this seam — notably
+ * `lib/workspace-backup.js` imports `lib/export.js` directly, and
+ * `lib/deepseek-share.js` imports `lib/import.js` directly.
  * @param {{modules?: unknown} | undefined} internals - test-only apply argument.
  * @returns {{
  *   sessions?: object,
@@ -166,6 +200,11 @@ let workspaceBackupModule
  *   files?: object,
  *   share?: object,
  *   workspaceBackup?: object,
+ *   export?: object,
+ *   import?: object,
+ *   trash?: object,
+ *   move?: object,
+ *   attachmentReport?: object,
  * } | undefined} override set.
  */
 function moduleOverrides(internals) {
@@ -179,6 +218,11 @@ function moduleOverrides(internals) {
     files: modules.files,
     share: modules.share,
     workspaceBackup: modules.workspaceBackup,
+    export: modules.export,
+    import: modules.import,
+    trash: modules.trash,
+    move: modules.move,
+    attachmentReport: modules.attachmentReport,
   }
 }
 
@@ -316,6 +360,97 @@ async function loadWorkspaceBackup(overrides) {
 }
 
 /**
+ * Resolve the archive-builder module lazily (`lib/export.js`).
+ *
+ * `index.js` no longer imports it at module load, so a broken or substituted
+ * export module fails only the routes/tool actions that build archives.
+ * @param {{export?: object} | undefined} overrides - module injection seam.
+ * @returns {Promise<object>} export module namespace.
+ */
+async function loadExport(overrides) {
+  if (overrides !== undefined) {
+    if (overrides.export === undefined || overrides.export === null) {
+      throw new SessionPortFormatError('unavailable', '会话导出模块不可用')
+    }
+    return overrides.export
+  }
+  if (exportModule === undefined) {
+    try {
+      exportModule = await import('./lib/export.js')
+    } catch (error) {
+      throw new SessionPortFormatError('unavailable', `会话导出模块不可用：${errorText(error)}`)
+    }
+  }
+  return exportModule
+}
+
+/**
+ * Resolve the archive-reader module lazily (`lib/import.js`).
+ * @param {{import?: object} | undefined} overrides - module injection seam.
+ * @returns {Promise<object>} import module namespace.
+ */
+async function loadImport(overrides) {
+  if (overrides !== undefined) {
+    if (overrides.import === undefined || overrides.import === null) {
+      throw new SessionPortFormatError('unavailable', '会话导入模块不可用')
+    }
+    return overrides.import
+  }
+  if (importModule === undefined) {
+    try {
+      importModule = await import('./lib/import.js')
+    } catch (error) {
+      throw new SessionPortFormatError('unavailable', `会话导入模块不可用：${errorText(error)}`)
+    }
+  }
+  return importModule
+}
+
+/**
+ * Resolve the trash-operations module lazily (`lib/trash.js`).
+ * @param {{trash?: object} | undefined} overrides - module injection seam.
+ * @returns {Promise<object>} trash module namespace.
+ */
+async function loadTrash(overrides) {
+  if (overrides !== undefined) {
+    if (overrides.trash === undefined || overrides.trash === null) {
+      throw new SessionPortFormatError('unavailable', '回收站模块不可用')
+    }
+    return overrides.trash
+  }
+  if (trashModule === undefined) {
+    try {
+      trashModule = await import('./lib/trash.js')
+    } catch (error) {
+      throw new SessionPortFormatError('unavailable', `回收站模块不可用：${errorText(error)}`)
+    }
+  }
+  return trashModule
+}
+
+/**
+ * Resolve the workspace-move module lazily (`lib/move.js`).
+ * @param {{move?: object} | undefined} overrides - module injection seam.
+ * @returns {Promise<object>} move module namespace.
+ */
+async function loadMove(overrides) {
+  if (overrides !== undefined) {
+    if (overrides.move === undefined || overrides.move === null) {
+      throw new SessionPortFormatError('unavailable', '会话迁移模块不可用')
+    }
+    return overrides.move
+  }
+  if (moveModule === undefined) {
+    try {
+      moveModule = await import('./lib/move.js')
+    } catch (error) {
+      throw new SessionPortFormatError('unavailable', `会话迁移模块不可用：${errorText(error)}`)
+    }
+  }
+  return moveModule
+}
+
+/**
  * Cordis entry point.
  * @param {object} ctx - the plugin context.
  * @param {object} [config] - the Loader row's config (all fields optional).
@@ -343,7 +478,7 @@ export function apply(ctx, config, internals) {
  *   workspaceExclude: string[],
  *   workspaceMaxBytes: number | undefined,
  *   trashDir: string | undefined,
- *   defaultMode: 'full'|'compact',
+ *   defaultMode: 'full'|'compact'|'compressed',
  * }} resolved settings.
  */
 function resolveSettings(config) {
@@ -365,7 +500,7 @@ function resolveSettings(config) {
     workspaceMaxBytes:
       Number.isSafeInteger(raw.workspaceMaxBytes) && raw.workspaceMaxBytes > 0 ? raw.workspaceMaxBytes : undefined,
     trashDir: typeof raw.trashDir === 'string' && raw.trashDir.trim() !== '' ? raw.trashDir.trim() : undefined,
-    defaultMode: raw.defaultMode === 'full' ? 'full' : 'compact',
+    defaultMode: EXPORT_MODE_VALUES.has(raw.defaultMode) ? raw.defaultMode : 'compact',
   }
 }
 
@@ -433,8 +568,15 @@ function registerRoutes(ctx, settings, overrides) {
 async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
   const rejection = connection.requestRejection(req)
   if (rejection !== undefined) {
-    res.statusCode = rejection
-    res.end()
+    // Answer the trust fence with the same JSON envelope as every other failure
+    // so clients can branch on `code`; 401 means "not authenticated", any other
+    // rejection status means "not allowed".
+    const status = Number.isInteger(rejection) ? rejection : 403
+    sendJson(res, status, {
+      ok: false,
+      code: status === 401 ? 'unauthorized' : 'forbidden',
+      message: status === 401 ? '未认证：请求缺少有效的连接凭据' : '已拒绝：请求未通过插件的连接信任校验',
+    })
     return
   }
   const url = new URL(String(req.url ?? '/'), 'http://localhost')
@@ -467,6 +609,9 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
           deleteSelectedFiles: true,
           shareImport: true,
           workspaceBackup: true,
+          trash: true,
+          move: true,
+          attachmentReport: true,
           attachments: helpers.servicesOf(ctx).attachments !== undefined,
           tool: 'session_kit',
         },
@@ -474,6 +619,11 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
           directory: trashDirectory(settings.trashDir),
           mode: 'move',
           batchLimit: MAX_MANAGE_BATCH,
+        },
+        move: {
+          mode: 'copy-then-trash',
+          batchLimit: MAX_MOVE_BATCH,
+          note: '迁移会写入一个新 id 的会话（cwd=目标工作区）并读回验证，然后把源会话移入回收站；旧 id 失效，子代理转录不复制，源目录可从回收站恢复。',
         },
         migration: {
           official: true,
@@ -498,7 +648,8 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
         },
         workspaceBackup: {
           mode: 'workspace',
-          note: '按工作区备份：一个工作区 = 该工作区全部主会话 + 整棵工作区文件树，只打包一次（敏感文件/构建缓存排除、符号链接不跟随）；普通 export 仍按选中的会话打包。',
+          batchLimit: MAX_WORKSPACE_BATCH,
+          note: '按工作区备份：一个工作区 = 该工作区全部主会话 + 整棵工作区文件树，只打包一次（敏感文件/构建缓存排除、符号链接不跟随）；可一次选择多个工作区，每个工作区各自生成一个 ZIP；普通 export 仍按选中的会话打包。',
           defaults: {
             mode: settings.defaultMode,
             includeAttachments: settings.includeAttachments,
@@ -526,6 +677,10 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
       sendJson(res, 200, { ok: true, sessions, workspaces })
       return
     }
+    if (path === `${ROUTE_PREFIX}/attachment-report` && method === 'GET') {
+      await handleAttachmentReport(ctx, overrides, url, res)
+      return
+    }
     if (path === `${ROUTE_PREFIX}/export` && method === 'POST') {
       await handleExport(ctx, settings, overrides, req, res)
       return
@@ -535,7 +690,7 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
       return
     }
     if (path === `${ROUTE_PREFIX}/import` && method === 'POST') {
-      await handleImport(ctx, settings, url, req, res)
+      await handleImport(ctx, settings, overrides, url, req, res)
       return
     }
     if (path === `${ROUTE_PREFIX}/archive` && method === 'POST') {
@@ -566,6 +721,22 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
       await handleImportShare(ctx, settings, overrides, req, res)
       return
     }
+    if (path === `${ROUTE_PREFIX}/trash` && method === 'GET') {
+      await handleTrashList(ctx, settings, overrides, req, res)
+      return
+    }
+    if (path === `${ROUTE_PREFIX}/trash-restore` && method === 'POST') {
+      await handleTrashRestore(ctx, settings, overrides, req, res)
+      return
+    }
+    if (path === `${ROUTE_PREFIX}/trash-purge` && method === 'POST') {
+      await handleTrashPurge(ctx, settings, overrides, req, res)
+      return
+    }
+    if (path === `${ROUTE_PREFIX}/move` && method === 'POST') {
+      await handleMove(ctx, settings, overrides, req, res)
+      return
+    }
     sendJson(res, 404, { ok: false, code: 'not-found', message: `没有这个接口：${method} ${path}` })
   } catch (error) {
     sendJson(res, statusOf(error), { ok: false, code: codeOf(error), message: errorText(error) })
@@ -573,18 +744,33 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
 }
 
 /**
- * Parse one archive/unarchive/delete id list.
+ * Normalize one export-mode value against the accepted set.
  *
- * `'all'` is accepted only where the caller allows it (the archive tool
- * action). Arrays are trimmed, de-duplicated in order, and capped at
- * {@link MAX_MANAGE_BATCH}; delete/unarchive refusals keep the destructive
- * operations explicit.
+ * Unlike an id list, a wrong mode is not an error on the route side: every
+ * caller falls back to the configured default, which keeps older clients
+ * working when a new mode ships.
+ * @param {unknown} value - raw mode from a body or tool argument.
+ * @param {'full'|'compact'|'compressed'} fallback - configured default.
+ * @returns {'full'|'compact'|'compressed'} resolved mode.
+ */
+function exportModeOf(value, fallback) {
+  return typeof value === 'string' && EXPORT_MODE_VALUES.has(value) ? value : fallback
+}
+
+/**
+ * Parse one session-id scope shared by every route and tool action.
+ *
+ * `'all'` is accepted only where the caller allows it (export and the archive
+ * tool action). Arrays are trimmed, de-duplicated in order, and capped at
+ * `maxBatch` (pass `Infinity` for export, which has no count cap). An empty
+ * array is refused unless the caller opts in with `allowEmpty`, because a
+ * destructive or expensive action must never run on an accidental empty list.
  * @param {unknown} value - raw `sessionIds` value.
- * @param {{allowAll?: boolean, maxBatch?: number}} [options] - whether `'all'` is meaningful and the batch cap.
+ * @param {{allowAll?: boolean, maxBatch?: number, allowEmpty?: boolean}} [options] - scope policy.
  * @returns {string[] | 'all' | undefined} normalized list, `'all'`, or undefined when absent.
  * @throws {SessionPortFormatError} `invalid-sessionIds`, `too-many-sessions`.
  */
-function parseSessionIdList(value, { allowAll = false, maxBatch = MAX_MANAGE_BATCH } = {}) {
+function parseSessionIdList(value, { allowAll = false, maxBatch = MAX_MANAGE_BATCH, allowEmpty = false } = {}) {
   if (value === undefined || value === null) return undefined
   if (value === 'all') {
     if (allowAll) return 'all'
@@ -610,7 +796,9 @@ function parseSessionIdList(value, { allowAll = false, maxBatch = MAX_MANAGE_BAT
     seen.add(id)
     ids.push(id)
   }
-  if (ids.length === 0) throw new SessionPortFormatError('invalid-sessionIds', 'sessionIds 不能为空')
+  if (ids.length === 0 && !allowEmpty) {
+    throw new SessionPortFormatError('invalid-sessionIds', 'sessionIds 不能为空')
+  }
   if (ids.length > maxBatch) {
     throw new SessionPortFormatError('too-many-sessions', `一次最多处理 ${maxBatch} 个会话（本次 ${ids.length} 个）`)
   }
@@ -619,12 +807,17 @@ function parseSessionIdList(value, { allowAll = false, maxBatch = MAX_MANAGE_BAT
 
 /**
  * HTTP status for one failed manage result code.
+ *
+ * Batches report the status of their first failure when every id failed, so
+ * this mapping must stay in step with {@link statusOf}; the two differ only
+ * because batch results carry a `code` string instead of an `Error`.
  * @param {string | undefined} code - error code reported by `lib/manage.js`.
- * @returns {number} 404 / 409 / 500.
+ * @returns {number} 404 not-found / 409 active / 503 unavailable / 500 otherwise.
  */
 function statusForManageCode(code) {
   if (code === 'not-found') return 404
   if (code === 'active') return 409
+  if (code === 'unavailable') return 503
   return 500
 }
 
@@ -818,7 +1011,7 @@ function parseSelectedFiles(value) {
  * `selectedFiles` list (`400 invalid-selection` otherwise) so no client can move
  * every derived file silently; `permanent:true` erases instead of trashing and
  * also requires `confirm:true`. A fully failed batch answers with the status of
- * its first failure code (404 not-found / 409 active / 500); a partial success
+ * its first failure code (404 not-found / 409 active / 503 unavailable / 500); a partial success
  * answers 200 with one result per id.
  * @param {object} ctx - the plugin context.
  * @param {object} settings - resolved settings.
@@ -1235,19 +1428,28 @@ function stringList(value, fallback) {
  */
 async function handleExport(ctx, settings, overrides, req, res) {
   const payload = await readJsonBody(req, MAX_JSON_BODY_BYTES)
-  const requested = payload.sessionIds
   const includeSubagents = booleanFlag(payload.includeSubagents, settings.includeSubagents)
-  let sessionIds
-  if (requested === 'all') {
-    const helpers = await loadSessions(overrides)
-    sessionIds = (await helpers.listSessionEntries(ctx, { includeSubagents })).map((entry) => entry.id)
-  } else if (Array.isArray(requested)) {
-    sessionIds = requested.map((value) => String(value))
-  } else {
+  // One parser for every surface: `'all'` is meaningful here, an empty array is
+  // allowed through so `buildArchive` (not the parser) reports it, and export
+  // keeps no session-count cap.
+  const scope = parseSessionIdList(payload.sessionIds, {
+    allowAll: true,
+    allowEmpty: true,
+    maxBatch: Number.POSITIVE_INFINITY,
+  })
+  if (scope === undefined) {
     throw new SessionPortFormatError('missing-sessions', '请求缺少 sessionIds（会话 id 数组，或 "all"）')
   }
-  const mode = payload.mode === 'full' || payload.mode === 'compact' ? payload.mode : settings.defaultMode
-  const exported = await buildArchive(ctx, {
+  let sessionIds
+  if (scope === 'all') {
+    const helpers = await loadSessions(overrides)
+    sessionIds = (await helpers.listSessionEntries(ctx, { includeSubagents })).map((entry) => entry.id)
+  } else {
+    sessionIds = scope
+  }
+  const mode = exportModeOf(payload.mode, settings.defaultMode)
+  const exporter = await loadExport(overrides)
+  const exported = await exporter.buildArchive(ctx, {
     sessionIds,
     mode,
     includeAttachments: booleanFlag(payload.includeAttachments, settings.includeAttachments),
@@ -1269,6 +1471,161 @@ async function handleExport(ctx, settings, overrides, req, res) {
     'x-session-kit-workspace-files': String(exported.workspaceFileCount ?? 0),
   })
   res.end(exported.data)
+}
+
+/**
+ * `GET /session-kit/trash` — inventory of recoverable trash operations.
+ * @param {object} ctx - the plugin context.
+ * @param {object} settings - resolved settings.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {import('node:http').IncomingMessage} req - request.
+ * @param {import('node:http').ServerResponse} res - response.
+ */
+async function handleTrashList(ctx, settings, overrides, req, res) {
+  void req
+  const trash = await loadTrash(overrides)
+  const listed = await trash.listTrashOperations(ctx, trashOptions(settings))
+  sendJson(res, 200, { ok: true, ...listed })
+}
+
+/**
+ * `POST /session-kit/trash-restore` — move recorded session directories back.
+ *
+ * Body: `{ operationId: string, sessionIds?: string[] }`. A target that already
+ * exists is skipped, never overwritten; a partial restore keeps the operation
+ * for a later call.
+ * @param {object} ctx - the plugin context.
+ * @param {object} settings - resolved settings.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {import('node:http').IncomingMessage} req - request.
+ * @param {import('node:http').ServerResponse} res - response.
+ */
+async function handleTrashRestore(ctx, settings, overrides, req, res) {
+  const payload = await readJsonBody(req, MAX_JSON_BODY_BYTES)
+  const operationId = optionalString(payload.operationId, 'operationId', { required: true })
+  const sessionIds = parseSessionIdList(payload.sessionIds, {
+    allowAll: false,
+    allowEmpty: true,
+    maxBatch: MAX_DETAIL_BATCH,
+  })
+  const trash = await loadTrash(overrides)
+  const restored = await trash.restoreTrashOperation(ctx, {
+    ...trashOptions(settings),
+    operationId,
+    ...(sessionIds !== undefined && sessionIds !== 'all' && sessionIds.length > 0 ? { sessionIds } : {}),
+  })
+  sendJson(res, 200, { ok: true, ...restored })
+}
+
+/**
+ * `POST /session-kit/trash-purge` — permanently erase trash operations.
+ *
+ * Body: `{ operationIds: string[] | "all", olderThanDays?: number,
+ * confirm: true }`. Without `confirm:true` nothing is erased.
+ * @param {object} ctx - the plugin context.
+ * @param {object} settings - resolved settings.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {import('node:http').IncomingMessage} req - request.
+ * @param {import('node:http').ServerResponse} res - response.
+ */
+async function handleTrashPurge(ctx, settings, overrides, req, res) {
+  const payload = await readJsonBody(req, MAX_JSON_BODY_BYTES)
+  if (payload.confirm !== true) {
+    throw new SessionPortFormatError('confirm-required', '清理回收站不可恢复，需要 confirm:true')
+  }
+  const operationIds = parseTrashOperationIds(payload.operationIds)
+  const olderThanDays =
+    payload.olderThanDays === undefined ? undefined : positiveIntegerValue(payload.olderThanDays, 'olderThanDays')
+  const trash = await loadTrash(overrides)
+  const purged = await trash.purgeTrashOperations(ctx, {
+    ...trashOptions(settings),
+    operationIds,
+    confirm: true,
+    ...(olderThanDays !== undefined ? { olderThanDays } : {}),
+  })
+  sendJson(res, 200, { ok: true, ...purged })
+}
+
+/**
+ * `POST /session-kit/move` — move sessions into a destination workspace.
+ *
+ * A move is copy-then-trash: a NEW session (new id, `cwd` = target workspace
+ * path) is written and read back first, then the source is moved into the
+ * trash directory, so a failed copy never loses the conversation. Each session
+ * is preflighted individually; unsafe sources appear in `skipped`.
+ * Body: `{ workspaceId: string, sessionIds: string[], confirm: true }`.
+ * @param {object} ctx - the plugin context.
+ * @param {object} settings - resolved settings.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {import('node:http').IncomingMessage} req - request.
+ * @param {import('node:http').ServerResponse} res - response.
+ */
+async function handleMove(ctx, settings, overrides, req, res) {
+  const payload = await readJsonBody(req, MAX_JSON_BODY_BYTES)
+  if (payload.confirm !== true) {
+    throw new SessionPortFormatError(
+      'confirm-required',
+      '迁移会把源会话移入回收站（可恢复），需要 confirm:true；活动会话、子代理转录和旧格式会话会被跳过',
+    )
+  }
+  const workspaceId = optionalString(payload.workspaceId, 'workspaceId', { required: true })
+  const sessionIds = parseSessionIdList(payload.sessionIds, { allowAll: false, maxBatch: MAX_MOVE_BATCH })
+  if (sessionIds === undefined) {
+    throw new SessionPortFormatError('invalid-argument', 'move 需要 sessionIds 数组（要迁移的会话 id）')
+  }
+  const move = await loadMove(overrides)
+  const moved = await move.moveSessions(ctx, {
+    workspaceId,
+    sessionIds,
+    ...trashOptions(settings),
+  })
+  sendJson(res, 200, { ok: true, ...moved })
+}
+
+/**
+ * Trash operations take the configured directory, which may be undefined.
+ * @param {object} settings - resolved settings.
+ * @returns {{trashDir?: string}} options fragment.
+ */
+function trashOptions(settings) {
+  return settings.trashDir !== undefined ? { trashDir: settings.trashDir } : {}
+}
+
+/**
+ * Normalize a purge scope: an explicit directory-name list, or `"all"`.
+ * @param {unknown} value - raw body value.
+ * @returns {string[] | 'all'} scope.
+ * @throws {SessionPortFormatError} `invalid-argument` for anything else.
+ */
+function parseTrashOperationIds(value) {
+  if (value === 'all') return 'all'
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new SessionPortFormatError('invalid-argument', 'operationIds 必须是回收站目录名数组或 "all"')
+  }
+  const ids = value.map((entry) => {
+    if (typeof entry !== 'string' || entry.trim() === '') {
+      throw new SessionPortFormatError('invalid-argument', 'operationIds 的每一项必须是非空字符串')
+    }
+    return entry.trim()
+  })
+  if (ids.length > MAX_MANAGE_BATCH) {
+    throw new SessionPortFormatError('too-many-sessions', `一次最多清理 ${MAX_MANAGE_BATCH} 个回收站操作`)
+  }
+  return ids
+}
+
+/**
+ * Validate one positive integer body value.
+ * @param {unknown} value - raw value.
+ * @param {string} field - field name for the error message.
+ * @returns {number} the value.
+ * @throws {SessionPortFormatError} `invalid-argument` when it is not a positive safe integer.
+ */
+function positiveIntegerValue(value, field) {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new SessionPortFormatError('invalid-argument', `${field} 必须是正整数`)
+  }
+  return value
 }
 
 /**
@@ -1306,8 +1663,8 @@ async function handleExportWorkspace(ctx, settings, overrides, req, res) {
   if (workspaceId === '') {
     throw new SessionPortFormatError('invalid-argument', '请求缺少 workspaceId（工作区 id）')
   }
-  if (payload.mode !== undefined && payload.mode !== 'full' && payload.mode !== 'compact') {
-    throw new SessionPortFormatError('invalid-argument', 'mode 必须是 "full" 或 "compact"')
+  if (payload.mode !== undefined && !EXPORT_MODE_VALUES.has(payload.mode)) {
+    throw new SessionPortFormatError('invalid-argument', 'mode 必须是 "full"、"compact" 或 "compressed"')
   }
   const backup = await loadWorkspaceBackup(overrides)
   if (typeof backup.buildWorkspaceBackup !== 'function') {
@@ -1317,7 +1674,7 @@ async function handleExportWorkspace(ctx, settings, overrides, req, res) {
   try {
     result = await backup.buildWorkspaceBackup(ctx, {
       workspaceId,
-      mode: payload.mode ?? settings.defaultMode,
+      mode: exportModeOf(payload.mode, settings.defaultMode),
       includeAttachments: booleanFlag(payload.includeAttachments, settings.includeAttachments),
       includeSubagents: booleanFlag(payload.includeSubagents, settings.includeSubagents),
       workspaceExclude: stringList(payload.workspaceExclude, settings.workspaceExclude),
@@ -1350,6 +1707,48 @@ async function handleExportWorkspace(ctx, settings, overrides, req, res) {
 }
 
 /**
+ * Resolve the read-only attachment report module lazily.
+ * @param {{attachmentReport?: object} | undefined} overrides - module injection seam.
+ * @returns {Promise<object>} report module namespace.
+ */
+async function loadAttachmentReport(overrides) {
+  if (overrides !== undefined) {
+    if (overrides.attachmentReport === undefined || overrides.attachmentReport === null) {
+      throw new SessionPortFormatError('unavailable', '附件报告模块不可用')
+    }
+    return overrides.attachmentReport
+  }
+  if (attachmentReportModule === undefined) {
+    try {
+      attachmentReportModule = await import('./lib/attachment-report.js')
+    } catch (error) {
+      throw new SessionPortFormatError('unavailable', `附件报告模块不可用：${errorText(error)}`)
+    }
+  }
+  return attachmentReportModule
+}
+
+/**
+ * `GET /session-kit/attachment-report` — read-only dangling-reference scan.
+ * Query: `limit` (1..300, default 300), `includeSubagents=1`.
+ * @param {object} ctx - the plugin context.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {URL} url - parsed request URL.
+ * @param {import('node:http').ServerResponse} res - response.
+ */
+async function handleAttachmentReport(ctx, overrides, url, res) {
+  const report = await loadAttachmentReport(overrides)
+  const rawLimit = url.searchParams.get('limit')
+  const limit = rawLimit === null || rawLimit === '' ? undefined : positiveIntegerValue(Number(rawLimit), 'limit')
+  const includeSubagents = url.searchParams.get('includeSubagents') === '1'
+  const result = await report.reportAttachmentReferences(ctx, {
+    ...(limit !== undefined ? { limit } : {}),
+    includeSubagents,
+  })
+  sendJson(res, 200, { ok: true, ...result })
+}
+
+/**
  * `POST /session-kit/import` — commit one uploaded archive as new sessions.
  * Query carries `cwd`, `workspaceId`, `restoreWorkspaceFiles`, `filename` hints.
  * @param {object} ctx - the plugin context.
@@ -1358,18 +1757,54 @@ async function handleExportWorkspace(ctx, settings, overrides, req, res) {
  * @param {import('node:http').IncomingMessage} req - request.
  * @param {import('node:http').ServerResponse} res - response.
  */
-async function handleImport(ctx, settings, url, req, res) {
+async function handleImport(ctx, settings, overrides, url, req, res) {
   const buffer = await readRequestBody(req, settings.maxImportBytes)
   const rawRestore = url.searchParams.get('restoreWorkspaceFiles')
   const restoreWorkspaceFiles =
     rawRestore === null || rawRestore === ''
       ? settings.restoreWorkspaceFiles
       : rawRestore === '1' || rawRestore.toLowerCase() === 'true'
-  const result = await importArchive(ctx, {
+  const rawSkip = url.searchParams.get('skipDuplicates')
+  const skipDuplicates = rawSkip === '1' || rawSkip?.toLowerCase() === 'true'
+  const streamProgress = url.searchParams.get('progress') === 'ndjson'
+  const importer = await loadImport(overrides)
+  if (streamProgress) {
+    res.writeHead(200, {
+      'content-type': 'application/x-ndjson; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+    })
+    const writeEvent = (event) => {
+      res.write(`${JSON.stringify(event)}\n`)
+    }
+    try {
+      const result = await importer.importArchive(ctx, {
+        buffer,
+        cwd: url.searchParams.get('cwd') ?? undefined,
+        workspaceId: url.searchParams.get('workspaceId') ?? undefined,
+        restoreWorkspaceFiles,
+        skipDuplicates,
+        maxImportBytes: settings.maxImportBytes,
+        onProgress: (entry) => writeEvent({ event: 'session', ...entry }),
+      })
+      writeEvent({ event: 'done', ok: true, ...result })
+    } catch (error) {
+      writeEvent({
+        event: 'error',
+        ok: false,
+        code: error instanceof SessionPortFormatError ? error.code : 'import-failed',
+        message: errorText(error),
+      })
+    }
+    res.end()
+    return
+  }
+  const result = await importer.importArchive(ctx, {
     buffer,
     cwd: url.searchParams.get('cwd') ?? undefined,
     workspaceId: url.searchParams.get('workspaceId') ?? undefined,
     restoreWorkspaceFiles,
+    skipDuplicates,
     maxImportBytes: settings.maxImportBytes,
   })
   sendJson(res, 200, { ok: true, ...result })
@@ -1433,6 +1868,7 @@ function statusOf(error) {
   if (code === 'not-found' || code === 'file-missing' || code === 'workspace-not-found') return 404
   if (code === 'too-large') return 413
   if (code === 'active') return 409
+  if (code === 'trash-manifest-missing') return 409
   if (code === 'share-fetch' || code === 'share-api' || code === 'timeout') return 502
   if (
     code === 'unsafe-location' ||
@@ -1440,6 +1876,13 @@ function statusOf(error) {
     code === 'migration-failed' ||
     code === 'files-failed' ||
     code === 'file-plan-failed' ||
+    code === 'trash-failed' ||
+    code === 'read-failed' ||
+    code === 'write-failed' ||
+    code === 'verify-failed' ||
+    code === 'move-failed' ||
+    code === 'compact-failed' ||
+    code === 'compress-failed' ||
     code === 'detail-failed' ||
     code === 'import-failed' ||
     code === 'workspace-backup-failed' ||
@@ -1471,15 +1914,19 @@ function registerTool(ctx, settings, overrides) {
         description: [
           'Manage DSH conversations as session archives.',
           'action=list summarizes workspaces and sessions (archived rows are marked).',
-          'action=export writes selected sessions (or all) as ONE ZIP under a plugin-owned folder and returns its path; mode=compact keeps only the conversational spine, mode=full keeps the complete session logs.',
+          'action=export writes selected sessions (or all) as ONE ZIP under a plugin-owned folder and returns its path; mode=compact keeps only the conversational spine, mode=compressed keeps every event and tool call but truncates oversized string payloads and drops streamed deltas, mode=full keeps the complete session logs.',
           'Export can optionally pack whole workspace trees (includeWorkspaceFiles) while excluding VCS/build caches and secret files, and can include subagent transcripts (includeSubagents, default false).',
-          "action=import creates NEW sessions from an archive produced by this plugin or by DSH's built-in session-log export; it never modifies or deletes an existing session, never imports subagent transcripts, and can restore the archive's workspace files into the target directory (restoreWorkspaceFiles).",
+          "action=import creates NEW sessions from an archive produced by this plugin or by DSH's built-in session-log export; it never modifies or deletes an existing session, never imports subagent transcripts, and can restore the archive's workspace files into the target directory (restoreWorkspaceFiles). Archived/pinned flags in the archive are re-applied best-effort; pass skipDuplicates=true (or ?skipDuplicates=1) to skip source ids that already exist locally, and ?progress=ndjson to stream one JSON line per committed session.",
           "action=archive / action=unarchive toggle a session's archived state; action=delete moves sessions into <DSH_HOME>/session-kit-trash and requires confirm:true plus explicit session ids. The related-files handling is experimental: pass removeFiles:true together with an explicit selectedFiles list to move only those files; permanent:true erases the session directories and selected files irreversibly (also requires confirm:true).",
           'action=migrate upgrades legacy session logs through DSH\'s official migration chain; sessionIds are explicit ids, or "all" (which requires confirm:true). The old generation is kept and a failed session stays unchanged.',
           'action=files previews the workspace files a deletion would move for the selected sessions; the derivation is best effort (shell redirections, PTC scripts and files only mentioned in text cannot be discovered) and shared workspace files may be affected.',
+          "action=detail reports each session's storage size, format status and archived state for up to 100 explicit ids; it reads through the same session service as the panel's detail view and writes nothing.",
+          'action=trash_list inventories the trash directory (each delete writes an operation manifest); action=trash_restore moves the recorded session directories back to their original project directory, skips a target that already exists and re-registers workspace/archive/pin state, and action=trash_purge permanently erases selected operations (or "all") and requires confirm:true.',
+          'action=move copies the selected sessions into a destination workspace as NEW sessions (new ids, header.cwd = target path), reads each copy back, then moves the SOURCE session directories into the trash directory; a source that is live, running, a subagent transcript or an older format is skipped before copying, and a copy that fails verification leaves its source untouched. A move is reversible by restoring the trash operation. It requires confirm:true and workspaceId.',
           'action=delete with removeFiles:true requires selectedFiles (absolute paths from the files preview) and moves only those derived files; preview with action=files first and keep confirm:true. Without permanent:true nothing is erased.',
           'action=import_share imports a DeepSeek share conversation (chat.deepseek.com/share/<id> link or bare share id) as a NEW session; pass workspaceId to choose the target workspace, otherwise cwd or the deployment default directory is used.',
-          'action=export_workspace backs up ONE workspace as a single ZIP: every main session in that workspace plus its whole file tree (sensitive files/build caches excluded, symlinks not followed); workspaceId is required and the session-scoped export action keeps its behavior.',
+          'action=export_workspace backs up one or more workspaces as separate ZIPs: every main session in each workspace plus its whole file tree (sensitive files/build caches excluded, symlinks not followed). Pass workspaceIds for a batch (max 20) or a single workspaceId; the session-scoped export action keeps its behavior.',
+          'action=attachment_report scans up to 300 sessions read-only and reports attachment references whose host file no longer exists; it never deletes anything and returns missing and unverifiable reference counts.',
         ].join(' '),
         parameters: {
           type: 'object',
@@ -1496,14 +1943,20 @@ function registerTool(ctx, settings, overrides) {
                 'delete',
                 'migrate',
                 'files',
+                'detail',
+                'trash_list',
+                'trash_restore',
+                'trash_purge',
+                'move',
+                'attachment_report',
                 'import_share',
               ],
               description:
-                "list: summarize sessions. export: save selected sessions as one ZIP. export_workspace: back up one whole workspace (sessions + file tree) as one ZIP. import: create new sessions from a ZIP or JSONL archive. archive/unarchive: toggle archived state. delete: move sessions to the trash directory. migrate: upgrade legacy session logs through DSH's official migration chain. files: preview the workspace files a deletion would move. import_share: import a DeepSeek share link as a new session.",
+                "list: summarize sessions. export: save selected sessions as one ZIP. export_workspace: back up one whole workspace (sessions + file tree) as one ZIP. import: create new sessions from a ZIP or JSONL archive. archive/unarchive: toggle archived state. delete: move sessions to the trash directory. migrate: upgrade legacy session logs through DSH's official migration chain. files: preview the workspace files a deletion would move. detail: report each session's storage size, format status and archived state (bounded by the same 100-id cap as the detail route). trash_list: inventory recoverable trash operations. trash_restore: move recorded session directories back (never overwrites). trash_purge: permanently erase trash operations (requires confirm:true). move: copy sessions into a destination workspace (new ids) then trash the sources (requires confirm:true and workspaceId). attachment_report: read-only scan of attachment references whose host files no longer resolve (limit defaults to 300 sessions; nothing is deleted). import_share: import a DeepSeek share link as a new session.",
             },
             mode: {
               type: 'string',
-              enum: ['full', 'compact'],
+              enum: ['full', 'compact', 'compressed'],
               description:
                 'export/export_workspace only: full keeps complete logs; compact keeps only the conversation (default from plugin config).',
             },
@@ -1513,7 +1966,7 @@ function registerTool(ctx, settings, overrides) {
                 { type: 'string', enum: ['all'] },
               ],
               description:
-                'export/archive: session ids, or "all" (archive only). unarchive/delete/files: explicit session ids ("all" is refused for safety). migrate: explicit ids, or "all" (requires confirm:true).',
+                'export/archive: session ids, or "all" (archive only). unarchive/delete/files/detail/move: explicit session ids ("all" is refused for safety). migrate: explicit ids, or "all" (requires confirm:true).',
             },
             input: {
               type: 'string',
@@ -1522,7 +1975,13 @@ function registerTool(ctx, settings, overrides) {
             workspaceId: {
               type: 'string',
               description:
-                'import_share: target workspace id (resolved through the workspace registry); otherwise cwd or the deployment default directory is used. export_workspace: the workspace to back up (required).',
+                'import_share: target workspace id (resolved through the workspace registry); otherwise cwd or the deployment default directory is used. export_workspace: one workspace to back up (required unless workspaceIds is given). move: the destination workspace (required).',
+            },
+            workspaceIds: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                'export_workspace only: several workspace ids to back up as separate ZIPs (max 20, de-duplicated). Takes precedence over workspaceId. The HTTP route still produces one ZIP per request.',
             },
             title: {
               type: 'string',
@@ -1553,10 +2012,15 @@ function registerTool(ctx, settings, overrides) {
               description:
                 "import only: restore the archive's workspace files into the target directory (existing files are never overwritten).",
             },
+            skipDuplicates: {
+              type: 'boolean',
+              description:
+                'import only: skip archive sessions whose source id already exists locally instead of importing another copy. Without it, duplicates are reported as warnings. The HTTP route also accepts ?skipDuplicates=1 and ?progress=ndjson.',
+            },
             confirm: {
               type: 'boolean',
               description:
-                'delete: must be true (and a second confirmation is required for permanent:true). migrate with sessionIds="all": must be true.',
+                'delete: must be true (and a second confirmation is required for permanent:true). migrate with sessionIds="all": must be true. move: must be true (the source sessions are moved into the trash directory).',
             },
             stopActivity: {
               type: 'boolean',
@@ -1573,6 +2037,25 @@ function registerTool(ctx, settings, overrides) {
               items: { type: 'string' },
               description:
                 'delete only: absolute paths from the files preview to move (or permanently delete) together with the sessions; required when removeFiles is true.',
+            },
+            operationId: {
+              type: 'string',
+              description: 'trash_restore only: the trash operation directory name (from trash_list).',
+            },
+            operationIds: {
+              oneOf: [
+                { type: 'array', items: { type: 'string' } },
+                { type: 'string', enum: ['all'] },
+              ],
+              description: 'trash_purge only: operation names, or "all". Requires confirm:true.',
+            },
+            olderThanDays: {
+              type: 'integer',
+              description: 'trash_purge only: with operationIds:"all", keep operations newer than this many days.',
+            },
+            limit: {
+              type: 'integer',
+              description: 'attachment_report only: how many sessions to scan (default and maximum 300, newest first).',
             },
             permanent: {
               type: 'boolean',
@@ -1607,18 +2090,25 @@ function registerTool(ctx, settings, overrides) {
             return listToolText(sessions, workspaces)
           }
           if (action === 'export') {
-            const requested = args.sessionIds
+            // An omitted sessionIds still means "all" for the tool (an agent call
+            // without ids exports the whole list); anything explicit goes through
+            // the same parser as every other surface and is never silently
+            // coerced or de-duplicated differently.
+            const scope = parseSessionIdList(args.sessionIds, {
+              allowAll: true,
+              allowEmpty: true,
+              maxBatch: Number.POSITIVE_INFINITY,
+            })
             const sessionIds =
-              requested === 'all' || requested === undefined
+              scope === undefined || scope === 'all'
                 ? (await helpers.listSessionEntries(ctx, { includeSubagents })).map((entry) => entry.id)
-                : Array.isArray(requested)
-                  ? requested.map((value) => String(value))
-                  : []
-            const mode = args.mode === 'full' || args.mode === 'compact' ? args.mode : settings.defaultMode
-            const exported = await buildArchive(ctx, {
+                : scope
+            const mode = exportModeOf(args.mode, settings.defaultMode)
+            const exporter = await loadExport(overrides)
+            const exported = await exporter.buildArchive(ctx, {
               sessionIds,
               mode,
-              includeAttachments: settings.includeAttachments,
+              includeAttachments: booleanFlag(args.includeAttachments, settings.includeAttachments),
               includeWorkspaceFiles: booleanFlag(args.includeWorkspaceFiles, settings.includeWorkspaceFiles),
               includeSubagents,
               workspaceExclude: stringList(args.workspaceExclude, settings.workspaceExclude),
@@ -1636,12 +2126,17 @@ function registerTool(ctx, settings, overrides) {
             if (path === '') {
               throw new Error('session_kit: import 需要 path 参数（会话归档路径）')
             }
+            const importer = await loadImport(overrides)
             const targetCwd = await cwdOf(ctx, helpers, exec, args.cwd)
-            const file = await readImportFile(path, { cwd: targetCwd, maxImportBytes: settings.maxImportBytes })
-            const result = await importArchive(ctx, {
+            const file = await importer.readImportFile(path, {
+              cwd: targetCwd,
+              maxImportBytes: settings.maxImportBytes,
+            })
+            const result = await importer.importArchive(ctx, {
               buffer: file.buffer,
               cwd: targetCwd,
               restoreWorkspaceFiles: booleanFlag(args.restoreWorkspaceFiles, settings.restoreWorkspaceFiles),
+              skipDuplicates: booleanFlag(args.skipDuplicates, false),
               maxImportBytes: settings.maxImportBytes,
             })
             return importToolText(result)
@@ -1655,6 +2150,24 @@ function registerTool(ctx, settings, overrides) {
           if (action === 'files') {
             return runFilesTool(ctx, overrides, args)
           }
+          if (action === 'detail') {
+            return runDetailTool(ctx, overrides, args)
+          }
+          if (action === 'trash_list') {
+            return runTrashListTool(ctx, settings, overrides)
+          }
+          if (action === 'trash_restore') {
+            return runTrashRestoreTool(ctx, settings, overrides, args)
+          }
+          if (action === 'trash_purge') {
+            return runTrashPurgeTool(ctx, settings, overrides, args)
+          }
+          if (action === 'move') {
+            return runMoveTool(ctx, settings, overrides, args)
+          }
+          if (action === 'attachment_report') {
+            return runAttachmentReportTool(ctx, overrides, args)
+          }
           if (action === 'import_share') {
             return runImportShareTool(ctx, overrides, helpers, args)
           }
@@ -1662,7 +2175,7 @@ function registerTool(ctx, settings, overrides) {
             return runWorkspaceExportTool(ctx, settings, overrides, args)
           }
           throw new Error(
-            'session_kit: action 必须是 "list"、"export"、"export_workspace"、"import"、"archive"、"unarchive"、"delete"、"migrate"、"files" 或 "import_share"',
+            'session_kit: action 必须是 "list"、"export"、"export_workspace"、"import"、"archive"、"unarchive"、"delete"、"migrate"、"files"、"detail"、"trash_list"、"trash_restore"、"trash_purge"、"move"、"attachment_report" 或 "import_share"',
           )
         },
       }),
@@ -1823,6 +2336,292 @@ function filesToolText(plan) {
 }
 
 /**
+ * Run the detail tool action (parse ids -> per-session detail -> summary text).
+ *
+ * Mirrors `POST /session-kit/session-detail`: same parser, same per-id error
+ * tolerance, same 100-id cap. No client-only state is touched and nothing is
+ * written, so this action is safe to call without `confirm`.
+ * @param {object} ctx - the plugin context.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {object} args - model arguments.
+ * @returns {Promise<string>} summary text.
+ */
+async function runDetailTool(ctx, overrides, args) {
+  const sessionIds = parseSessionIdList(args.sessionIds, { allowAll: false, maxBatch: MAX_DETAIL_BATCH })
+  if (sessionIds === undefined) {
+    throw new Error('session_kit: detail 需要 sessionIds 参数（会话 id 数组）')
+  }
+  const helpers = await loadSessions(overrides)
+  if (typeof helpers.sessionDetail !== 'function') {
+    throw new Error('session_kit: 会话详情模块不可用')
+  }
+  const results = []
+  for (const sessionId of sessionIds) {
+    try {
+      results.push({ id: sessionId, ok: true, detail: await helpers.sessionDetail(ctx, sessionId) })
+    } catch (error) {
+      results.push({
+        id: sessionId,
+        ok: false,
+        error: errorText(error),
+        code: typeof error?.code === 'string' && error.code !== '' ? error.code : 'detail-failed',
+      })
+    }
+  }
+  return detailToolText(results)
+}
+
+/**
+ * Render a byte count compactly while keeping the exact value visible.
+ * @param {number} bytes - non-negative byte count.
+ * @returns {string} e.g. `1.2 MiB（1258291 字节）`, or 大小未知.
+ */
+function formatByteSize(bytes) {
+  if (!Number.isSafeInteger(bytes) || bytes < 0) return '大小未知'
+  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
+  let value = bytes
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit += 1
+  }
+  const shown = unit === 0 ? String(value) : value.toFixed(1)
+  return unit === 0 ? `${bytes} 字节` : `${shown} ${units[unit]}（${bytes} 字节）`
+}
+
+/**
+ * Tool result text for the detail action.
+ * @param {Array<{id: string, ok: boolean, detail?: object, error?: string, code?: string}>} results - per-id results.
+ * @returns {string} summary text.
+ */
+function detailToolText(results) {
+  const failed = results.filter((result) => result.ok !== true)
+  const lines = [`会话详情：成功 ${results.length - failed.length} 个，失败 ${failed.length} 个`]
+  for (const result of results) {
+    if (result.ok !== true) {
+      lines.push(`- ${result.id}：${result.error ?? '读取失败'}（${result.code ?? 'detail-failed'}）`)
+      continue
+    }
+    const detail = result.detail !== null && typeof result.detail === 'object' ? result.detail : {}
+    const parts = []
+    if (Number.isSafeInteger(detail.sizeBytes)) parts.push(`存储 ${formatByteSize(detail.sizeBytes)}`)
+    if (typeof detail.formatStatus === 'string' && detail.formatStatus !== '') {
+      parts.push(`格式 ${detail.formatStatus}`)
+    }
+    if (detail.legacy === true) parts.push('旧格式')
+    parts.push(detail.archived === true ? '已归档' : '未归档')
+    lines.push(`- ${result.id}：${parts.join('，')}`)
+  }
+  return lines.join('\n')
+}
+
+/**
+ * Run the trash_list tool action.
+ *
+ * The inventory is read-only: it reports each operation's manifest, size and
+ * whether it can be restored, and never moves or deletes anything.
+ * @param {object} ctx - the plugin context.
+ * @param {object} settings - resolved settings.
+ * @param {object | undefined} overrides - module injection seam.
+ * @returns {Promise<string>} inventory text.
+ */
+async function runTrashListTool(ctx, settings, overrides) {
+  const trash = await loadTrash(overrides)
+  const listed = await trash.listTrashOperations(ctx, trashOptions(settings))
+  return trashListText(listed)
+}
+
+/**
+ * Run the trash_restore tool action.
+ * @param {object} ctx - the plugin context.
+ * @param {object} settings - resolved settings.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {object} args - model arguments.
+ * @returns {Promise<string>} summary text.
+ */
+async function runTrashRestoreTool(ctx, settings, overrides, args) {
+  const operationId = typeof args.operationId === 'string' ? args.operationId.trim() : ''
+  if (operationId === '') {
+    throw new Error('session_kit: trash_restore 需要 operationId（回收站操作目录名，先用 trash_list 查看）')
+  }
+  const sessionIds = parseSessionIdList(args.sessionIds, {
+    allowAll: false,
+    allowEmpty: true,
+    maxBatch: MAX_DETAIL_BATCH,
+  })
+  const trash = await loadTrash(overrides)
+  const restored = await trash.restoreTrashOperation(ctx, {
+    ...trashOptions(settings),
+    operationId,
+    ...(Array.isArray(sessionIds) && sessionIds.length > 0 ? { sessionIds } : {}),
+  })
+  return trashRestoreText(restored)
+}
+
+/**
+ * Run the trash_purge tool action (irreversible; requires `confirm: true`).
+ * @param {object} ctx - the plugin context.
+ * @param {object} settings - resolved settings.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {object} args - model arguments.
+ * @returns {Promise<string>} summary text.
+ */
+async function runTrashPurgeTool(ctx, settings, overrides, args) {
+  if (args.confirm !== true) {
+    throw new Error('session_kit: trash_purge 需要 confirm:true（清理回收站不可恢复）')
+  }
+  const operationIds = parseTrashOperationIds(args.operationIds)
+  const olderThanDays =
+    args.olderThanDays === undefined ? undefined : positiveIntegerValue(args.olderThanDays, 'olderThanDays')
+  const trash = await loadTrash(overrides)
+  const purged = await trash.purgeTrashOperations(ctx, {
+    ...trashOptions(settings),
+    operationIds,
+    confirm: true,
+    ...(olderThanDays !== undefined ? { olderThanDays } : {}),
+  })
+  return trashPurgeText(purged)
+}
+
+/**
+ * Tool result text for the trash_list action.
+ * @param {{trashRoot?: string, operations?: Array<object>, warnings?: string[]}} listed - inventory.
+ * @returns {string} summary text.
+ */
+function trashListText(listed) {
+  const operations = Array.isArray(listed.operations) ? listed.operations : []
+  if (operations.length === 0) return '回收站是空的'
+  const total = operations.reduce(
+    (sum, operation) => sum + (Number.isSafeInteger(operation.bytes) ? operation.bytes : 0),
+    0,
+  )
+  const lines = [`回收站：${operations.length} 个操作，共 ${formatByteSize(total)}`]
+  for (const operation of operations.slice(0, 20)) {
+    const when =
+      typeof operation.createdAt === 'string' ? operation.createdAt.replace('T', ' ').slice(0, 19) : '时间未知'
+    const state = operation.restorable === true ? '可恢复' : '缺清单，只能人工检查'
+    lines.push(
+      `- ${operation.operationId}（${when}，${operation.sessionCount ?? 0} 个会话，` +
+        `${formatByteSize(operation.bytes ?? 0)}，${state}${operation.hasFiles === true ? '，含相关文件' : ''}）`,
+    )
+  }
+  if (operations.length > 20) lines.push(`…还有 ${operations.length - 20} 个操作未列出`)
+  for (const warning of listed.warnings ?? []) lines.push(`注意：${warning}`)
+  return lines.join('\n')
+}
+
+/**
+ * Tool result text for the trash_restore action.
+ * @param {{operationId?: string, restored?: Array<object>, skipped?: Array<object>, warnings?: string[]}} result - restore outcome.
+ * @returns {string} summary text.
+ */
+function trashRestoreText(result) {
+  const restored = Array.isArray(result.restored) ? result.restored : []
+  const skipped = Array.isArray(result.skipped) ? result.skipped : []
+  const lines = [`回收站恢复：成功 ${restored.length} 个会话，跳过 ${skipped.length} 个`]
+  for (const entry of restored) lines.push(`- 已恢复到 ${entry.path}`)
+  for (const entry of skipped) {
+    const reason =
+      entry.reason === 'target-exists'
+        ? '目标已存在（未覆盖）'
+        : entry.reason === 'missing'
+          ? '回收站里找不到目录'
+          : entry.reason === 'no-original-location'
+            ? '清单没有记录原位置'
+            : entry.reason === 'unsafe-location'
+              ? '原位置不安全'
+              : `移动失败：${entry.error ?? '未知原因'}`
+    lines.push(`- ${entry.id}：${reason}`)
+  }
+  for (const warning of result.warnings ?? []) lines.push(`注意：${warning}`)
+  return lines.join('\n')
+}
+
+/**
+ * Tool result text for the trash_purge action.
+ * @param {{removed?: string[], freedBytes?: number, warnings?: string[]}} result - purge outcome.
+ * @returns {string} summary text.
+ */
+function trashPurgeText(result) {
+  const removed = Array.isArray(result.removed) ? result.removed : []
+  const lines = [`回收站清理：已永久删除 ${removed.length} 个操作，释放 ${formatByteSize(result.freedBytes ?? 0)}`]
+  for (const operationId of removed) lines.push(`- ${operationId}`)
+  for (const warning of result.warnings ?? []) lines.push(`注意：${warning}`)
+  return lines.join('\n')
+}
+
+/**
+ * Run the move tool action (parse -> copy-then-trash -> summary).
+ *
+ * The route and the tool share `lib/move.js`; `confirm:true` is required because
+ * the source sessions are moved into the trash directory.
+ * @param {object} ctx - the plugin context.
+ * @param {object} settings - resolved settings.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {object} args - model arguments.
+ * @returns {Promise<string>} summary text.
+ */
+async function runMoveTool(ctx, settings, overrides, args) {
+  if (args.confirm !== true) {
+    throw new Error('session_kit: move 需要 confirm:true（源会话会移入回收站，可从回收站恢复）')
+  }
+  const workspaceId = typeof args.workspaceId === 'string' ? args.workspaceId.trim() : ''
+  if (workspaceId === '') {
+    throw new Error('session_kit: move 需要 workspaceId（目标工作区 id，先用 action=list 查看）')
+  }
+  const sessionIds = parseSessionIdList(args.sessionIds, { allowAll: false, maxBatch: MAX_MOVE_BATCH })
+  if (sessionIds === undefined) {
+    throw new Error('session_kit: move 需要 sessionIds 参数（要迁移的会话 id 数组）')
+  }
+  const move = await loadMove(overrides)
+  if (typeof move.moveSessions !== 'function') {
+    throw new Error('session_kit: 会话迁移模块不可用')
+  }
+  const outcome = await move.moveSessions(ctx, {
+    workspaceId,
+    sessionIds,
+    ...trashOptions(settings),
+  })
+  return moveToolText(outcome)
+}
+
+/**
+ * Tool result text for the move action.
+ * @param {{target?: object, moved?: Array<object>, skipped?: Array<object>, warnings?: string[]}} outcome - move result.
+ * @returns {string} summary text.
+ */
+function moveToolText(outcome) {
+  const moved = Array.isArray(outcome?.moved) ? outcome.moved : []
+  const skipped = Array.isArray(outcome?.skipped) ? outcome.skipped : []
+  const target = outcome?.target ?? {}
+  const label =
+    typeof target.title === 'string' && target.title !== '' ? target.title : String(target.workspaceId ?? '')
+  const lines = [
+    `迁移目标：${label}（${String(target.workspaceId ?? '')}）→ ${String(target.path ?? '')}`,
+    `迁移：成功 ${moved.length} 个，跳过 ${skipped.length} 个`,
+  ]
+  for (const entry of moved) {
+    const state = entry.sourceTrashed === true ? '源会话已移入回收站' : '源会话仍在原位置（见警告）'
+    lines.push(`- ${entry.sourceId} → ${entry.sessionId}（${entry.eventCount ?? 0} 个事件，${state}）`)
+  }
+  const reasons = {
+    active: '活动会话',
+    subagent: '子代理转录',
+    'format-version': '旧格式',
+    'read-failed': '读取失败',
+    'write-failed': '写入失败',
+    'verify-failed': '读回验证失败',
+    'move-failed': '迁移失败',
+  }
+  for (const entry of skipped) {
+    const reason = reasons[entry.reason] ?? entry.reason
+    lines.push(`- 跳过 ${entry.id}：${reason}（${entry.message}）`)
+  }
+  for (const warning of outcome?.warnings ?? []) lines.push(`注意：${warning}`)
+  return lines.join('\n')
+}
+
+/**
  * Run the import_share tool action (resolve target -> share import -> summary).
  * @param {object} ctx - the plugin context.
  * @param {object | undefined} overrides - module injection seam.
@@ -1944,41 +2743,115 @@ function exportToolText(path, exported) {
  * @param {object} args - model arguments.
  * @returns {Promise<string>} summary text.
  */
-async function runWorkspaceExportTool(ctx, settings, overrides, args) {
-  const workspaceId = typeof args.workspaceId === 'string' ? args.workspaceId.trim() : ''
-  if (workspaceId === '') {
-    throw new Error('session_kit: export_workspace 需要 workspaceId 参数（工作区 id）')
+/**
+ * Read the requested workspace ids from tool arguments.
+ * `workspaceIds` wins when it is a non-empty array; a bare `workspaceId` is the
+ * single-workspace form. Values are trimmed, de-duplicated and capped.
+ * @param {object} args - model arguments.
+ * @returns {string[]} workspace ids.
+ * @throws {Error} empty list, non-string entries or over the batch limit.
+ */
+function requestedWorkspaceIds(args) {
+  const requested = []
+  const list = Array.isArray(args.workspaceIds) ? args.workspaceIds : []
+  if (list.length > 0) {
+    for (const value of list) {
+      if (typeof value !== 'string' || value.trim() === '') {
+        throw new Error('session_kit: workspaceIds 必须是非空字符串数组')
+      }
+      requested.push(value.trim())
+    }
+  } else if (typeof args.workspaceId === 'string' && args.workspaceId.trim() !== '') {
+    requested.push(args.workspaceId.trim())
   }
-  if (args.mode !== undefined && args.mode !== 'full' && args.mode !== 'compact') {
-    throw new Error('session_kit: mode 必须是 "full" 或 "compact"')
+  const workspaceIds = [...new Set(requested)]
+  if (workspaceIds.length === 0) {
+    throw new Error('session_kit: export_workspace 需要 workspaceId 或 workspaceIds 参数（工作区 id）')
+  }
+  if (workspaceIds.length > MAX_WORKSPACE_BATCH) {
+    throw new Error(
+      `session_kit: 一次最多备份 ${MAX_WORKSPACE_BATCH} 个工作区（本次 ${workspaceIds.length} 个）；请分批导出`,
+    )
+  }
+  return workspaceIds
+}
+
+/**
+ * Run the export_workspace tool action (build one ZIP per workspace, write each
+ * to the plugin export directory, summarise every result). A failure for one
+ * workspace does not abort the batch; every ZIP is a separate file.
+ * @param {object} ctx - the plugin context.
+ * @param {object} settings - resolved settings.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {object} args - model arguments.
+ * @returns {Promise<string>} summary text.
+ */
+async function runWorkspaceExportTool(ctx, settings, overrides, args) {
+  const workspaceIds = requestedWorkspaceIds(args)
+  if (args.mode !== undefined && !EXPORT_MODE_VALUES.has(args.mode)) {
+    throw new Error('session_kit: mode 必须是 "full"、"compact" 或 "compressed"')
   }
   const backup = await loadWorkspaceBackup(overrides)
   if (typeof backup.buildWorkspaceBackup !== 'function') {
     throw new Error('session_kit: 工作区备份模块不可用')
   }
-  let result
-  try {
-    result = await backup.buildWorkspaceBackup(ctx, {
-      workspaceId,
-      mode: args.mode ?? settings.defaultMode,
-      includeAttachments: booleanFlag(args.includeAttachments, settings.includeAttachments),
-      includeSubagents: booleanFlag(args.includeSubagents, settings.includeSubagents),
-      workspaceExclude: stringList(args.workspaceExclude, settings.workspaceExclude),
-      ...(settings.workspaceMaxBytes !== undefined ? { workspaceMaxBytes: settings.workspaceMaxBytes } : {}),
-      maxExportBytes: settings.maxExportBytes,
-    })
-  } catch (error) {
-    throw new Error(`session_kit: 工作区备份失败：${errorText(error)}`)
-  }
-  const data = result?.data
-  if (!(data instanceof Uint8Array) || typeof result?.filename !== 'string') {
-    throw new Error('session_kit: 工作区备份模块没有返回 ZIP 数据或文件名')
-  }
   const directory = defaultExportDirectory()
-  await mkdir(directory, { recursive: true })
-  const path = join(directory, safeBackupFilename(result.filename))
-  await writeFile(path, Buffer.from(data))
-  return workspaceExportToolText(path, result)
+  const exported = []
+  const failed = []
+  const usedNames = new Set()
+  for (const workspaceId of workspaceIds) {
+    try {
+      const result = await backup.buildWorkspaceBackup(ctx, {
+        workspaceId,
+        mode: exportModeOf(args.mode, settings.defaultMode),
+        includeAttachments: booleanFlag(args.includeAttachments, settings.includeAttachments),
+        includeSubagents: booleanFlag(args.includeSubagents, settings.includeSubagents),
+        workspaceExclude: stringList(args.workspaceExclude, settings.workspaceExclude),
+        ...(settings.workspaceMaxBytes !== undefined ? { workspaceMaxBytes: settings.workspaceMaxBytes } : {}),
+        maxExportBytes: settings.maxExportBytes,
+      })
+      const data = result?.data
+      if (!(data instanceof Uint8Array) || typeof result?.filename !== 'string') {
+        throw new Error('工作区备份模块没有返回 ZIP 数据或文件名')
+      }
+      await mkdir(directory, { recursive: true })
+      const path = uniqueWorkspaceArchivePath(directory, result.filename, workspaceId, usedNames)
+      await writeFile(path, Buffer.from(data))
+      exported.push({ workspaceId, path, result })
+    } catch (error) {
+      failed.push({ workspaceId, message: errorText(error) })
+    }
+  }
+  if (exported.length === 0) {
+    const reasons =
+      failed.length === 1
+        ? failed[0].message
+        : failed.map((entry) => `${entry.workspaceId}：${entry.message}`).join('；')
+    throw new Error(`session_kit: 工作区备份失败：${reasons}`)
+  }
+  if (exported.length === 1 && failed.length === 0) {
+    return workspaceExportToolText(exported[0].path, exported[0].result)
+  }
+  return workspaceExportBatchToolText(exported, failed)
+}
+
+/**
+ * Keep two workspaces with the same title from overwriting each other in one
+ * batch by appending the workspace id before `.zip`.
+ * @param {string} directory - export directory.
+ * @param {string} filename - archive filename from the builder.
+ * @param {string} workspaceId - workspace id.
+ * @param {Set<string>} used - names already claimed by this batch.
+ * @returns {string} absolute archive path.
+ */
+function uniqueWorkspaceArchivePath(directory, filename, workspaceId, used) {
+  let name = safeBackupFilename(filename)
+  if (used.has(name)) {
+    const suffix = '-' + safeBackupFilename(workspaceId).replace(/\.zip$/iu, '')
+    name = /\.zip$/iu.test(name) ? name.slice(0, -4) + suffix + '.zip' : name + suffix
+  }
+  used.add(name)
+  return join(directory, name)
 }
 
 /**
@@ -2006,7 +2879,69 @@ function workspaceExportToolText(path, result) {
   return lines.join('\n')
 }
 
+/**
+ * Tool result text for a multi-workspace export batch.
+ * @param {Array<{workspaceId: string, path: string, result: object}>} exported - successes.
+ * @param {Array<{workspaceId: string, message: string}>} failed - per-workspace failures.
+ * @returns {string} summary text with one line per workspace.
+ */
+function workspaceExportBatchToolText(exported, failed) {
+  const mode = exported[0]?.result?.manifest?.mode ?? 'full'
+  const lines = [`已备份 ${exported.length} 个工作区（模式 ${mode}），每个工作区一个 ZIP：`]
+  for (const entry of exported) {
+    const workspace =
+      entry.result.workspace !== null && typeof entry.result.workspace === 'object' ? entry.result.workspace : {}
+    const title = typeof workspace.title === 'string' && workspace.title !== '' ? workspace.title : entry.workspaceId
+    lines.push(
+      `- 「${title}」→ ${entry.path}（${entry.result.sessionCount ?? 0} 个会话，${entry.result.workspaceFileCount ?? 0} 个工作区文件）`,
+    )
+    for (const warning of entry.result.warnings ?? []) lines.push(`  注意：${warning}`)
+  }
+  if (failed.length > 0) {
+    lines.push(`失败 ${failed.length} 个：`)
+    for (const entry of failed) lines.push(`- ${entry.workspaceId}：${entry.message}`)
+  }
+  return lines.join('\n')
+}
+
 /** Tool result text for the import action. */
+/**
+ * Run the read-only attachment reference report.
+ * @param {object} ctx - plugin context.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {object} args - tool arguments.
+ * @returns {Promise<string>} human-readable report.
+ */
+async function runAttachmentReportTool(ctx, overrides, args) {
+  const report = await loadAttachmentReport(overrides)
+  const limit = args.limit === undefined ? undefined : positiveIntegerValue(args.limit, 'limit')
+  const result = await report.reportAttachmentReferences(ctx, limit === undefined ? {} : { limit })
+  return attachmentReportToolText(result)
+}
+
+/** Format an attachment-reference report for the agent tool. */
+function attachmentReportToolText(report) {
+  const lines = [
+    `附件引用检查：扫描 ${String(report.scannedSessions)} / ${String(report.sessionTotal)} 个会话，共 ${String(report.totalReferences)} 个引用；缺失 ${String(report.missing.length)} 个，无法验证 ${String(report.unverifiable)} 个`,
+  ]
+  if (report.truncated) lines.push(`本次只检查前 ${String(report.limit)} 个会话（可用 limit 调整，最大 300）`)
+  if (report.missing.length > 0) {
+    lines.push('缺失引用：')
+    for (const item of report.missing.slice(0, 50)) {
+      const label = item.kind === 'image' ? `图片 ${item.attachmentId}` : `文件 ${item.name ?? item.attachmentId}`
+      lines.push(`- 会话 ${item.sessionId}：${label}（not-found）`)
+    }
+    if (report.missing.length > 50) lines.push(`- …以及另外 ${String(report.missing.length - 50)} 个`)
+  } else {
+    lines.push('没有发现无法解析的附件引用。')
+  }
+  if (report.warnings.length > 0) {
+    lines.push('注意：')
+    for (const warning of report.warnings) lines.push(`- ${warning}`)
+  }
+  return lines.join('\n')
+}
+
 function importToolText(result) {
   const lines = [`已导入 ${result.sessions.length} 个会话：`]
   for (const session of result.sessions) {

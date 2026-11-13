@@ -364,7 +364,7 @@ test('the trust fence rejects management requests before parsing the body', asyn
   harness.state.rejection = 403
   const res = await harness.call(jsonRequest('/session-kit/archive', { sessionIds: ['a'] }))
   assert.equal(res.statusCode, 403)
-  assert.equal(res.body, undefined)
+  assert.equal(jsonBody(res).code, 'forbidden')
   assert.deepEqual(harness.state.archiveCalls, [])
 })
 
@@ -432,4 +432,20 @@ test('management tool batches report per-id failures instead of throwing', async
   const text = await harness.state.tool.execute({ action: 'archive', sessionIds: ['a', 'b'] }, {})
   assert.match(text, /成功 1 个，失败 1 个/u)
   assert.match(text, /b：磁盘繁忙/u)
+})
+
+test('a fully failed batch reports 503 when the helper module is unavailable', async () => {
+  const manage = {
+    async archiveSession() {
+      throw Object.assign(new Error('会话管理模块不可用'), { code: 'unavailable' })
+    },
+    async unarchiveSession() {},
+    async deleteSession() {},
+  }
+  const harness = createHarness({ manage })
+  const res = await harness.call(jsonRequest('/session-kit/archive', { sessionIds: ['a'] }))
+  assert.equal(res.statusCode, 503)
+  const body = jsonBody(res)
+  assert.equal(body.ok, false)
+  assert.equal(body.results[0].code, 'unavailable')
 })

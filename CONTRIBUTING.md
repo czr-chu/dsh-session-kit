@@ -11,6 +11,26 @@ Thanks for helping improve dsh-session-kit. The **host half is plain ESM**; the 
 - a Web or Desktop deployment for the browser panel; a headless deployment can
   still exercise the `session_kit` agent tool.
 
+Platform gotcha (macOS): the Node binary shipped inside the DSH app is
+hardened-runtime signed, so it refuses to `dlopen` rolldown's ad-hoc-signed
+native binding and `npm run build:client` fails with "Cannot find native
+binding". Build with a normal Node 22+ install instead (for example
+`PATH=/opt/homebrew/opt/node@24/bin:$PATH npm run build`). Tests are unaffected.
+
+To try a change in a live deployment, install this checkout as a linked
+dependency instead of a release tag, then restart DSH:
+
+```bash
+dsh plugin --profile web add <absolute path to this checkout>
+# or, via the plugin manager tool: remove_bundle then install_bundle with the
+# absolute package directory as the target
+```
+
+The profile then points at the checkout (symlink), so host-side edits apply on
+the next DSH restart; client edits additionally need `npm run build:client` and
+a page refresh. The committed `lib/client.js` must be rebuilt and committed in
+the same change.
+
 ## Running tests
 
 The suite has two tiers:
@@ -45,6 +65,7 @@ module injection and temporary directories.
 | `lib/sessions.js` | Session listing/detail helpers, target-directory resolution, id minting, new-session writes. |
 | `lib/export.js`, `lib/import.js` | Archive builder/importer (manifest, checksums, attachments, workspace files). |
 | `lib/compact.js` | Compact ("visible conversation") export transform. |
+| `lib/compressed.js` | Compressed export transform: keeps every event, empties delta streams, truncates oversized strings (see `docs/decisions/0001`). |
 | `lib/manage.js` | Archive/unarchive/delete-to-trash/permanent delete. |
 | `lib/migrate.js` | Official DSH legacy-format migration wrapper. |
 | `lib/session-files.js` | Best-effort related-file derivation for delete. |
@@ -70,6 +91,26 @@ Use synthetic fixtures with generic names (`/workspace/demo`, `session-example`)
 that way. If you find data like this in an issue or PR, report it privately per
 [SECURITY.md](SECURITY.md) instead of reposting it.
 
+## Documentation
+
+This repository is read by people and by coding models without the author's
+conversation context, so documentation ships with the code. **Read and follow
+[`docs/change-documentation.md`](docs/change-documentation.md)** for any change
+that alters behavior, contracts, limits, archive format, safety policy or UI
+flow. In short, the same commit must update:
+
+- the touched module's header contract (responsibility, failure codes, and what
+  it deliberately does not do) plus JSDoc on new exports;
+- `docs/architecture.md` (route/tool table, archive layout) and the tool
+  description/schema in `index.js`;
+- `docs/feature-matrix.md` (status, location, test-name evidence, limitations);
+- `README.md` and `README.zh.md` (features, configuration, known limitations);
+- `CHANGELOG.md`, and a `docs/decisions/NNNN-*.md` record for semantic changes.
+
+A capability is not done until it is feature-detectable through `/info`
+`capabilities` and wired into the client. Keep `zh` and `en` dictionaries in
+step; never add a UI string to one locale only.
+
 ## Pull requests
 
 - Keep a change focused; split independent features.
@@ -77,8 +118,8 @@ that way. If you find data like this in an issue or PR, report it privately per
   and any security or privacy implication (especially for file paths, deletion,
   imports and share fetching).
 - Run `node --test test/*.test.mjs` and, when relevant, the `tsx` suite above.
-- Update package README/docs or `CHANGELOG.md` when behavior or installation
-  changes.
+- Complete the documentation checklist in
+  [`docs/change-documentation.md`](docs/change-documentation.md#6-review-checklist).
 - Do not commit build artifacts or local test residue.
 
 ## Style

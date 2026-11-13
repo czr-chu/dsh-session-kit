@@ -289,7 +289,7 @@ test('/session-files maps derivation failures to 404/500 and the fence stays fir
   fenced.state.rejection = 403
   const fencedRes = await fenced.call(jsonRequest('/session-kit/session-files', { sessionIds: ['s1'] }))
   assert.equal(fencedRes.statusCode, 403)
-  assert.equal(fencedRes.body, undefined)
+  assert.equal(jsonBody(fencedRes).code, 'forbidden')
   assert.deepEqual(fenced.state.deriveCalls, [])
   void formatError
 })

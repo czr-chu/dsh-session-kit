@@ -343,7 +343,7 @@ test('/import-share answers 503 without the share module and 403 behind the fenc
   fenced.state.rejection = 403
   const fencedRes = await fenced.call(jsonRequest('/session-kit/import-share', { input: SHARE_INPUT }))
   assert.equal(fencedRes.statusCode, 403)
-  assert.equal(fencedRes.body, undefined)
+  assert.equal(jsonBody(fencedRes).code, 'forbidden')
   assert.deepEqual(fenced.state.shareCalls, [])
 })
 

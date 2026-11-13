@@ -218,9 +218,10 @@ The full matrix is in <code>docs/feature-matrix.md</code>. Summary:
    plugin-level human approval dialog for an agent-initiated permanent delete;
    deployments rely on the surrounding DSH permission/approval model and should
    treat the tool as powerful.
-6. **Trash folders accumulate.** Nothing cleans
-   <code>$DSH_HOME/session-kit-trash</code>; disk usage grows until the user
-   removes folders.
+6. **Trash folders accumulate.** Nothing expires them automatically:
+   <code>$DSH_HOME/session-kit-trash</code> grows until the user purges an
+   operation (Trash card / <code>trash_purge</code>) or removes folders. Purge
+   is explicit (<code>confirm: true</code>) and never touches attachments.
 
 ### Functional and format limits
 

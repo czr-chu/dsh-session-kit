@@ -295,7 +295,7 @@ test('/session-detail answers 503 without the detail helper and 403 behind the f
   fenced.state.rejection = 403
   const fencedRes = await fenced.call(jsonRequest('/session-kit/session-detail', { sessionIds: ['s1'] }))
   assert.equal(fencedRes.statusCode, 403)
-  assert.equal(fencedRes.body, undefined)
+  assert.equal(jsonBody(fencedRes).code, 'forbidden')
   assert.deepEqual(fenced.state.detailCalls, [])
 })
 
@@ -538,4 +538,57 @@ test('the tool schema exposes selectedFiles and permanent', async () => {
   assert.equal(schema.properties.permanent.type, 'boolean')
   assert.match(harness.state.tool.description, /selectedFiles/u)
   assert.match(harness.state.tool.description, /permanent:true/u)
+})
+
+test('the detail tool reports size, format and archived state per id', async () => {
+  const harness = createHarness({
+    details: {
+      s1: { sessionId: 's1', sizeBytes: 2048, formatStatus: 'current', legacy: false, archived: false },
+      s2: {
+        sessionId: 's2',
+        sizeBytes: 3 * 1024 * 1024,
+        formatStatus: 'migration-required',
+        legacy: true,
+        archived: true,
+      },
+    },
+  })
+  const text = await harness.state.tool.execute({ action: 'detail', sessionIds: [' s1 ', 's2'] }, {})
+  assert.match(text, /会话详情：成功 2 个，失败 0 个/u)
+  assert.match(text, /s1/u)
+  assert.match(text, /2\.0 KiB（2048 字节）/u)
+  assert.match(text, /格式 current/u)
+  assert.match(text, /未归档/u)
+  assert.match(text, /3\.0 MiB（3145728 字节）/u)
+  assert.match(text, /旧格式/u)
+  assert.match(text, /已归档/u)
+  assert.deepEqual(harness.state.detailCalls, ['s1', 's2'])
+})
+
+test('the detail tool keeps per-id failures while other ids succeed', async () => {
+  const failure = Object.assign(new Error('磁盘不可读'), { code: 'detail-failed' })
+  const harness = createHarness({ details: { s1: failure } })
+  const text = await harness.state.tool.execute({ action: 'detail', sessionIds: ['s1', 's2'] }, {})
+  assert.match(text, /会话详情：成功 1 个，失败 1 个/u)
+  assert.match(text, /磁盘不可读（detail-failed）/u)
+  assert.match(text, /s2/u)
+})
+
+test('the detail tool requires explicit ids and enforces the detail cap', async () => {
+  const harness = createHarness()
+  await assert.rejects(
+    () => harness.state.tool.execute({ action: 'detail', sessionIds: ['all'] }, {}),
+    /这里不允许 "all"/u,
+  )
+  const ids = Array.from({ length: MAX_DETAIL_BATCH + 1 }, (_, index) => `s${index}`)
+  await assert.rejects(() => harness.state.tool.execute({ action: 'detail', sessionIds: ids }, {}), /一次最多处理/u)
+  await assert.rejects(() => harness.state.tool.execute({ action: 'detail' }, {}), /detail 需要 sessionIds/u)
+  assert.deepEqual(harness.state.detailCalls, [])
+})
+
+test('the tool schema exposes the detail action', async () => {
+  const harness = createHarness()
+  assert.ok(harness.state.tool.parameters.properties.action.enum.includes('detail'))
+  assert.match(harness.state.tool.description, /action=detail/u)
+  assert.match(harness.state.tool.parameters.properties.sessionIds.description, /detail/u)
 })

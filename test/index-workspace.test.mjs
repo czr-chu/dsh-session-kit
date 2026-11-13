@@ -15,6 +15,7 @@ import test from 'node:test'
 
 import { apply, name } from '../index.js'
 import { SessionPortFormatError } from '../lib/format.js'
+import * as importModule from '../lib/import.js'
 
 /** Build a response object whose end() settles a promise. */
 function makeResponse() {
@@ -81,6 +82,7 @@ function createHarness(options = {}) {
     async buildWorkspaceBackup(ctx, request) {
       state.backupCalls.push(request)
       if (options.backupError !== undefined) throw options.backupError
+      if (typeof options.backupResult === 'function') return options.backupResult(request)
       return options.backupResult ?? DEFAULT_BACKUP
     },
   }
@@ -122,6 +124,10 @@ function createHarness(options = {}) {
   }
   const modules = { sessions }
   if (options.omitWorkspaceBackup !== true) modules.workspaceBackup = workspaceBackup
+  // The archive reader is only needed by the empty-body /import case at the end
+  // of this file; it runs before any service call, so injecting the real module
+  // keeps the route contract honest without a session store.
+  modules.import = importModule
   apply(ctx, options.config ?? {}, { modules })
   return {
     state,
@@ -316,7 +322,7 @@ test('/export-workspace answers 503 without the module and 403 behind the fence'
   fenced.state.rejection = 403
   const fencedRes = await fenced.call(jsonRequest('/session-kit/export-workspace', { workspaceId: 'ws-1' }))
   assert.equal(fencedRes.statusCode, 403)
-  assert.equal(fencedRes.body, undefined)
+  assert.equal(jsonBody(fencedRes).code, 'forbidden')
   assert.equal(fenced.state.backupCalls.length, 0)
 })
 
@@ -343,6 +349,77 @@ test('the export_workspace tool writes the archive and summarises the workspace'
       workspaceExclude: [],
       maxExportBytes: 1024 * 1024 * 1024,
     })
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('the export_workspace tool writes one ZIP per workspace and reports per-item results', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'session-kit-ws-batch-'))
+  const previous = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  try {
+    const harness = createHarness({
+      backupResult: (request) => ({
+        ...DEFAULT_BACKUP,
+        filename: `workspace-${request.workspaceId}-2-sessions-20261108-021500.zip`,
+        data: Buffer.from(`PK-workspace-${request.workspaceId}`),
+        workspace: {
+          workspaceId: request.workspaceId,
+          title: request.workspaceId === 'ws-1' ? 'Demo Workspace' : 'Second Workspace',
+        },
+      }),
+    })
+    const text = await harness.state.tool.execute(
+      { action: 'export_workspace', workspaceIds: ['ws-1', ' ws-2 ', 'ws-1'], workspaceId: 'ignored' },
+      {},
+    )
+    assert.match(text, /已备份 2 个工作区/u)
+    assert.match(text, /「Demo Workspace」/u)
+    assert.match(text, /「Second Workspace」/u)
+    assert.deepEqual(
+      harness.state.backupCalls.map((call) => call.workspaceId),
+      ['ws-1', 'ws-2'],
+    )
+    assert.deepEqual(
+      await readFile(join(home, 'session-kit', 'exports', 'workspace-ws-1-2-sessions-20261108-021500.zip')),
+      Buffer.from('PK-workspace-ws-1'),
+    )
+    assert.deepEqual(
+      await readFile(join(home, 'session-kit', 'exports', 'workspace-ws-2-2-sessions-20261108-021500.zip')),
+      Buffer.from('PK-workspace-ws-2'),
+    )
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('the export_workspace tool validates workspaceIds and keeps the single-id form', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'session-kit-ws-batch-'))
+  const previous = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  try {
+    const harness = createHarness()
+    await assert.rejects(
+      () => harness.state.tool.execute({ action: 'export_workspace', workspaceIds: [''] }, {}),
+      /workspaceIds/u,
+    )
+    const tooMany = Array.from({ length: 21 }, (_, index) => `ws-${index}`)
+    await assert.rejects(
+      () => harness.state.tool.execute({ action: 'export_workspace', workspaceIds: tooMany }, {}),
+      /最多备份 20 个工作区/u,
+    )
+    assert.equal(harness.state.backupCalls.length, 0)
+    const text = await harness.state.tool.execute(
+      { action: 'export_workspace', workspaceIds: [], workspaceId: 'ws-1' },
+      {},
+    )
+    assert.match(text, /已备份工作区「Demo Workspace」/u)
+    assert.equal(harness.state.backupCalls.length, 1)
   } finally {
     if (previous === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = previous
@@ -394,6 +471,8 @@ test('the tool schema exposes export_workspace and its options', async () => {
   const schema = harness.state.tool.parameters
   assert.ok(schema.properties.action.enum.includes('export_workspace'))
   assert.equal(schema.properties.workspaceId.type, 'string')
+  assert.equal(schema.properties.workspaceIds.type, 'array')
+  assert.equal(schema.properties.workspaceIds.items.type, 'string')
   assert.equal(schema.properties.mode.type, 'string')
   assert.equal(schema.properties.includeAttachments.type, 'boolean')
   assert.equal(schema.properties.includeSubagents.type, 'boolean')

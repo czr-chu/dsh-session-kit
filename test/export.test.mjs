@@ -216,6 +216,34 @@ test('full archive carries per-session folders, manifest, README, meta and attac
   assert.match(readme, /sessions\//u)
 })
 
+test('manifest and meta preserve archived and pinned flags', async () => {
+  const id = 's-arch'
+  const deps = makeDeps({
+    docs: { [id]: makeDoc(id) },
+    indexEntries: [
+      {
+        id,
+        title: '置顶归档会话',
+        cwd: '/work/ws',
+        createdAt: 1000,
+        updatedAt: 1000,
+        formatVersion: 4,
+        eventCount: 4,
+        archived: true,
+        pinned: true,
+      },
+    ],
+  })
+  const built = await buildArchive({}, { sessionIds: [id], deps, now: 1730000000000 })
+  const entries = entryMap(built.data)
+  const manifest = JSON.parse(Buffer.from(entries.get('manifest.json')).toString('utf8'))
+  const meta = JSON.parse(Buffer.from(entries.get(`sessions/${id}/meta.json`)).toString('utf8'))
+  assert.equal(manifest.sessions[0].archived, true)
+  assert.equal(manifest.sessions[0].pinned, true)
+  assert.equal(meta.archived, true)
+  assert.equal(meta.pinned, true)
+})
+
 test('single-session archive is named after its title and keeps the title in meta', async () => {
   const deps = makeDeps({
     docs: { one: makeDoc('one') },
@@ -257,6 +285,35 @@ test('compact mode stores the compacted log under session.compact.v4.jsonl', asy
   const parsed = parseSessionLog(Buffer.from(entries.get('sessions/c1/session.compact.v4.jsonl')).toString('utf8'))
   assert.equal(parsed.events.length, 2)
   assert.equal(built.manifest.sessions[0].mode, 'compact')
+})
+
+test('compressed mode keeps every event under session.compressed.v4.jsonl', async () => {
+  const doc = makeDoc('c1')
+  const built = await buildArchive(
+    {},
+    {
+      sessionIds: ['c1'],
+      mode: 'compressed',
+      deps: makeDeps({ docs: { c1: doc } }),
+      now: 1730000000000,
+      includeAttachments: false,
+    },
+  )
+  assert.equal(built.manifest.mode, 'compressed')
+  assert.equal(built.manifest.sessions[0].mode, 'compressed')
+  const entries = entryMap(built.data)
+  assert.ok(entries.has('sessions/c1/session.compressed.v4.jsonl'))
+  assert.equal(entries.has('sessions/c1/session.v4.jsonl'), false)
+  const parsed = parseSessionLog(Buffer.from(entries.get('sessions/c1/session.compressed.v4.jsonl')).toString('utf8'))
+  assert.deepEqual(
+    parsed.events.map((event) => event.type),
+    doc.events.map((event) => event.type),
+    'compressed keeps the full event sequence',
+  )
+  assert.deepEqual(
+    parsed.events.map((event) => event.seq),
+    doc.events.map((event) => event.seq),
+  )
 })
 
 test('rejects an empty selection and an unknown mode', async () => {

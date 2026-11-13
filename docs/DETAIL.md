@@ -7,18 +7,30 @@ on-disk format by hand.
 
 ## What you can do
 
-- Use **Workspace backup** to pack one project's sessions and whole file tree once, and restore it through **Import → Archive → Target workspace**.
-- Browse sessions grouped by workspace, search titles/ids/cwds, filter active
-  or archived, and open a row for storage size, format status, archived state
-  and the derived related-file list.
+- Use **Workspace backup** to pack one or several projects' sessions and whole file trees (one ZIP per workspace), and restore each through **Import → Archive → Target workspace**.
+- Browse sessions grouped by workspace, search titles/ids/cwds, sort by recent /
+  created / title / directory, filter active or archived; long groups expand 25
+  rows at a time and the selection bar reports ids hidden by the filter. Open a
+  row for storage size, format status, archived state and the derived related-file
+  list.
 - Export selected sessions as one ZIP. **Compact** keeps the visible
-  conversation and the final answer of each turn; **full** keeps the complete
-  event log and attachments. Add optional whole-workspace trees with sensitive
-  and build paths excluded.
+  conversation and the final answer of each turn; **compressed** keeps every
+  event but truncates oversized output; **full** keeps the complete event log
+  and attachments. Add optional whole-workspace trees with sensitive and build
+  paths excluded.
 - Import an archive as **new** sessions and optionally restore its workspace
-  files. Existing sessions are never overwritten.
-- Archive/unarchive, delete to `$DSH_HOME/session-kit-trash`, or explicitly
-  erase permanently after a separate confirmation.
+  files. Existing sessions are never overwritten. Archived/pinned flags travel
+  with the archive and are re-applied best-effort; a duplicate preflight warns
+  (or skips with **Skip duplicates**) and the API can stream NDJSON progress.
+- Check attachment references read-only: the Attachment check card /
+  `attachment_report` reports references whose host file is missing or cannot be
+  verified, without deleting anything.
+- Archive/unarchive, delete to `$DSH_HOME/session-kit-trash`, restore or
+  permanently purge a trash operation from the Trash card, or explicitly erase
+  permanently after a separate confirmation.
+- Move selected sessions into another workspace: the copy is written under a new
+  id, verified, attached there, and the source is moved to the trash so the move
+  stays reversible.
 - Upgrade legacy logs through DSH's official migration chain; old generations
   are retained and refusals are reported.
 - Import a public `chat.deepseek.com/share/<id>` conversation into a chosen
@@ -39,7 +51,7 @@ on-disk format by hand.
 ## Install
 
 ```sh
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.11.0
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.12.0
 ```
 
 Restart `dsh web` after installing or upgrading. The plugin has no

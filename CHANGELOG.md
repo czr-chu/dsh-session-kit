@@ -4,6 +4,99 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-11-14
+
+### Added
+
+- **Import continuity**: exports now carry `archived` / `pinned` in
+  `manifest.json` and each `sessions/<id>/meta.json`; import re-applies both to
+  the new session id (best-effort, per-session warnings). A preflight compares
+  source ids with local sessions and warns on duplicates;
+  `skipDuplicates: true` (or `?skipDuplicates=1`) filters them out. See
+  `docs/decisions/0006-import-continuity-and-attachment-report.md`.
+- **Import progress stream**: `POST /session-kit/import?progress=ndjson` emits
+  one `session` line per committed session and a final `done` or `error` line,
+  leaving the default JSON response unchanged.
+- **Attachment reference report**: `GET /session-kit/attachment-report` and
+  `session_kit action=attachment_report` scan up to 300 sessions read-only and
+  report attachment references whose host file is missing or unverifiable. It
+  never deletes or rewrites anything (the attachment store has no delete API).
+- **Compressed export mode** (`mode: "compressed"`): keeps every event and tool
+  call in place, empties streamed deltas and truncates oversized strings
+  (8 KiB per string, 16 KiB per event, halved again when an event is still too
+  large). The archive stays a valid v4 log
+  (`session.compressed.v4.jsonl`), so import continues to work; the panel's
+  Export card and the `session_kit` tool both offer full / compact / compressed.
+  See `docs/decisions/0001-compressed-export-mode.md`.
+- `session_kit action=detail` reports each session's storage size, format
+  status and archived state for up to 100 explicit ids, mirroring
+  `POST /session-kit/session-detail` for agents. It is read-only and needs no
+  `confirm`.
+- **Trash management**: every delete now writes `operation.json` into the
+  trash operation directory (per-session original directories, derived sessions
+  root, archived/pinned snapshots). New read/restore/purge surfaces —
+  `GET /session-kit/trash`, `POST /session-kit/trash-restore`,
+  `POST /session-kit/trash-purge`, the `trash_list` / `trash_restore` /
+  `trash_purge` tool actions, and a Trash card in the panel. Restore moves
+  directories back, re-attaches them to their workspace and replays the
+  archived/pinned snapshot; an existing target is skipped, never overwritten.
+  Purge requires `confirm: true` and accepts operation ids or `all` (optionally
+  `olderThanDays`). Legacy operations without a manifest stay listed but are
+  not restorable. See `docs/decisions/0002-trash-operations.md`.
+
+- **Workspace move**: `POST /session-kit/move` and `session_kit action=move`
+  copy each selected session into a target workspace under a new id (cwd =
+  destination path), read the copy back through the session query, attach it,
+  and only then move the source directory into the trash, so the move stays
+  reversible. Live/running sessions, subagent transcripts and older-format logs
+  are skipped before any write; subagent transcripts are not copied, attachment
+  bytes stay shared, archived/pinned state is replayed best-effort, and the
+  batch is per-session tolerant (max 100, `confirm: true` required). The panel
+  gains a "Move to workspace" action and a destination dialog. Old ids stop
+  working until the trashed source is restored. See
+  `docs/decisions/0003-workspace-move.md`.
+
+- **Panel usability (P6)**: long workspace groups render 25 rows at a time with
+  a "show more" control, a sort selector (recent / created / title / path)
+  orders sessions inside groups, the selection bar reports selected ids hidden
+  by the current filter, and dialogs now trap Tab/Shift+Tab in addition to
+  Escape. New strings are localized in both locales; new styles use the theme
+  focus-ring/token variables. See `docs/decisions/0005-panel-usability.md`.
+- **Multi-workspace backup**: the Workspace backup card now lets you tick
+  several workspaces and downloads one ZIP per workspace; `session_kit
+  action=export_workspace` accepts `workspaceIds` (max 20) and writes one file
+  per workspace. A failure for one workspace is reported per item without
+  aborting the batch. The HTTP route still produces one ZIP per request, and
+  the archive format/manifest are unchanged. See
+  `docs/decisions/0004-multi-workspace-backup.md`.
+
+### Changed
+
+- A fenced (untrusted-connection) rejection now answers
+  `{ ok: false, code: 'forbidden' | 'unauthorized', message }` with the rejection
+  status instead of an empty body, so clients can branch on `code`. Every other
+  failure already used this envelope.
+- `sessionIds` goes through one parser on every route and tool action: values
+  are trimmed and de-duplicated, non-string ids are rejected with
+  `400 invalid-sessionIds` instead of being silently coerced, and `'all'` is
+  accepted only where the surface documents it. Export keeps no session-count
+  cap.
+- Exported session headers keep header fields this plugin does not model
+  (`headerLineOf`), so a newer DSH field is not dropped. Import still rebuilds a
+  minimal header and does not propagate them.
+- `index.js` resolves `lib/export.js` and `lib/import.js` through the same lazy
+  module seam as the other helpers, so `/export` and `/import` can be exercised
+  at route level with injected modules.
+
+### Fixed
+
+- `session_kit action=export` now honors its documented `includeAttachments`
+  parameter instead of always using the configured default.
+- A batch that fails for every id because a helper module is unavailable now
+  answers `503` instead of `500`, matching the single-request error mapping.
+- Import, export and detail routes no longer depend on module load order for
+  their `unavailable` reporting: the helper is resolved per call.
+
 ## [0.11.0] - 2026-11-08
 
 ### Added

@@ -363,7 +363,7 @@ test('the trust fence rejects migrate requests before parsing the body', async (
   harness.state.rejection = 403
   const res = await harness.call(jsonRequest('/session-kit/migrate', { sessionIds: ['a'] }))
   assert.equal(res.statusCode, 403)
-  assert.equal(res.body, undefined)
+  assert.equal(jsonBody(res).code, 'forbidden')
   assert.deepEqual(harness.state.migrateCalls, [])
 })
 
