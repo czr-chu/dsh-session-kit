@@ -2478,7 +2478,8 @@ function SessionKitPanel(props) {
       })
       return
     }
-    if (catalog.workspaces.length === 0) {
+    const moveWorkspaces = catalog.workspaces.filter((workspace) => workspace.workspaceId !== '')
+    if (moveWorkspaces.length === 0) {
       setNotice({ tone: 'warn', title: tr('panel.moveTitle'), lines: [tr('panel.moveNoWorkspaces')] })
       return
     }
@@ -2487,7 +2488,7 @@ function SessionKitPanel(props) {
       const session = byId.get(id)
       return session !== undefined && session.title !== '' ? session.title : id
     })
-    setMoveTarget(catalog.workspaces[0].id)
+    setMoveTarget(moveWorkspaces[0].workspaceId)
     setMoveRequest({ sessionIds: [...sessionIds], items })
   }
 
@@ -2836,6 +2837,15 @@ function SessionKitPanel(props) {
   }
 
   const workspaceCount = catalog.workspaces.length
+  const workspaceOptions = catalog.workspaces
+    .filter((workspace) => workspace.workspaceId !== '')
+    .map((workspace) =>
+      h(
+        'option',
+        { key: workspace.workspaceId, value: workspace.workspaceId },
+        workspace.title !== '' ? `${workspace.title} — ${workspace.path}` : workspace.path,
+      ),
+    )
 
   const statChip = (label, value) =>
     h(
@@ -3334,7 +3344,7 @@ function SessionKitPanel(props) {
           onChange: (event) => setImportWorkspaceId(event.target.value),
         },
         h('option', { value: '' }, tr('panel.importWorkspaceDefault')),
-        ...workspaceSelectOptions,
+        ...workspaceOptions,
       ),
     ),
     importOptions,
@@ -3434,7 +3444,7 @@ function SessionKitPanel(props) {
           className: styles.select,
         },
         h('option', { value: '' }, tr('panel.shareWorkspaceDefault')),
-        ...workspaceSelectOptions,
+        ...workspaceOptions,
       ),
       h('input', {
         type: 'text',
@@ -3909,13 +3919,7 @@ function SessionKitPanel(props) {
                 onChange: (event) => setMoveTarget(event.target.value),
               },
               h('option', { value: '' }, tr('panel.moveTargetPlaceholder')),
-              ...catalog.workspaces.map((workspace) =>
-                h(
-                  'option',
-                  { key: workspace.id, value: workspace.id },
-                  workspace.title !== '' ? `${workspace.title} — ${workspace.path}` : workspace.path,
-                ),
-              ),
+              ...workspaceOptions,
             ),
           ),
           note: tr('panel.moveNote'),

@@ -4,6 +4,18 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1] - 2026-11-14
+
+### Fixed
+
+- The session panel no longer crashes on open with
+  `ReferenceError: workspaceSelectOptions is not defined`. The 0.12.0
+  multi-workspace refactor removed that helper but left two select menus
+  (import target and share target) reading it; both now share the normalized
+  `workspaceOptions` list. The move dialog also uses `workspaceId` (not the
+  never-present `id`) for its default target and options, so its confirm button
+  is enabled and the chosen workspace reaches `POST /session-kit/move`.
+
 ## [0.12.0] - 2026-11-14
 
 ### Added

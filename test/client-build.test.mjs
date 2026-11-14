@@ -28,3 +28,11 @@ test('the client artifact does not embed build-machine absolute paths', () => {
     assert.doesNotMatch(text, /[A-Za-z]:\\\\Users\\\\/i)
   }
 })
+
+test('workspace selects use the normalized workspace options helper', () => {
+  const source = readFileSync(new URL('../src/client/index.js', import.meta.url), 'utf8')
+  assert.doesNotMatch(source, /workspaceSelectOptions/)
+  assert.match(source, /const workspaceOptions = catalog\.workspaces\s*\n\s*\.filter\(/)
+  assert.ok((source.match(/\.\.\.workspaceOptions/g) ?? []).length >= 3)
+  assert.doesNotMatch(bundle, /workspaceSelectOptions/)
+})
