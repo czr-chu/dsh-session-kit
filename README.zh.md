@@ -292,6 +292,7 @@ session-kit-<count>-sessions-<timestamp>.zip
 ├── sessions/<sessionId>/
 │   ├── session.v4.jsonl                  # 全量模式
 │   ├── session.compact.v4.jsonl          # 精简模式
+│   ├── session.compressed.v4.jsonl       # 压缩模式
 │   └── meta.json
 ├── attachments/
 │   ├── media/<attachmentId>.<ext>

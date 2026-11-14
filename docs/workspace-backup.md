@@ -3,7 +3,8 @@
 DSH groups sessions by **workspace**, a named project directory. Files belong to
 that directory, not to an individual conversation. Workspace backup follows
 that model: one ZIP contains every main session in one workspace plus the whole
-workspace file tree, collected once.
+workspace file tree, collected once. Selecting several workspaces produces one
+ZIP **per workspace**, not a combined archive.
 
 Use it when a workspace is one project. If one workspace mixes unrelated
 projects, split them into separate directories/workspaces first; per-session
@@ -11,15 +12,20 @@ file ownership cannot be recovered reliably from DSH's event log.
 
 ## Create a backup
 
-In the Web/Desktop panel choose **Workspace backup → Workspace**, then click
-**Back up workspace**. The agent tool exposes the same operation:
+In the Web/Desktop panel open **Workspace backup**, tick one or more
+workspaces (or **Select all workspaces**), then click **Back up workspace**.
+Each selected workspace is downloaded as its own ZIP. The agent tool exposes
+the same operation:
 
 ```text
-session_kit action=export_workspace workspaceId=<workspace-id>
+session_kit action=export_workspace workspaceIds=["<id-1>", "<id-2>"]
 ```
 
+`workspaceIds` accepts at most 20 ids; a single `workspaceId` still works.
 Route: `POST /session-kit/export-workspace` with
-`{ "workspaceId": "...", "mode": "full" | "compact", "includeAttachments": true, "includeSubagents": false }`.
+`{ "workspaceId": "...", "mode": "full" | "compact" | "compressed", "includeAttachments": true, "includeSubagents": false }`
+(the HTTP route produces one ZIP per request; the panel loops over the
+selection).
 
 The archive layout extends the normal session archive:
 
@@ -27,6 +33,8 @@ The archive layout extends the normal session archive:
 manifest.json                     sessions + workspace files + checksums
 README.md                         restore instructions
 sessions/<id>/session.v4.jsonl    one folder per main session in the workspace
+sessions/<id>/session.compact.v4.jsonl
+sessions/<id>/session.compressed.v4.jsonl
 sessions/<id>/meta.json
 workspaces/<key>/...              the whole workspace tree, once
 ```
@@ -58,7 +66,16 @@ POST /session-kit/import?workspaceId=<target-workspace-id>&cwd=<target-path>&res
 
 The target workspace must already exist (create it in DSH first). Existing
 files are skipped with a warning; existing sessions are never overwritten.
-Archived/pinned state is not restored — imported sessions are new and visible.
+Archived/pinned state is restored best-effort from the manifest/meta: the new
+session id is archived and/or pinned when those flags were set in the backup.
+
+## Backup vs. workspace archive
+
+A backup copies data into a ZIP and can leave the machine. A workspace archive
+keeps every file in place and only archives the member sessions and removes the
+workspace registration, so the project can be restored later without moving
+bytes. Use [workspace archive](decisions/0007-workspace-archive.md) to put a
+project away and backup when you need a portable copy.
 
 ## Limits
 

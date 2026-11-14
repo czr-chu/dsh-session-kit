@@ -56,6 +56,16 @@ sessions and verifies that every backend location is a real session directory
 named after the encoded session id under a canonical project directory, without
 following symlinks. A move failure rolls back already-moved directories. Users
 who want permanent erasure delete the trash folder themselves.
+## Workspace archive records
+
+A whole-workspace archive writes `<DSH_HOME>/session-kit-workspace-archive/<archiveId>/record.json`
+before its first mutation. The record contains the workspace title and absolute
+path, member session ids, order, and each session's prior archived/pinned state.
+It contains no conversation content and no credentials. The archive does not
+copy or delete files: session logs and the workspace tree remain at their
+original paths. Removing the record without restoring only loses the mapping
+needed to recreate the workspace grouping; it does not delete sessions or files.
+
 ## Format migration
 
 Migration is delegated to DSH's official persistence seam. The plugin never

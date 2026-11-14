@@ -24,8 +24,8 @@ url: https://github.com/czr-chu/dsh-session-kit
 name: czr-chu/dsh-session-kit
 category: session
 description:
-  en: 'Session manager for DSH: export in full, compact or compressed form, back up workspaces as per-workspace ZIPs, restore deleted sessions from a reversible trash, move sessions between workspaces, and check attachment references.'
-  zh: 'DSH 会话管理：全量/精简/压缩导出，按工作区打包备份，回收站恢复误删会话，跨工作区迁移，并检查附件引用是否可解析。'
+  en: 'Session manager for DSH: export in full, compact or compressed form, back up workspaces as per-workspace ZIPs, restore deleted sessions from a reversible trash, move sessions between workspaces, check attachment references, and archive/restore a whole workspace without moving its files.'
+  zh: 'DSH 会话管理：全量/精简/压缩导出，按工作区打包备份，回收站恢复误删会话，跨工作区迁移，检查附件引用是否可解析，以及不移动文件地归档/恢复整个工作区。'
 icon: https://raw.githubusercontent.com/czr-chu/dsh-session-kit/main/assets/icon-512.png
 ```
 
