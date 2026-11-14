@@ -14,12 +14,14 @@ the Connection trust check exactly like the shipped open-in-app plugin, plus a
 | Read | `GET /session-kit/info`, `GET /session-kit/list`, `POST /session-kit/session-detail`, `POST /session-kit/session-files`, `GET /session-kit/attachment-report` |
 | Archive | `POST /session-kit/export`, `POST /session-kit/export-workspace`, `POST /session-kit/import`, `POST /session-kit/import-share` |
 | Manage | `POST /session-kit/archive`, `POST /session-kit/unarchive`, `POST /session-kit/delete`, `POST /session-kit/migrate`, `POST /session-kit/move` |
+| Workspace archive | `GET /session-kit/workspace-archives`, `POST /session-kit/workspace-archive`, `POST /session-kit/workspace-restore` |
 | Trash | `GET /session-kit/trash`, `POST /session-kit/trash-restore`, `POST /session-kit/trash-purge` |
 
 The tool exposes the same operations as actions: `list`, `export`,
 `export_workspace`, `import`, `archive`, `unarchive`, `delete`, `migrate`,
 `files`, `detail`, `import_share`, `trash_list`, `trash_restore`, `trash_purge`,
-`move`, `attachment_report`. Routes and actions share one scope parser
+`move`, `workspace_archive_list`, `workspace_archive`, `workspace_restore`,
+`attachment_report`. Routes and actions share one scope parser
 (`parseSessionIdList`), so `sessionIds` is trimmed and de-duplicated everywhere
 and `'all'` is accepted only where the action documents it. `detail` mirrors
 `POST /session-kit/session-detail` for agents (same 100-id cap, same per-id
@@ -33,7 +35,8 @@ failure's status (404 not-found / 409 active / 503 unavailable / 500).
 
 `index.js` resolves its helper modules through a test-only third `apply`
 argument (never Loader config): `sessions`, `manage`, `migrate`, `files`,
-`share`, `workspaceBackup`, `export`, `import`, `trash`, `move`, `attachmentReport`. A missing member means
+`share`, `workspaceBackup`, `export`, `import`, `trash`, `move`,
+`workspaceArchive`, `attachmentReport`. A missing member means
 "unavailable" for the routes that need it. Modules resolved *inside* another lib
 module stay outside that seam: `lib/workspace-backup.js` imports
 `lib/export.js`, and `lib/deepseek-share.js` imports `lib/import.js`, directly.
@@ -52,6 +55,7 @@ lib/trash.js             trash operation manifest inventory, restore and permane
 lib/format.js            canonical session JSONL + attachment ref helpers
 lib/zip.js               dependency-free ZIP reader/writer
 lib/attachments.js       attachment packing/restore
+lib/workspace-archive.js  workspace archive manifest, archive-then-deregister, restore
 lib/attachment-report.js read-only missing/unverifiable attachment reference scan
 ```
 
@@ -209,6 +213,35 @@ the trash brings the old id back), event payloads are copied verbatim,
 subagent transcripts are not copied (they travel with the source into the
 trash), and attachment bytes stay shared through the content-addressed store.
 See [decisions/0003](decisions/0003-workspace-move.md).
+
+## Workspace archive model
+
+DSH has no workspace-level archive API: `archiveSession` writes a global
+per-session flag, and `registry.delete` only forgets the registration (session
+logs and files stay on disk, but the sessions lose their project grouping).
+`POST /session-kit/workspace-archive` (tool `workspace_archive`) therefore
+implements a reversible **archive-then-deregister** (`lib/workspace-archive.js`):
+write an atomic manifest under
+`<DSH_HOME>/session-kit-workspace-archive/<archiveId>/record.json` recording the
+workspace title/path/order and each session's prior archived/pinned state,
+archive the member sessions through the official API (already archived ones are
+skipped), then remove the registration. An active session or a failed
+archive/delete rolls the new archive flags back and removes the manifest, so
+the workspace stays usable. A record is written before the first mutation,
+which is why a crash can leave an archivable record but never an unrecorded
+disappearance.
+
+`POST /session-kit/workspace-restore` (tool `workspace_restore`) validates the
+record and directory, reuses a workspace at the same path or creates one,
+attaches every session, unarchives **only** the sessions this archive archived
+(pre-existing archive flags are preserved), restores pinning, and deletes the
+manifest only when every attach succeeded. A partial restore rewrites the
+record with `restoredAt`/`pendingSessionIds` and stays listed for a retry.
+Restoring usually yields a new workspace id (the old registration was deleted);
+session ids, logs and workspace files are untouched. Archiving the workspace
+currently in use makes DSH leave it, so the panel record is reached from another
+workspace (or after creating one). See
+[decisions/0007](decisions/0007-workspace-archive.md).
 
 ## Format migration model
 

@@ -76,6 +76,39 @@ const zh = {
   'panel.workspaceBackupSelected': '已选择 {count} 个工作区',
   'panel.workspaceBackupPartial': '已导出 {done} 个工作区，{failed} 个失败',
   'panel.workspaceBackupFailedLine': '{workspace}：{message}',
+  'panel.workspaceArchiveSection': '工作区归档',
+  'panel.workspaceArchiveHint':
+    '把整个工作区当成一个项目归档：归档其下所有会话并移除工作区注册，目录、会话日志和工作区文件都保留，之后可以整体恢复。',
+  'panel.workspaceArchiveSelect': '工作区',
+  'panel.workspaceArchiveButton': '归档整个工作区',
+  'panel.workspaceArchiveNoTarget': '没有可归档的工作区。',
+  'panel.workspaceArchiveTitle': '归档整个工作区',
+  'panel.workspaceArchiveBody':
+    '将归档「{title}」下的 {count} 个会话，并移除工作区注册。目录、会话日志和工作区文件都会保留，之后可以恢复这个工作区。',
+  'panel.workspaceArchiveNote':
+    '活动会话会导致归档失败并回滚。归档当前正在使用的工作区后，DSH 会离开该工作区；可从其他工作区（或新建工作区后）打开会话管理查看归档记录并恢复。',
+  'panel.workspaceArchiveConfirm': '归档工作区',
+  'panel.workspaceArchiveBusy': '正在归档…',
+  'panel.workspaceArchiveDone': '工作区已归档',
+  'panel.workspaceArchiveDoneLine': '「{title}」：{count} 个会话已归档',
+  'panel.workspaceArchiveKept': '目录与会话日志保留在 {path}',
+  'panel.workspaceArchiveRestoreHint': '可在下方“已归档的工作区”中恢复。',
+  'panel.workspaceArchiveFailed': '归档工作区失败',
+  'panel.workspaceArchiveListTitle': '已归档的工作区',
+  'panel.workspaceArchiveListEmpty': '还没有工作区归档记录。',
+  'panel.workspaceArchiveListReload': '刷新',
+  'panel.workspaceArchiveLoading': '正在读取归档记录…',
+  'panel.workspaceArchiveLoadFailed': '读取工作区归档失败',
+  'panel.workspaceArchiveRestore': '恢复',
+  'panel.workspaceArchiveRestoring': '正在恢复…',
+  'panel.workspaceArchiveRestoreTitle': '工作区已恢复',
+  'panel.workspaceArchiveRestoreDoneLine': '「{title}」：已恢复 {count} 个会话',
+  'panel.workspaceArchiveRestorePartial': '有 {count} 个会话未能恢复，归档记录保留，可稍后重试。',
+  'panel.workspaceArchiveRestoreFailed': '恢复工作区失败',
+  'panel.workspaceArchiveSkipped': '未恢复 {id}：{message}',
+  'panel.workspaceArchiveStatusReady': '可恢复',
+  'panel.workspaceArchiveStatusPartial': '部分恢复',
+  'panel.workspaceArchiveMeta': '{count} 个会话 · {date}',
   'panel.importWorkspaceTarget': '目标工作区',
   'panel.importWorkspaceDefault': '默认目录 / 当前工作区',
   'panel.loading': '正在加载会话列表…',
@@ -380,6 +413,39 @@ const en = {
   'panel.workspaceBackupSelected': '{count} workspace(s) selected',
   'panel.workspaceBackupPartial': 'Exported {done} workspace(s), {failed} failed',
   'panel.workspaceBackupFailedLine': '{workspace}: {message}',
+  'panel.workspaceArchiveSection': 'Workspace archive',
+  'panel.workspaceArchiveHint':
+    'Archive a whole workspace as one project: archive every session and remove the workspace registration, while the directory, session logs and workspace files stay in place for a later restore.',
+  'panel.workspaceArchiveSelect': 'Workspace',
+  'panel.workspaceArchiveButton': 'Archive whole workspace',
+  'panel.workspaceArchiveNoTarget': 'No workspace can be archived.',
+  'panel.workspaceArchiveTitle': 'Archive whole workspace',
+  'panel.workspaceArchiveBody':
+    'Archive the {count} session(s) under “{title}” and remove the workspace registration. The directory, session logs and workspace files are kept, and the workspace can be restored later.',
+  'panel.workspaceArchiveNote':
+    'An active session aborts the archive and rolls it back. Archiving the workspace you are currently using makes DSH leave it; open Session management from another workspace (or after creating one) to see the record and restore it.',
+  'panel.workspaceArchiveConfirm': 'Archive workspace',
+  'panel.workspaceArchiveBusy': 'Archiving…',
+  'panel.workspaceArchiveDone': 'Workspace archived',
+  'panel.workspaceArchiveDoneLine': '“{title}”: {count} session(s) archived',
+  'panel.workspaceArchiveKept': 'Directory and session logs kept at {path}',
+  'panel.workspaceArchiveRestoreHint': 'Restore it from “Archived workspaces” below.',
+  'panel.workspaceArchiveFailed': 'Workspace archive failed',
+  'panel.workspaceArchiveListTitle': 'Archived workspaces',
+  'panel.workspaceArchiveListEmpty': 'No workspace archive records yet.',
+  'panel.workspaceArchiveListReload': 'Refresh',
+  'panel.workspaceArchiveLoading': 'Reading archive records…',
+  'panel.workspaceArchiveLoadFailed': 'Reading workspace archives failed',
+  'panel.workspaceArchiveRestore': 'Restore',
+  'panel.workspaceArchiveRestoring': 'Restoring…',
+  'panel.workspaceArchiveRestoreTitle': 'Workspace restored',
+  'panel.workspaceArchiveRestoreDoneLine': '“{title}”: {count} session(s) restored',
+  'panel.workspaceArchiveRestorePartial': '{count} session(s) could not be restored; the record is kept for a retry.',
+  'panel.workspaceArchiveRestoreFailed': 'Workspace restore failed',
+  'panel.workspaceArchiveSkipped': 'Not restored {id}: {message}',
+  'panel.workspaceArchiveStatusReady': 'Ready',
+  'panel.workspaceArchiveStatusPartial': 'Partial',
+  'panel.workspaceArchiveMeta': '{count} session(s) · {date}',
   'panel.importWorkspaceTarget': 'Target workspace',
   'panel.importWorkspaceDefault': 'Default directory / current workspace',
   'panel.loading': 'Loading sessions…',
@@ -1443,7 +1509,8 @@ function confirmDialogNode(options) {
  *          manageSessions: Function, previewSessionFiles: Function,
  *          loadSessionDetails: Function, migrateSessions: Function, moveSessions: Function,
  *          loadTrash: Function, restoreTrash: Function, purgeTrash: Function,
- *          checkAttachments: Function,
+ *          checkAttachments: Function, loadWorkspaceArchives: Function,
+ *          archiveWorkspace: Function, restoreWorkspace: Function,
  *          refreshSessions: Function, targetOf: Function}} props
  *   slot translator and the Host operations injected by `apply`.
  */
@@ -1484,6 +1551,15 @@ function SessionKitPanel(props) {
   const [trashBusy, setTrashBusy] = React.useState('')
   const [trashConfirm, setTrashConfirm] = React.useState(null)
   const [attachmentBusy, setAttachmentBusy] = React.useState(false)
+  const [workspaceArchiveState, setWorkspaceArchiveState] = React.useState({
+    phase: 'idle',
+    archives: [],
+    warnings: [],
+    archiveRoot: '',
+  })
+  const [workspaceArchiveBusy, setWorkspaceArchiveBusy] = React.useState('')
+  const [workspaceArchiveTarget, setWorkspaceArchiveTarget] = React.useState('')
+  const [workspaceArchiveConfirm, setWorkspaceArchiveConfirm] = React.useState(null)
   const fileInputRef = React.useRef(null)
   const mountedRef = React.useRef(true)
 
@@ -1539,6 +1615,124 @@ function SessionKitPanel(props) {
       if (!mountedRef.current) return
       setTrash((previous) => ({ ...previous, phase: 'error' }))
       setNotice({ tone: 'error', title: tr('panel.trashLoadFailed'), lines: [errorMessageOf(error, tr)] })
+    }
+  }
+
+  async function reloadWorkspaceArchives() {
+    setWorkspaceArchiveState((previous) => ({ ...previous, phase: 'loading' }))
+    try {
+      const listed = await props.loadWorkspaceArchives()
+      if (!mountedRef.current) return
+      setWorkspaceArchiveState({
+        phase: 'ready',
+        archives: listed.archives,
+        warnings: listed.warnings,
+        archiveRoot: listed.archiveRoot,
+      })
+    } catch (error) {
+      if (!mountedRef.current) return
+      setWorkspaceArchiveState((previous) => ({
+        ...previous,
+        phase: 'error',
+        error: errorMessageOf(error, tr),
+      }))
+    }
+  }
+
+  function askArchiveWorkspace(workspaceId) {
+    if (busy !== '' || workspaceArchiveBusy !== '') return
+    const workspace = catalog.workspaces.find((entry) => entry.workspaceId === workspaceId)
+    if (workspace === undefined) return
+    setWorkspaceArchiveConfirm({
+      workspaceId: workspace.workspaceId,
+      title: workspace.title !== '' ? workspace.title : workspace.path,
+      sessionCount: workspace.sessionIds.length,
+      path: workspace.path,
+    })
+  }
+
+  async function runArchiveWorkspace(workspaceId) {
+    if (workspaceArchiveBusy !== '' || workspaceId === '') return
+    setWorkspaceArchiveBusy(`archive:${workspaceId}`)
+    try {
+      const result = await props.archiveWorkspace(workspaceId)
+      if (mountedRef.current) {
+        const title =
+          result.archive.workspace.title !== '' ? result.archive.workspace.title : result.archive.workspace.path
+        setNotice({
+          tone: 'success',
+          title: tr('panel.workspaceArchiveDone'),
+          lines: capNoticeLines(
+            [
+              tr('panel.workspaceArchiveDoneLine', { title, count: result.archivedCount }),
+              tr('panel.workspaceArchiveKept', { path: result.archive.workspace.path }),
+              tr('panel.workspaceArchiveRestoreHint'),
+            ],
+            tr,
+          ),
+        })
+        setWorkspaceArchiveConfirm(null)
+        setWorkspaceArchiveTarget('')
+      }
+      await reloadWorkspaceArchives()
+      await reload({ quiet: true })
+      await props.refreshSessions()
+    } catch (error) {
+      if (mountedRef.current) {
+        setNotice({
+          tone: 'error',
+          title: tr('panel.workspaceArchiveFailed'),
+          lines: [errorMessageOf(error, tr)],
+        })
+      }
+    } finally {
+      if (mountedRef.current) setWorkspaceArchiveBusy('')
+    }
+  }
+
+  async function runRestoreWorkspace(archive) {
+    if (workspaceArchiveBusy !== '' || archive === null || typeof archive !== 'object') return
+    setWorkspaceArchiveBusy(`restore:${archive.archiveId}`)
+    try {
+      const result = await props.restoreWorkspace(archive.archiveId)
+      if (mountedRef.current) {
+        const title = result.workspace.title !== '' ? result.workspace.title : result.workspace.path
+        const lines = [tr('panel.workspaceArchiveRestoreDoneLine', { title, count: result.restored.length })]
+        if (!result.completed) {
+          lines.push(
+            tr('panel.workspaceArchiveRestorePartial', {
+              count: result.pendingSessionIds.length,
+            }),
+          )
+        }
+        for (const skipped of result.skipped) {
+          lines.push(
+            tr('panel.workspaceArchiveSkipped', {
+              id: pickString(skipped.id),
+              message: pickString(skipped.message),
+            }),
+          )
+        }
+        lines.push(...result.warnings)
+        setNotice({
+          tone: result.completed ? 'success' : 'warn',
+          title: tr('panel.workspaceArchiveRestoreTitle'),
+          lines: capNoticeLines(lines, tr),
+        })
+      }
+      await reloadWorkspaceArchives()
+      await reload({ quiet: true })
+      await props.refreshSessions()
+    } catch (error) {
+      if (mountedRef.current) {
+        setNotice({
+          tone: 'error',
+          title: tr('panel.workspaceArchiveRestoreFailed'),
+          lines: [errorMessageOf(error, tr)],
+        })
+      }
+    } finally {
+      if (mountedRef.current) setWorkspaceArchiveBusy('')
     }
   }
 
@@ -1674,6 +1868,7 @@ function SessionKitPanel(props) {
 
   React.useEffect(() => {
     void reloadTrash()
+    void reloadWorkspaceArchives()
     void reload()
   }, [])
 
@@ -3299,6 +3494,163 @@ function SessionKitPanel(props) {
     ),
   )
 
+  const archiveTargets = catalog.workspaces.filter((workspace) => workspace.workspaceId !== '')
+  const selectedArchiveTarget =
+    workspaceArchiveTarget !== '' &&
+    archiveTargets.some((workspace) => workspace.workspaceId === workspaceArchiveTarget)
+      ? workspaceArchiveTarget
+      : (archiveTargets[0]?.workspaceId ?? '')
+  const archiveBusy = workspaceArchiveBusy !== ''
+  const workspaceArchivePanel = h(
+    'div',
+    { className: styles.toolCard },
+    h(
+      'div',
+      { className: styles.toolCardHeader },
+      h('h3', { className: styles.toolCardTitle }, tr('panel.workspaceArchiveSection')),
+      h('p', { className: styles.toolCardHint }, tr('panel.workspaceArchiveHint')),
+    ),
+    archiveTargets.length === 0
+      ? h('p', { className: styles.toolCardStatus }, tr('panel.workspaceArchiveNoTarget'))
+      : h(
+          'div',
+          { className: styles.fieldColumn },
+          h(
+            'label',
+            { className: styles.fieldLabel, htmlFor: 'session-kit-archive-target' },
+            tr('panel.workspaceArchiveSelect'),
+          ),
+          h(
+            'select',
+            {
+              id: 'session-kit-archive-target',
+              className: styles.select,
+              value: selectedArchiveTarget,
+              disabled: archiveBusy,
+              onChange: (event) => setWorkspaceArchiveTarget(event.target.value),
+            },
+            ...archiveTargets.map((workspace) =>
+              h(
+                'option',
+                { key: workspace.workspaceId, value: workspace.workspaceId },
+                workspace.title !== ''
+                  ? `${workspace.title} — ${workspace.path}`
+                  : workspace.path !== ''
+                    ? workspace.path
+                    : workspace.workspaceId,
+              ),
+            ),
+          ),
+        ),
+    h(
+      'div',
+      { className: styles.toolActions },
+      h(
+        'button',
+        {
+          type: 'button',
+          style: buttonStyle('secondary', archiveBusy || selectedArchiveTarget === ''),
+          disabled: archiveBusy || selectedArchiveTarget === '',
+          onClick: () => askArchiveWorkspace(selectedArchiveTarget),
+        },
+        tr('panel.workspaceArchiveButton'),
+      ),
+    ),
+    h(
+      'div',
+      { className: styles.archiveListHeader },
+      h('span', { className: styles.fieldLabel }, tr('panel.workspaceArchiveListTitle')),
+      h(
+        'button',
+        {
+          type: 'button',
+          style: rowButtonStyle('ghost', archiveBusy || workspaceArchiveState.phase === 'loading'),
+          disabled: archiveBusy || workspaceArchiveState.phase === 'loading',
+          onClick: () => {
+            void reloadWorkspaceArchives()
+          },
+        },
+        tr('panel.workspaceArchiveListReload'),
+      ),
+    ),
+    workspaceArchiveState.phase === 'loading'
+      ? h('p', { className: styles.toolCardStatus }, tr('panel.workspaceArchiveLoading'))
+      : workspaceArchiveState.phase === 'error'
+        ? h('p', { className: styles.toolCardStatus }, tr('panel.workspaceArchiveLoadFailed'))
+        : workspaceArchiveState.archives.length === 0
+          ? h('p', { className: styles.toolCardStatus }, tr('panel.workspaceArchiveListEmpty'))
+          : h(
+              'div',
+              { className: styles.archiveList },
+              ...workspaceArchiveState.archives.map((archive) => {
+                const title =
+                  archive.workspace.title !== '' ? archive.workspace.title : archive.workspace.path || archive.archiveId
+                const restoring = workspaceArchiveBusy === `restore:${archive.archiveId}`
+                return h(
+                  'div',
+                  { key: archive.archiveId, className: styles.archiveItem },
+                  h(
+                    'div',
+                    { className: styles.archiveHead },
+                    h('strong', { className: styles.archiveTitle }, title),
+                    h(
+                      'span',
+                      { className: styles.archiveBadge },
+                      tr(
+                        archive.status === 'partial'
+                          ? 'panel.workspaceArchiveStatusPartial'
+                          : 'panel.workspaceArchiveStatusReady',
+                      ),
+                    ),
+                  ),
+                  h('div', { className: styles.archiveMeta }, archive.workspace.path),
+                  h(
+                    'div',
+                    { className: styles.archiveMeta },
+                    tr('panel.workspaceArchiveMeta', {
+                      count: archive.sessionCount,
+                      date: formatDateTime(archive.archivedAt),
+                    }),
+                  ),
+                  archive.status === 'partial'
+                    ? h(
+                        'div',
+                        { className: styles.archiveMeta },
+                        tr('panel.workspaceArchiveRestorePartial', {
+                          count: archive.pendingSessionIds.length,
+                        }),
+                      )
+                    : null,
+                  h(
+                    'div',
+                    { className: styles.archiveActions },
+                    h(
+                      'button',
+                      {
+                        type: 'button',
+                        style: rowButtonStyle('ghost', archiveBusy),
+                        disabled: archiveBusy,
+                        onClick: () => {
+                          void runRestoreWorkspace(archive)
+                        },
+                      },
+                      restoring ? tr('panel.workspaceArchiveRestoring') : tr('panel.workspaceArchiveRestore'),
+                    ),
+                  ),
+                )
+              }),
+            ),
+    workspaceArchiveState.warnings.length > 0
+      ? h(
+          'div',
+          { className: styles.lines },
+          workspaceArchiveState.warnings.map((warning, index) =>
+            h('span', { key: `archive-warning-${index}`, className: styles.noticeLine }, warning),
+          ),
+        )
+      : null,
+  )
+
   const importOptions = h(
     'div',
     { className: styles.optionList, role: 'group', 'aria-label': tr('panel.importOptions') },
@@ -3666,6 +4018,7 @@ function SessionKitPanel(props) {
     { className: styles.toolsPanel, 'aria-label': tr('panel.tools') },
     exportPanel,
     workspaceBackupPanel,
+    workspaceArchivePanel,
     importPanel,
     trashPanel,
     attachmentPanel,
@@ -3958,6 +4311,29 @@ function SessionKitPanel(props) {
           },
         })
 
+  const workspaceArchiveDialog =
+    workspaceArchiveConfirm === null
+      ? null
+      : confirmDialogNode({
+          tr,
+          title: tr('panel.workspaceArchiveTitle'),
+          body: tr('panel.workspaceArchiveBody', {
+            title: workspaceArchiveConfirm.title,
+            count: workspaceArchiveConfirm.sessionCount,
+          }),
+          items: [workspaceArchiveConfirm.path],
+          note: tr('panel.workspaceArchiveNote'),
+          confirmRole: 'primary',
+          confirmLabel: tr('panel.workspaceArchiveConfirm'),
+          busyLabel: tr('panel.workspaceArchiveBusy'),
+          busy: workspaceArchiveBusy !== '',
+          busyAction: workspaceArchiveBusy === `archive:${workspaceArchiveConfirm.workspaceId}`,
+          onCancel: () => setWorkspaceArchiveConfirm(null),
+          onConfirm: () => {
+            void runArchiveWorkspace(workspaceArchiveConfirm.workspaceId)
+          },
+        })
+
   return h(
     'div',
     { className: styles.page },
@@ -3975,6 +4351,7 @@ function SessionKitPanel(props) {
     migrateDialog,
     moveDialog,
     trashDialog,
+    workspaceArchiveDialog,
   )
 }
 // #endregion
@@ -4143,6 +4520,99 @@ async function manageSelection(action, sessionIds, options) {
     throw requestFailure(payload, response.status)
   }
   return normalizeManagePayload(payload, sessionIds)
+}
+
+/** Normalize one workspace archive row. */
+function normalizeWorkspaceArchive(raw) {
+  const record = raw !== null && typeof raw === 'object' ? raw : {}
+  const workspace = record.workspace !== null && typeof record.workspace === 'object' ? record.workspace : {}
+  return {
+    archiveId: pickString(record.archiveId),
+    archivedAt: pickString(record.archivedAt),
+    workspace: {
+      workspaceId: pickString(workspace.workspaceId ?? workspace.id),
+      title: pickString(workspace.title),
+      path: pickString(workspace.path),
+    },
+    sessionCount: pickNumber(record.sessionCount),
+    preArchivedCount: pickNumber(record.preArchivedCount),
+    pinnedCount: pickNumber(record.pinnedCount),
+    status: pickString(record.status) === 'partial' ? 'partial' : 'ready',
+    restoredAt: pickString(record.restoredAt),
+    pendingSessionIds: Array.isArray(record.pendingSessionIds)
+      ? record.pendingSessionIds.filter((id) => typeof id === 'string')
+      : [],
+    warnings: Array.isArray(record.warnings) ? record.warnings.filter((line) => typeof line === 'string') : [],
+  }
+}
+
+/** Normalize the workspace archive listing payload. */
+function normalizeWorkspaceArchiveList(payload) {
+  const root = payload !== null && typeof payload === 'object' ? payload : {}
+  return {
+    archiveRoot: pickString(root.archiveRoot),
+    archives: (Array.isArray(root.archives) ? root.archives : [])
+      .map(normalizeWorkspaceArchive)
+      .filter((archive) => archive.archiveId !== ''),
+    warnings: Array.isArray(root.warnings) ? root.warnings.filter((line) => typeof line === 'string') : [],
+  }
+}
+
+/** Read the whole-workspace archive records (`GET /session-kit/workspace-archives`). */
+async function loadWorkspaceArchives() {
+  const payload = await requestJson('/workspace-archives')
+  return normalizeWorkspaceArchiveList(payload)
+}
+
+/** Archive one whole workspace after the user confirmed. */
+async function archiveWorkspaceOnHost(workspaceId) {
+  const response = await fetch(hostUrl('/workspace-archive'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({ workspaceId, confirm: true }),
+  })
+  const payload = await jsonBody(response)
+  if (!response.ok || payload === null || typeof payload !== 'object' || payload.ok !== true) {
+    throw requestFailure(payload, response.status)
+  }
+  return {
+    archive: normalizeWorkspaceArchive(payload.archive),
+    archivedCount: pickNumber(payload.archivedCount),
+    alreadyArchivedCount: pickNumber(payload.alreadyArchivedCount),
+    workspaceRemoved: payload.workspaceRemoved === true,
+  }
+}
+
+/** Restore one whole workspace from its archive record. */
+async function restoreWorkspaceOnHost(archiveId) {
+  const response = await fetch(hostUrl('/workspace-restore'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({ archiveId }),
+  })
+  const payload = await jsonBody(response)
+  if (!response.ok || payload === null || typeof payload !== 'object' || payload.ok !== true) {
+    throw requestFailure(payload, response.status)
+  }
+  const workspace = payload.workspace !== null && typeof payload.workspace === 'object' ? payload.workspace : {}
+  return {
+    archiveId: pickString(payload.archiveId),
+    workspace: {
+      workspaceId: pickString(workspace.workspaceId ?? workspace.id),
+      title: pickString(workspace.title),
+      path: pickString(workspace.path),
+      reused: workspace.reused === true,
+    },
+    restored: Array.isArray(payload.restored) ? payload.restored.filter((id) => typeof id === 'string') : [],
+    skipped: Array.isArray(payload.skipped)
+      ? payload.skipped.filter((entry) => entry !== null && typeof entry === 'object')
+      : [],
+    warnings: Array.isArray(payload.warnings) ? payload.warnings.filter((line) => typeof line === 'string') : [],
+    completed: payload.completed !== false,
+    pendingSessionIds: Array.isArray(payload.pendingSessionIds)
+      ? payload.pendingSessionIds.filter((id) => typeof id === 'string')
+      : [],
+  }
 }
 
 /** Read the trash inventory (`GET /session-kit/trash`). */
@@ -4361,6 +4831,9 @@ function apply(ctx) {
             restoreTrash: (operationId, sessionIds) => restoreTrashBatch(operationId, sessionIds),
             purgeTrash: (operationIds) => purgeTrashBatch(operationIds),
             checkAttachments: () => loadAttachmentReport(),
+            loadWorkspaceArchives: () => loadWorkspaceArchives(),
+            archiveWorkspace: (workspaceId) => archiveWorkspaceOnHost(workspaceId),
+            restoreWorkspace: (archiveId) => restoreWorkspaceOnHost(archiveId),
             refreshSessions: () => refreshSessionList(ctx),
             targetOf: () => importTargetOf(ctx),
           }),

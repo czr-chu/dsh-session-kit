@@ -4,7 +4,7 @@
 
 **Session manager, backup, and migration toolkit for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).**
 
-Version **0.12.1** · public beta · [中文说明](README.zh.md)
+Version **0.13.0** · public beta · [中文说明](README.zh.md)
 
 dsh-session-kit adds a **Session manager** panel and a <code>session_kit</code> agent
 tool to DeepSeek Harness (DSH). It backs up a whole **workspace** (every session
@@ -36,6 +36,9 @@ storage layout or rewriting session files by hand.
 - **Manage sessions where they live.** Archive/unarchive, delete to a trash
   directory with strict path validation, restore or permanently purge a trash
   operation, or (explicitly) erase permanently.
+- **Put a whole project away.** Archive a workspace's sessions and remove only
+  its registration; the directory, logs and files stay put, and restoring
+  recreates the project with the same sessions, title and pinning.
 - **Move a session to another workspace.** The copy is written under a new id,
   verified by reading it back, then the source is moved to the trash — the move
   stays reversible.
@@ -73,6 +76,27 @@ storage layout or rewriting session files by hand.
   the files without overwriting existing files.
 - This is the intended model when one workspace is one project. Session-level
   file derivation remains experimental for mixed workspaces.
+
+### Archive a whole workspace
+
+- **Archive whole workspace** archives every session attached to it through the
+  official session archive API, writes a restore record, and then removes the
+  workspace **registration only**. The directory, session logs and workspace
+  files stay exactly where they are.
+- Use it when a project is paused but may come back. Deleting a workspace
+  instead leaves its sessions in the unnamed workspace and loses the project
+  grouping; the archive record keeps the title, path, order and each session's
+  prior archived/pinned state.
+- **Restore** recreates or reuses the workspace at the recorded path, reattaches
+  the sessions, unarchives only the sessions this archive archived (sessions
+  that were already archived stay archived), restores pinning, and removes the
+  record only when every session was attached. A partial restore keeps the
+  record for a retry.
+- An active session aborts the archive and rolls it back. Archiving the
+  workspace you are currently using makes DSH leave it; open Session management
+  from another workspace (or after creating one) to restore the record.
+- This is not a backup: nothing is copied, moved or deleted. Use workspace
+  backup when you need an off-machine ZIP.
 
 ### Export selected sessions
 
@@ -246,6 +270,9 @@ The <code>session_kit</code> tool exposes the same operations to the model:
 | <code>list</code> | Summarize workspaces and sessions | archived rows are marked |
 | <code>export</code> | Write one ZIP under the plugin's export directory | <code>mode: compact</code> / <code>compressed</code> / <code>full</code>, <code>sessionIds</code> or <code>all</code> |
 | <code>export_workspace</code> | Write one ZIP per selected workspace | <code>workspaceIds</code> (max 20) or a single <code>workspaceId</code>; each ZIP carries all main sessions + that workspace tree |
+| <code>workspace_archive_list</code> | List whole-workspace archive records | read-only; title/path, session and partial counts |
+| <code>workspace_archive</code> | Archive all sessions of one workspace, then remove its registration | requires <code>confirm: true</code> and <code>workspaceId</code>; directory/logs/files are kept |
+| <code>workspace_restore</code> | Recreate the workspace and reattach its sessions | <code>archiveId</code>; partial records can be retried |
 | <code>import</code> | Import an archive file as new sessions | optional workspace file restore |
 | <code>archive</code> / <code>unarchive</code> | Toggle the durable archive state | batch ids supported |
 | <code>delete</code> | Move sessions to the trash | requires <code>confirm: true</code>; optional <code>removeFiles</code> with explicit <code>selectedFiles</code>; <code>permanent: true</code> erases irreversibly |
@@ -275,10 +302,10 @@ a Web or Desktop deployment; a headless deployment still gets the
 
 ~~~bash
 # from GitHub (recommended: pin a release tag)
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.12.1
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.13.0
 
 # or directly from a GitHub Release tarball
-# dsh plugin --profile web add 'https://github.com/czr-chu/dsh-session-kit/releases/download/v0.12.1/dsh-session-kit-0.12.1.tgz'
+# dsh plugin --profile web add 'https://github.com/czr-chu/dsh-session-kit/releases/download/v0.13.0/dsh-session-kit-0.13.0.tgz'
 
 # from a local checkout (iterating on the plugin)
 dsh plugin --profile web add ~/src/dsh-session-kit
@@ -291,7 +318,7 @@ Restart <code>dsh web</code> after installing, then refresh the page. The sideba
 gets a **Session manager** row under Plugins.
 
 In the Desktop/Web **Plugins → Add plugin** dialog, enter either the GitHub
-repository URL (`https://github.com/czr-chu/dsh-session-kit#v0.12.1`), the
+repository URL (`https://github.com/czr-chu/dsh-session-kit#v0.13.0`), the
 Release `.tgz` URL, or an absolute local directory. The repository is public; no
 GitHub token is needed for a Git install. See [docs/install.md](docs/install.md)
 for the repository requirements and offline install.
@@ -352,6 +379,13 @@ session-kit-<count>-sessions-<timestamp>.zip
 │   ├── media/<attachmentId>.<ext>
 │   └── files/<prefix>/<digest>/<name>
 └── workspaces/<encoded-workspace>/...    # optional whole workspace tree
+~~~
+
+A whole-workspace archive record lives outside the ZIP layout:
+
+~~~text
+$DSH_HOME/session-kit-workspace-archive/<archiveId>/
+└── record.json                           # workspace title/path/order, per-session archived/pinned, partial state
 ~~~
 
 The trash produced by delete is separate from archives:
@@ -451,6 +485,10 @@ More detail: [docs/security.md](docs/security.md) and the [privacy audit](docs/p
 - A workspace move creates a new session id: links/bookmarks to the old id stop
   working until you restore the trashed source. Subagent transcripts are not
   copied and the move is not atomic across a batch.
+- Archiving a workspace does not copy or delete any file; it archives the member
+  sessions and removes the registration. Restoring normally creates a new
+  workspace id at the same path, and archiving the workspace currently in use
+  makes DSH leave it until another workspace is opened.
 - Permanent delete has no rollback and no trash copy.
 - The official format migration can refuse a legacy log; the plugin reports the
   refusal and leaves the source unchanged.
@@ -477,7 +515,7 @@ npm test
 node --import tsx/esm --test dsh-session-kit/test/*.test.mjs
 ~~~
 
-Expected result: **314 tests**, with 9 guarded real-backend cases skipped under
+Expected result: **326 tests**, with 9 guarded real-backend cases skipped under
 plain <code>node --test</code> (they run when the DSH checkout is available
 through <code>tsx</code>). The suite covers session listing/reading, compact
 building, workspace file collection and sensitive exclusions, archive

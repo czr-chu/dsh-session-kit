@@ -780,3 +780,56 @@ textarea:focus-visible {
   outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
 }
+
+/* Whole-workspace archive: record list and row actions. */
+.archive-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+.archive-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.archive-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-alias-radius-m, 8px);
+  background: var(--dsw-alias-bg-l2);
+}
+.archive-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.archive-title {
+  font: 500 13px/20px var(--dsw-font-family, inherit);
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
+.archive-badge {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-l3);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+.archive-meta {
+  font: 12px/18px var(--dsw-font-family, inherit);
+  color: var(--dsw-alias-label-secondary);
+  overflow-wrap: anywhere;
+}
+.archive-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

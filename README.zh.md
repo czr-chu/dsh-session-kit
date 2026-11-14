@@ -3,7 +3,7 @@
 <img src="https://raw.githubusercontent.com/czr-chu/dsh-session-kit/main/assets/icon-512.png" width="72" align="right" alt="dsh-session-kit icon">
 
 **DeepSeek Harness 的会话管理、备份与迁移工具包。**
-Version **0.12.1** · 公开 beta · [English](README.md)
+Version **0.13.0** · 公开 beta · [English](README.md)
 
 dsh-session-kit 为 DeepSeek Harness（DSH）增加一个 **会话管理（Session manager）**
 面板和一个 <code>session_kit</code> agent 工具：按**工作区**备份整个项目（全部会话 +
@@ -30,6 +30,8 @@ dsh-session-kit 为 DeepSeek Harness（DSH）增加一个 **会话管理（Sessi
   可继续对话的合法 DSH 会话。
 - **就地管理。** 归档/恢复；删除到回收站（严格校验落盘路径）；从回收站恢复或永久清理；
   或显式地永久删除。
+- **把整个项目收起来。** 归档工作区的全部会话，只移除工作区注册；目录、日志和文件
+  原地保留，恢复时重建项目并挂回同一批会话、标题和置顶状态。
 - **把会话迁移到另一个工作区。** 复制成新 id、读回验证后，源会话移入回收站，
   整个迁移可回滚。
 - **按官方方式升级旧日志。** 走 DSH 自己的迁移链，旧代际文件保留；官方拒绝时如实报告，
@@ -57,6 +59,20 @@ dsh-session-kit 为 DeepSeek Harness（DSH）增加一个 **会话管理（Sessi
 - 通过 **Import → Archive → Target workspace** 恢复：以目标目录为 cwd 新建会话、挂到目标
   工作区，并安全恢复文件（不覆盖已有文件）。
 - 一个工作区就是一个项目时，这是推荐模型；混合多项目工作区的 per-session 文件推导仍是实验性功能。
+
+### 归档整个工作区
+
+- **归档整个工作区**会通过官方的会话归档接口归档其下所有会话，写一份恢复清单，然后
+  **只移除工作区注册**。目录、会话日志和工作区文件都留在原位。
+- 适合“这个项目先不做了，但以后可能回来”的场景。直接删除工作区会把会话甩到未命名
+  工作区并丢失项目分组；归档记录保留标题、路径、顺序，以及每个会话归档前的
+  归档/置顶状态。
+- **恢复**会在记录中的路径重建或复用工作区，逐个 attach 会话，只取消本次归档造成的
+  归档状态（原本就归档的会话保持归档），恢复置顶，并在全部 attach 成功后才删除记录。
+  部分失败会保留记录，可稍后重试。
+- 活动会话会导致归档失败并整体回滚。归档当前正在使用的工作区后，DSH 会离开该工作区；
+  需要从其他工作区（或新建工作区后）打开“会话管理”恢复记录。
+- 这不是备份：不复制、不移动、不删除任何文件。需要异地 ZIP 时请用工作区备份。
 
 ### 导出选中会话
 
@@ -186,6 +202,9 @@ dsh-session-kit 为 DeepSeek Harness（DSH）增加一个 **会话管理（Sessi
 | <code>list</code> | 汇总工作区与会话 | 已归档行会标记 |
 | <code>export</code> | 在插件导出目录写一个 ZIP | <code>mode: compact</code> / <code>compressed</code> / <code>full</code>，<code>sessionIds</code> 或 <code>all</code> |
 | <code>export_workspace</code> | 为每个选中的工作区各写一个 ZIP | <code>workspaceIds</code>（最多 20 个）或单个 <code>workspaceId</code>；每个 ZIP 含该工作区全部主会话与整棵树 |
+| <code>workspace_archive_list</code> | 列出整个工作区的归档记录 | 只读；含标题/路径、会话数与 partial 状态 |
+| <code>workspace_archive</code> | 归档一个工作区的全部会话，再移除其注册 | 需要 <code>confirm: true</code> 与 <code>workspaceId</code>；目录/日志/文件保留 |
+| <code>workspace_restore</code> | 重建工作区并重新 attach 会话 | <code>archiveId</code>；partial 记录可重试 |
 | <code>import</code> | 把归档文件导入为新会话 | 可选恢复工作区文件 |
 | <code>archive</code> / <code>unarchive</code> | 切换持久归档状态 | 支持批量 id |
 | <code>delete</code> | 把会话移入回收站 | 需要 <code>confirm: true</code>；可选 <code>removeFiles</code> + 显式 <code>selectedFiles</code>；<code>permanent: true</code> 不可恢复 |
@@ -214,10 +233,10 @@ dsh-session-kit 为 DeepSeek Harness（DSH）增加一个 **会话管理（Sessi
 
 ~~~bash
 # 从 GitHub 安装（建议固定 release tag）
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.12.1
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.13.0
 
 # 或直接从 GitHub Release 的 tgz 安装
-# dsh plugin --profile web add 'https://github.com/czr-chu/dsh-session-kit/releases/download/v0.12.1/dsh-session-kit-0.12.1.tgz'
+# dsh plugin --profile web add 'https://github.com/czr-chu/dsh-session-kit/releases/download/v0.13.0/dsh-session-kit-0.13.0.tgz'
 
 # 从本地 checkout 安装（便于迭代）
 dsh plugin --profile web add ~/src/dsh-session-kit
@@ -230,7 +249,7 @@ dsh plugin --profile web list --depth 0
 一行。
 
 桌面版/Web 的 **插件 → 添加插件** 对话框可直接输入 GitHub 仓库地址
-（`https://github.com/czr-chu/dsh-session-kit#v0.12.1`）、Release 的 `.tgz`
+（`https://github.com/czr-chu/dsh-session-kit#v0.13.0`）、Release 的 `.tgz`
 直链，或绝对本地目录。仓库是公开的，Git 安装不需要 GitHub token；完整说明见
 [docs/install.md](docs/install.md)。
 
@@ -256,7 +275,7 @@ DSH 版本不满足时会通过 <code>engines.dsh</code> 在安装阶段被拒�
 5. **管理。** 用行内操作归档/恢复或删除。删除会移入回收站；删除对话框同时提供实验性的
    相关文件选择，以及独立的永久删除二次确认。工具列底部的**回收站**卡片列出删除操作，
    可恢复或永久清理。**迁移到工作区**会把选中会话复制到另一个工作区，并把源会话
-   移入回收站。
+   移入回收站；**工作区归档**卡片可以把整个项目收起来，之后从其他工作区恢复。
 6. **升级旧格式。** 带旧格式徽标的行可以单条或批量通过 DSH 官方迁移升级，旧代际文件保留。
 7. **导入 DeepSeek 分享。** 在 Import 卡片切到 **DeepSeek share**，粘贴链接或 id，
    选择工作区后导入。
@@ -278,6 +297,13 @@ session-kit-<count>-sessions-<timestamp>.zip
 │   ├── media/<attachmentId>.<ext>
 │   └── files/<prefix>/<digest>/<name>
 └── workspaces/<encoded-workspace>/...    # 可选：整棵工作区树
+~~~
+
+整个工作区的归档记录不在 ZIP 里：
+
+~~~text
+$DSH_HOME/session-kit-workspace-archive/<archiveId>/
+└── record.json                           # 工作区标题/路径/顺序、每个会话的归档/置顶状态、partial 信息
 ~~~
 
 删除产生的回收站目录与归档无关：
@@ -361,6 +387,8 @@ $DSH_HOME/session-kit-trash/<timestamp>/
 - 相关文件推导是近似结果，且标注为实验性。
 - 工作区迁移会产生新会话 id：旧 id 的链接/书签会失效，直到从回收站恢复源会话；
   子代理转录不复制，批量迁移也不是原子的。
+- 归档工作区不复制也不删除文件：它归档成员会话并移除注册。恢复通常会在同一路径
+  创建新的工作区 id；归档当前正在使用的工作区会让 DSH 离开它，直到打开另一个工作区。
 - 永久删除没有回滚，也没有回收站副本。
 - 官方格式迁移可能拒绝某份旧日志；插件会报告拒绝原因并保持源文件不变。
 - 分享导入需要访问 <code>chat.deepseek.com</code>；私有或已删除的分享会失败，
@@ -386,10 +414,10 @@ npm test
 node --import tsx/esm --test dsh-session-kit/test/*.test.mjs
 ~~~
 
-预期：**314 个测试**，其中 9 个真实后端用例在纯 <code>node --test</code> 下 skip
+预期：**326 个测试**，其中 9 个真实后端用例在纯 <code>node --test</code> 下 skip
 （在通过 <code>tsx</code> 使用 DSH checkout 时会运行）。覆盖会话列表/读取、
 compact 构建、工作区文件收集与敏感排除、归档构建/导入（含 zip-slip 与 sha256 校验）、
-归档/回收站/永久删除语义、工作区迁移、多工作区备份、官方格式迁移，以及分享链接的规范化/构建/导入
+归档/回收站/永久删除语义、工作区迁移、多工作区备份、整个工作区归档/恢复、官方格式迁移，以及分享链接的规范化/构建/导入
 （可用时对真实本地 JSONL 后端验证）。
 
 项目文档：[插件规范符合性](docs/plugin-conformance.md) · [工作区备份](docs/workspace-backup.md) · [隐私审计](docs/privacy.md) · [架构](docs/architecture.md) · [安装与升级](docs/install.md) · [市场上架](docs/market-listing.md) ·

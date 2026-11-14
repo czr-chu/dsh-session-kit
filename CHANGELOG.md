@@ -4,6 +4,23 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-11-14
+
+### Added
+
+- **Whole-workspace archive and restore**: the panel's Workspace archive card and
+  the `workspace_archive_list` / `workspace_archive` / `workspace_restore` tool
+  actions archive every session of a workspace through the official session
+  archive API, write a restore record under
+  `<DSH_HOME>/session-kit-workspace-archive/<archiveId>/record.json`, then remove
+  the workspace **registration only** — the directory, session logs and
+  workspace files stay in place. Restore recreates or reuses the workspace at
+  the recorded path, reattaches its sessions, unarchives only the sessions the
+  archive archived, restores pinning, and keeps a partial record when an attach
+  fails. Active sessions roll the archive back. This avoids deleting a finished
+  project's workspace and losing its grouping in the unnamed workspace. See
+  `docs/decisions/0007-workspace-archive.md`.
+
 ## [0.12.1] - 2026-11-14
 
 ### Fixed

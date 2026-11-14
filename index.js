@@ -13,13 +13,15 @@
  *    GET /session-kit/{info,list} and
  *    POST /session-kit/{export,export-workspace,import,archive,unarchive,
  *    delete,migrate,session-files,session-detail,import-share,move,
- *    trash,trash-restore,trash-purge} — fenced by the
+ *    trash,trash-restore,trash-purge,workspace-archives,workspace-archive,
+ *    workspace-restore} — fenced by the
  *    Connection service exactly like every other plugin-owned route; a fenced
  *    rejection answers `{ok:false, code:'forbidden'|'unauthorized'}` like any
  *    other failure; and
  *  - one agent tool (`session_kit`) with list / export / export_workspace /
  *    import / archive / unarchive / delete / migrate / files / detail /
  *    trash_list / trash_restore / trash_purge / move / attachment_report /
+ *    workspace_archive_list / workspace_archive / workspace_restore /
  *    import_share actions.
  *
  * Both faces share one `parseSessionIdList` for scope parsing (`'all'` where
@@ -38,7 +40,9 @@
  * (never a permanent erase) and requires an explicit id list. Batches are
  * capped at {@link MAX_MANAGE_BATCH} sessions and report one result per id; a
  * fully failed batch answers with the first failure's status (404 / 409 / 503 /
- * 500).
+ * 500). A workspace archive is not a byte archive: it archives every attached
+ * session through the registry, writes a restore manifest, then removes the
+ * workspace registration only; the directory and logs stay in place.
  *
  * The plugin imports no DSH package: session-query, persistence, attachments,
  * workspaces, presets and the working directory are read off `ctx` through the
@@ -156,6 +160,8 @@ export const MAX_DETAIL_BATCH = 100
 export const MAX_MOVE_BATCH = 100
 /** Upper bound on one multi-workspace backup batch (each workspace is one ZIP). */
 export const MAX_WORKSPACE_BATCH = 20
+/** Upper bound on workspace archive records returned by one listing. */
+export const MAX_WORKSPACE_ARCHIVES = 500
 /** Upper bound on one explicit selected-files list. */
 export const MAX_SELECTED_FILES = 5000
 /** Export modes every route and tool action accepts. */
@@ -178,6 +184,7 @@ let importModule
 let trashModule
 let moveModule
 let attachmentReportModule
+let workspaceArchiveModule
 
 /**
  * Normalize the in-process test-only module injection seam.
@@ -223,6 +230,7 @@ function moduleOverrides(internals) {
     trash: modules.trash,
     move: modules.move,
     attachmentReport: modules.attachmentReport,
+    workspaceArchive: modules.workspaceArchive,
   }
 }
 
@@ -451,6 +459,28 @@ async function loadMove(overrides) {
 }
 
 /**
+ * Resolve the workspace archive module lazily (`lib/workspace-archive.js`).
+ * @param {{workspaceArchive?: object} | undefined} overrides - module injection seam.
+ * @returns {Promise<object>} workspace archive module namespace.
+ */
+async function loadWorkspaceArchive(overrides) {
+  if (overrides !== undefined) {
+    if (overrides.workspaceArchive === undefined || overrides.workspaceArchive === null) {
+      throw new SessionPortFormatError('unavailable', '工作区归档模块不可用')
+    }
+    return overrides.workspaceArchive
+  }
+  if (workspaceArchiveModule === undefined) {
+    try {
+      workspaceArchiveModule = await import('./lib/workspace-archive.js')
+    } catch (error) {
+      throw new SessionPortFormatError('unavailable', `工作区归档模块不可用：${errorText(error)}`)
+    }
+  }
+  return workspaceArchiveModule
+}
+
+/**
  * Cordis entry point.
  * @param {object} ctx - the plugin context.
  * @param {object} [config] - the Loader row's config (all fields optional).
@@ -611,6 +641,7 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
           workspaceBackup: true,
           trash: true,
           move: true,
+          workspaceArchive: true,
           attachmentReport: true,
           attachments: helpers.servicesOf(ctx).attachments !== undefined,
           tool: 'session_kit',
@@ -624,6 +655,11 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
           mode: 'copy-then-trash',
           batchLimit: MAX_MOVE_BATCH,
           note: '迁移会写入一个新 id 的会话（cwd=目标工作区）并读回验证，然后把源会话移入回收站；旧 id 失效，子代理转录不复制，源目录可从回收站恢复。',
+        },
+        workspaceArchives: {
+          mode: 'archive-sessions-then-deregister',
+          maxArchives: MAX_WORKSPACE_ARCHIVES,
+          note: '归档整个工作区会把其下所有会话标记为归档并写恢复清单，然后只移除工作区注册；目录、会话日志和工作区文件全部保留。恢复时重建/复用工作区注册、逐个 attach 会话，只取消本次归档的会话，原先已归档的状态会保留。有会话无法 attach 时记录保持 partial 以便重试。',
         },
         migration: {
           official: true,
@@ -735,6 +771,18 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
     }
     if (path === `${ROUTE_PREFIX}/move` && method === 'POST') {
       await handleMove(ctx, settings, overrides, req, res)
+      return
+    }
+    if (path === `${ROUTE_PREFIX}/workspace-archives` && method === 'GET') {
+      await handleWorkspaceArchiveList(ctx, overrides, res)
+      return
+    }
+    if (path === `${ROUTE_PREFIX}/workspace-archive` && method === 'POST') {
+      await handleWorkspaceArchive(ctx, overrides, req, res)
+      return
+    }
+    if (path === `${ROUTE_PREFIX}/workspace-restore` && method === 'POST') {
+      await handleWorkspaceRestore(ctx, overrides, req, res)
       return
     }
     sendJson(res, 404, { ok: false, code: 'not-found', message: `没有这个接口：${method} ${path}` })
@@ -1583,6 +1631,57 @@ async function handleMove(ctx, settings, overrides, req, res) {
 }
 
 /**
+ * `GET /session-kit/workspace-archives` — list workspace archive records.
+ * @param {object} ctx - the plugin context.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {import('node:http').ServerResponse} res - response.
+ */
+async function handleWorkspaceArchiveList(ctx, overrides, res) {
+  const module = await loadWorkspaceArchive(overrides)
+  const listed = await module.listWorkspaceArchives(ctx, {})
+  sendJson(res, 200, { ok: true, ...listed })
+}
+
+/**
+ * `POST /session-kit/workspace-archive` — archive every session of one
+ * workspace, write the restore manifest, then remove the registration.
+ * Body: `{ workspaceId: string, confirm: true }`.
+ * @param {object} ctx - the plugin context.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {import('node:http').IncomingMessage} req - request.
+ * @param {import('node:http').ServerResponse} res - response.
+ */
+async function handleWorkspaceArchive(ctx, overrides, req, res) {
+  const payload = await readJsonBody(req, MAX_JSON_BODY_BYTES)
+  if (payload.confirm !== true) {
+    throw new SessionPortFormatError(
+      'confirm-required',
+      '归档整个工作区会移除工作区注册（目录与会话日志保留，可从归档记录恢复），需要 confirm:true',
+    )
+  }
+  const workspaceId = optionalString(payload.workspaceId, 'workspaceId', { required: true })
+  const module = await loadWorkspaceArchive(overrides)
+  const archived = await module.archiveWorkspace(ctx, { workspaceId, confirm: true })
+  sendJson(res, 200, { ok: true, ...archived })
+}
+
+/**
+ * `POST /session-kit/workspace-restore` — restore one workspace archive.
+ * Body: `{ archiveId: string }`.
+ * @param {object} ctx - the plugin context.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {import('node:http').IncomingMessage} req - request.
+ * @param {import('node:http').ServerResponse} res - response.
+ */
+async function handleWorkspaceRestore(ctx, overrides, req, res) {
+  const payload = await readJsonBody(req, MAX_JSON_BODY_BYTES)
+  const archiveId = optionalString(payload.archiveId, 'archiveId', { required: true })
+  const module = await loadWorkspaceArchive(overrides)
+  const restored = await module.restoreWorkspace(ctx, { archiveId })
+  sendJson(res, 200, { ok: true, ...restored })
+}
+
+/**
  * Trash operations take the configured directory, which may be undefined.
  * @param {object} settings - resolved settings.
  * @returns {{trashDir?: string}} options fragment.
@@ -1865,7 +1964,13 @@ function sendJson(res, status, payload) {
 function statusOf(error) {
   const code = codeOf(error)
   if (code === 'unavailable') return 503
-  if (code === 'not-found' || code === 'file-missing' || code === 'workspace-not-found') return 404
+  if (
+    code === 'not-found' ||
+    code === 'file-missing' ||
+    code === 'workspace-not-found' ||
+    code === 'workspace-archive-not-found'
+  )
+    return 404
   if (code === 'too-large') return 413
   if (code === 'active') return 409
   if (code === 'trash-manifest-missing') return 409
@@ -1881,6 +1986,8 @@ function statusOf(error) {
     code === 'write-failed' ||
     code === 'verify-failed' ||
     code === 'move-failed' ||
+    code === 'workspace-archive-failed' ||
+    code === 'workspace-restore-failed' ||
     code === 'compact-failed' ||
     code === 'compress-failed' ||
     code === 'detail-failed' ||
@@ -1927,6 +2034,9 @@ function registerTool(ctx, settings, overrides) {
           'action=import_share imports a DeepSeek share conversation (chat.deepseek.com/share/<id> link or bare share id) as a NEW session; pass workspaceId to choose the target workspace, otherwise cwd or the deployment default directory is used.',
           'action=export_workspace backs up one or more workspaces as separate ZIPs: every main session in each workspace plus its whole file tree (sensitive files/build caches excluded, symlinks not followed). Pass workspaceIds for a batch (max 20) or a single workspaceId; the session-scoped export action keeps its behavior.',
           'action=attachment_report scans up to 300 sessions read-only and reports attachment references whose host file no longer exists; it never deletes anything and returns missing and unverifiable reference counts.',
+          'action=workspace_archive_list lists whole-workspace archive records (workspace title/path, session count, archived/pinned counts, partial restore state); it writes nothing.',
+          'action=workspace_archive archives every attached session of one workspace, writes a restore manifest under <DSH_HOME>/session-kit-workspace-archive, then removes the workspace registration only; the directory, session logs and workspace files stay in place, and active sessions are refused. It requires confirm:true and workspaceId. Restore with action=workspace_restore.',
+          'action=workspace_restore recreates or reuses the workspace at the recorded path, attaches its sessions, unarchives only the sessions the archive archived, restores pinning, and removes the manifest only when every session was attached; sessions that cannot be attached leave the record in partial state for a retry.',
         ].join(' '),
         parameters: {
           type: 'object',
@@ -1948,11 +2058,14 @@ function registerTool(ctx, settings, overrides) {
                 'trash_restore',
                 'trash_purge',
                 'move',
+                'workspace_archive_list',
+                'workspace_archive',
+                'workspace_restore',
                 'attachment_report',
                 'import_share',
               ],
               description:
-                "list: summarize sessions. export: save selected sessions as one ZIP. export_workspace: back up one whole workspace (sessions + file tree) as one ZIP. import: create new sessions from a ZIP or JSONL archive. archive/unarchive: toggle archived state. delete: move sessions to the trash directory. migrate: upgrade legacy session logs through DSH's official migration chain. files: preview the workspace files a deletion would move. detail: report each session's storage size, format status and archived state (bounded by the same 100-id cap as the detail route). trash_list: inventory recoverable trash operations. trash_restore: move recorded session directories back (never overwrites). trash_purge: permanently erase trash operations (requires confirm:true). move: copy sessions into a destination workspace (new ids) then trash the sources (requires confirm:true and workspaceId). attachment_report: read-only scan of attachment references whose host files no longer resolve (limit defaults to 300 sessions; nothing is deleted). import_share: import a DeepSeek share link as a new session.",
+                "list: summarize sessions. export: save selected sessions as one ZIP. export_workspace: back up one whole workspace (sessions + file tree) as one ZIP. import: create new sessions from a ZIP or JSONL archive. archive/unarchive: toggle archived state. delete: move sessions to the trash directory. migrate: upgrade legacy session logs through DSH's official migration chain. files: preview the workspace files a deletion would move. detail: report each session's storage size, format status and archived state (bounded by the same 100-id cap as the detail route). trash_list: inventory recoverable trash operations. trash_restore: move recorded session directories back (never overwrites). trash_purge: permanently erase trash operations (requires confirm:true). move: copy sessions into a destination workspace (new ids) then trash the sources (requires confirm:true and workspaceId). workspace_archive_list: list whole-workspace archive records. workspace_archive: archive all sessions of one workspace and remove its registration only (requires confirm:true and workspaceId; directory/logs are kept). workspace_restore: restore one workspace archive by archiveId and reattach its sessions. attachment_report: read-only scan of attachment references whose host files no longer resolve (limit defaults to 300 sessions; nothing is deleted). import_share: import a DeepSeek share link as a new session.",
             },
             mode: {
               type: 'string',
@@ -1975,7 +2088,7 @@ function registerTool(ctx, settings, overrides) {
             workspaceId: {
               type: 'string',
               description:
-                'import_share: target workspace id (resolved through the workspace registry); otherwise cwd or the deployment default directory is used. export_workspace: one workspace to back up (required unless workspaceIds is given). move: the destination workspace (required).',
+                'import_share: target workspace id (resolved through the workspace registry); otherwise cwd or the deployment default directory is used. export_workspace: one workspace to back up (required unless workspaceIds is given). move: the destination workspace (required). workspace_archive: the workspace to archive (required).',
             },
             workspaceIds: {
               type: 'array',
@@ -2020,7 +2133,7 @@ function registerTool(ctx, settings, overrides) {
             confirm: {
               type: 'boolean',
               description:
-                'delete: must be true (and a second confirmation is required for permanent:true). migrate with sessionIds="all": must be true. move: must be true (the source sessions are moved into the trash directory).',
+                'delete: must be true (and a second confirmation is required for permanent:true). migrate with sessionIds="all": must be true. move: must be true (the source sessions are moved into the trash directory). workspace_archive: must be true (the workspace registration is removed; the directory and logs are kept).',
             },
             stopActivity: {
               type: 'boolean',
@@ -2041,6 +2154,11 @@ function registerTool(ctx, settings, overrides) {
             operationId: {
               type: 'string',
               description: 'trash_restore only: the trash operation directory name (from trash_list).',
+            },
+            archiveId: {
+              type: 'string',
+              description:
+                'workspace_restore only: the workspace archive directory name (from workspace_archive_list).',
             },
             operationIds: {
               oneOf: [
@@ -2165,6 +2283,15 @@ function registerTool(ctx, settings, overrides) {
           if (action === 'move') {
             return runMoveTool(ctx, settings, overrides, args)
           }
+          if (action === 'workspace_archive_list') {
+            return runWorkspaceArchiveListTool(ctx, overrides)
+          }
+          if (action === 'workspace_archive') {
+            return runWorkspaceArchiveTool(ctx, overrides, args)
+          }
+          if (action === 'workspace_restore') {
+            return runWorkspaceRestoreTool(ctx, overrides, args)
+          }
           if (action === 'attachment_report') {
             return runAttachmentReportTool(ctx, overrides, args)
           }
@@ -2175,7 +2302,7 @@ function registerTool(ctx, settings, overrides) {
             return runWorkspaceExportTool(ctx, settings, overrides, args)
           }
           throw new Error(
-            'session_kit: action 必须是 "list"、"export"、"export_workspace"、"import"、"archive"、"unarchive"、"delete"、"migrate"、"files"、"detail"、"trash_list"、"trash_restore"、"trash_purge"、"move"、"attachment_report" 或 "import_share"',
+            'session_kit: action 必须是 "list"、"export"、"export_workspace"、"import"、"archive"、"unarchive"、"delete"、"migrate"、"files"、"detail"、"trash_list"、"trash_restore"、"trash_purge"、"move"、"workspace_archive_list"、"workspace_archive"、"workspace_restore"、"attachment_report" 或 "import_share"',
           )
         },
       }),
@@ -2912,6 +3039,120 @@ function workspaceExportBatchToolText(exported, failed) {
  * @param {object} args - tool arguments.
  * @returns {Promise<string>} human-readable report.
  */
+/**
+ * Run `workspace_archive_list`: read-only listing of whole-workspace archives.
+ * @param {object} ctx - the plugin context.
+ * @param {object | undefined} overrides - module injection seam.
+ * @returns {Promise<string>} summary text.
+ */
+async function runWorkspaceArchiveListTool(ctx, overrides) {
+  const module = await loadWorkspaceArchive(overrides)
+  const listed = await module.listWorkspaceArchives(ctx, {})
+  return workspaceArchiveListText(listed)
+}
+
+/**
+ * Run `workspace_archive`: archive every attached session, write the restore
+ * manifest, then remove the workspace registration (directory kept).
+ * @param {object} ctx - the plugin context.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {object} args - model arguments.
+ * @returns {Promise<string>} summary text.
+ */
+async function runWorkspaceArchiveTool(ctx, overrides, args) {
+  if (args.confirm !== true) {
+    throw new Error(
+      'session_kit: workspace_archive 需要 confirm:true（会移除工作区注册；目录、会话日志和工作区文件都保留，可从归档记录恢复）',
+    )
+  }
+  const workspaceId = typeof args.workspaceId === 'string' ? args.workspaceId.trim() : ''
+  if (workspaceId === '') {
+    throw new Error('session_kit: workspace_archive 需要 workspaceId（先用 action=list 查看工作区 id）')
+  }
+  const module = await loadWorkspaceArchive(overrides)
+  const archived = await module.archiveWorkspace(ctx, { workspaceId, confirm: true })
+  return workspaceArchiveText(archived)
+}
+
+/**
+ * Run `workspace_restore`: recreate/reuse the workspace and reattach sessions.
+ * @param {object} ctx - the plugin context.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {object} args - model arguments.
+ * @returns {Promise<string>} summary text.
+ */
+async function runWorkspaceRestoreTool(ctx, overrides, args) {
+  const archiveId = typeof args.archiveId === 'string' ? args.archiveId.trim() : ''
+  if (archiveId === '') {
+    throw new Error('session_kit: workspace_restore 需要 archiveId（先用 action=workspace_archive_list 查看）')
+  }
+  const module = await loadWorkspaceArchive(overrides)
+  const restored = await module.restoreWorkspace(ctx, { archiveId })
+  return workspaceRestoreText(restored)
+}
+
+/**
+ * Render a workspace archive listing for the agent.
+ * @param {{archiveRoot: string, archives: object[], warnings: string[]}} listed - listing.
+ * @returns {string} summary text.
+ */
+function workspaceArchiveListText(listed) {
+  const lines = [`工作区归档：${listed.archives.length} 个（根目录 ${listed.archiveRoot}）`]
+  for (const archive of listed.archives) {
+    const workspace = archive.workspace ?? {}
+    const title = typeof workspace.title === 'string' && workspace.title !== '' ? workspace.title : workspace.path
+    const status = archive.status === 'partial' ? 'partial（有会话待恢复）' : 'ready'
+    lines.push(
+      `- ${archive.archiveId}：「${title}」${workspace.path ?? ''}（${archive.sessionCount} 个会话，${archive.preArchivedCount} 个原本已归档，${archive.pinnedCount} 个置顶，${status}；归档于 ${archive.archivedAt || '未知时间'}）`,
+    )
+  }
+  if (listed.warnings.length > 0) {
+    lines.push('注意：', ...listed.warnings.map((warning) => `- ${warning}`))
+  }
+  return lines.join('\n')
+}
+
+/**
+ * Render one workspace archive result for the agent.
+ * @param {{archive: object, archivedCount: number, alreadyArchivedCount: number}} archived - result.
+ * @returns {string} summary text.
+ */
+function workspaceArchiveText(archived) {
+  const workspace = archived.archive.workspace ?? {}
+  const title = typeof workspace.title === 'string' && workspace.title !== '' ? workspace.title : workspace.path
+  const lines = [
+    `已归档整个工作区「${title}」（${workspace.id ?? ''}）：${archived.archivedCount} 个会话新归档，${archived.alreadyArchivedCount} 个原本已归档。`,
+    `工作区注册已移除；目录和会话日志保留在 ${workspace.path ?? ''}。`,
+    `恢复：action=workspace_restore archiveId=${archived.archive.archiveId}`,
+  ]
+  return lines.join('\n')
+}
+
+/**
+ * Render one workspace restore result for the agent.
+ * @param {object} restored - restore outcome.
+ * @returns {string} summary text.
+ */
+function workspaceRestoreText(restored) {
+  const title =
+    typeof restored.workspace.title === 'string' && restored.workspace.title !== ''
+      ? restored.workspace.title
+      : restored.workspace.path
+  const lines = [
+    `已${restored.workspace.reused ? '复用' : '重建'}工作区「${title}」（${restored.workspace.workspaceId}）：attach ${restored.restored.length} 个会话。`,
+    restored.completed
+      ? '所有会话已恢复，归档记录已清理。'
+      : `仍有 ${restored.pendingSessionIds?.length ?? 0} 个会话未能 attach，归档记录保留为 partial，可稍后重试。`,
+  ]
+  for (const skipped of restored.skipped) {
+    lines.push(`- 未恢复 ${skipped.id}：${skipped.reason}（${skipped.message}）`)
+  }
+  if (restored.warnings.length > 0) {
+    lines.push('注意：', ...restored.warnings.map((warning) => `- ${warning}`))
+  }
+  return lines.join('\n')
+}
+
 async function runAttachmentReportTool(ctx, overrides, args) {
   const report = await loadAttachmentReport(overrides)
   const limit = args.limit === undefined ? undefined : positiveIntegerValue(args.limit, 'limit')

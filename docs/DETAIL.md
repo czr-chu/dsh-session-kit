@@ -8,6 +8,7 @@ on-disk format by hand.
 ## What you can do
 
 - Use **Workspace backup** to pack one or several projects' sessions and whole file trees (one ZIP per workspace), and restore each through **Import → Archive → Target workspace**.
+- Use **Workspace archive** to put a whole project away: archive its sessions, write a restore record, then remove only the workspace registration; the directory, logs and files stay in place and the workspace can be restored later from another workspace.
 - Browse sessions grouped by workspace, search titles/ids/cwds, sort by recent /
   created / title / directory, filter active or archived; long groups expand 25
   rows at a time and the selection bar reports ids hidden by the filter. Open a
@@ -51,7 +52,7 @@ on-disk format by hand.
 ## Install
 
 ```sh
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.12.1
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.13.0
 ```
 
 Restart `dsh web` after installing or upgrading. The plugin has no
