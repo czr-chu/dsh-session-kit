@@ -73,9 +73,10 @@
     "test": "node --test test/*.test.mjs",
     "build:client": "tsdown --config tsdown.config.mjs",
     "build": "npm run build:client",
-    "format": "prettier --write \"index.js\" \"lib/**/*.js\" \"src/**/*.js\" \"test/**/*.mjs\" \"tsdown.config.mjs\"",
-    "format:check": "prettier --check \"index.js\" \"lib/**/*.js\" \"src/**/*.js\" \"test/**/*.mjs\" \"tsdown.config.mjs\"",
-    "privacy:check": "node scripts/privacy-check.mjs"
+    "format": "prettier --write \"index.js\" \"lib/**/*.js\" \"src/**/*.js\" \"test/**/*.mjs\" \"tsdown.config.mjs\" \"eslint.config.mjs\"",
+    "format:check": "prettier --check \"index.js\" \"lib/**/*.js\" \"src/**/*.js\" \"test/**/*.mjs\" \"tsdown.config.mjs\" \"eslint.config.mjs\"",
+    "privacy:check": "node scripts/privacy-check.mjs",
+    "lint": "eslint ."
   },
   "author": {
     "name": "CharlesChu",
@@ -93,6 +94,7 @@
     "access": "public"
   },
   "devDependencies": {
+    "eslint": "^9.39.5",
     "lightningcss": "^1.33.0",
     "prettier": "^3.6.2",
     "tsdown": "^0.22.2"

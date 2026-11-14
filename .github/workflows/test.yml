@@ -34,6 +34,8 @@ jobs:
         run: npm run build:client
       - name: code format
         run: npm run format:check
+      - name: static analysis
+        run: npm run lint
       - name: privacy scan
         run: npm run privacy:check
       - name: committed artifact is up to date

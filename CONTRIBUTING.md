@@ -44,11 +44,19 @@ node --test test/*.test.mjs
 node --import tsx/esm --test dsh-session-kit/test/*.test.mjs
 ```
 
-Run `npm run format:check` before committing; the same check runs in CI.
+Run `npm run format:check` and `npm run lint` before committing; the same
+checks run in CI.
+
+`npm run lint` runs ESLint with `no-undef` on the client source. This matters
+because CI builds the client bundle but does not execute the panel: a free
+identifier left behind by a refactor (for example a removed helper still spread
+into a select) builds successfully and only crashes when the panel is opened.
+`no-undef` catches that class of regression before the bundle is committed.
 
 The real-backend tests are guarded: without the DSH TypeScript sources (and
 `tsx`) they self-skip, so the plain command stays green in any checkout. CI runs `npm ci`, `npm run build:client`, `npm run format:check`,
-an artifact diff check, the plain suite on Node 22 and 24, and a pack check. Run
+`npm run lint`, an artifact diff check, the plain suite on Node 22 and 24, and a
+pack check. Run
 the `tsx` variant locally when touching persistence, migrations, imports or the
 management modules.
 

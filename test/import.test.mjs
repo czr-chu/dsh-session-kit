@@ -8,14 +8,14 @@
  */
 
 import assert from 'node:assert/strict'
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
 import { buildArchive } from '../lib/export.js'
-import { parseSessionLog, serializeSessionLog } from '../lib/format.js'
+import { serializeSessionLog } from '../lib/format.js'
 import { importArchive, readImportFile } from '../lib/import.js'
 import { readZipEntries, writeZipEntries } from '../lib/zip.js'
 
@@ -26,11 +26,6 @@ const NEW_IMAGE_ID = 'img-new'
 const NEW_FILE_DIGEST = 'b'.repeat(64)
 const NEW_FILE_ID = 'sha256:' + NEW_FILE_DIGEST
 const SOURCE_ID = 'src-1'
-
-/** sha256 hex of a Buffer. */
-function sha256(data) {
-  return createHash('sha256').update(data).digest('hex')
-}
 
 /** Canonical header of one synthesized source session. */
 function makeHeader(id = SOURCE_ID, version = 4) {

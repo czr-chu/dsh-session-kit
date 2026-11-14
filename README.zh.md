@@ -409,6 +409,7 @@ npm run build:client
 
 # 插件自身测试（不联网；真实后端用例在不可用时自动 skip）
 npm run format:check
+npm run lint
 npm test
 
 # 从 DSH 仓库根运行完整套件，包含真实持久化/replay 校验

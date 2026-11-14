@@ -21,6 +21,13 @@ All notable changes to this plugin are recorded here. The format follows
   project's workspace and losing its grouping in the unnamed workspace. See
   `docs/decisions/0007-workspace-archive.md`.
 
+### Changed
+
+- Added an ESLint `no-undef` gate on the client source (`npm run lint`, run in
+  CI). The client bundle is built but not executed by CI, so a helper removed by
+  a refactor can still build and only crash when the panel opens; `no-undef`
+  catches that class before release.
+
 ## [0.12.1] - 2026-11-14
 
 ### Fixed

@@ -111,13 +111,17 @@ Paste into the PR description and tick:
 - [ ] Decision record added (semantic changes only)
 - [ ] /info capability + client feature detection wired
 - [ ] zh/en UI dictionaries updated together, same key set
-- [ ] npm test, npm run format:check, and build artifact diff clean
+- [ ] npm test, npm run format:check, npm run lint, and build artifact diff clean
+- [ ] client changes opened once in a real DSH panel (no console error, affected controls exercised)
 ```
 
 ## 7. Enforcement
 
-Today the gate is review plus `npm run format:check`, the test suite and the CI
-artifact diff. A stricter check (script that fails when a route lacks an
+Today the gate is review plus `npm run format:check`, `npm run lint`
+(`no-undef` on the client source), the test suite and the CI artifact diff.
+The lint gate catches free identifiers, not every render-time crash; client
+changes still require opening the panel in a real DSH build (record the smoke
+check in the PR). A stricter check (script that fails when a route lacks an
 `architecture.md` row or a tool action lacks a README entry) is proposed as
 C5 in [enhancement-proposal.md](enhancement-proposal.md); add it before the
 route/tool surface grows further.

@@ -509,6 +509,7 @@ npm run build:client
 
 # plugin-local tests (network-free; real-backend cases skip when unavailable)
 npm run format:check
+npm run lint
 npm test
 
 # full suite from the DSH repository root, including real persistence/replay checks
