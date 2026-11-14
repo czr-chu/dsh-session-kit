@@ -29,6 +29,18 @@ test('the client artifact does not embed build-machine absolute paths', () => {
   }
 })
 
+test('tools panel tabs and dangerous-action guards stay wired', () => {
+  const source = readFileSync(new URL('../src/client/index.js', import.meta.url), 'utf8')
+  assert.match(source, /const \[toolsTab, setToolsTab\]/)
+  assert.match(source, /styles\.toolsTabs/)
+  assert.match(source, /toolsTab === 'workspaces'/)
+  assert.match(source, /function dangerMessages\(/)
+  assert.match(source, /function refuseDangerous\(/)
+  assert.match(source, /refuseDangerous\(target\.sessionIds, 'workspace-archive'\)/)
+  assert.match(source, /styles\.selectionGuard/)
+  assert.match(source, /panel\.guardRunning/)
+})
+
 test('workspace selects use the normalized workspace options helper', () => {
   const source = readFileSync(new URL('../src/client/index.js', import.meta.url), 'utf8')
   assert.doesNotMatch(source, /workspaceSelectOptions/)

@@ -8,7 +8,7 @@ on-disk format by hand.
 ## What you can do
 
 - Use **Workspace backup** to pack one or several projects' sessions and whole file trees (one ZIP per workspace), and restore each through **Import → Archive → Target workspace**.
-- Use **Workspace archive** to put a whole project away: archive its sessions, write a restore record, then remove only the workspace registration; the directory, logs and files stay in place and the workspace can be restored later from another workspace.
+- Use **Workspace archive** to put a whole project away: archive its sessions, write a restore record, then remove only the workspace registration; the directory, logs and files stay in place and the workspace can be restored later from another workspace. The tools column is split into five tabs, and running sessions disable archive, delete and move.
 - Browse sessions grouped by workspace, search titles/ids/cwds, sort by recent /
   created / title / directory, filter active or archived; long groups expand 25
   rows at a time and the selection bar reports ids hidden by the filter. Open a

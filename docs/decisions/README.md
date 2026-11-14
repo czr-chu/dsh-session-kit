@@ -26,3 +26,4 @@ Template: [change-documentation.md §3](../change-documentation.md#3-decision-re
 | 0005 | [面板可用性：渐进分页、排序与可访问性](0005-panel-usability.md) | 已采纳 | `src/client/index.js`, `src/client/styles.module.css` |
 | 0006 | [导入连续性、重复预检、NDJSON 进度与附件引用报告](0006-import-continuity-and-attachment-report.md) | 已采纳 | `lib/export.js`, `lib/import.js`, `lib/attachment-report.js`, `index.js`, `src/client/index.js` |
 | 0007 | [整个工作区归档与恢复](0007-workspace-archive.md) | 已采纳 | `lib/workspace-archive.js`, `index.js`, `src/client/index.js`, `src/client/styles.module.css` |
+| 0008 | [工具面板分页与危险操作保护](0008-tools-tabs-and-danger-guards.md) | 已采纳 | `src/client/index.js`, `src/client/styles.module.css`, `test/client-build.test.mjs` |

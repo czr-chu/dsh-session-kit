@@ -86,6 +86,14 @@ filter. Dialogs trap Tab/Shift+Tab, close on Escape and use
 `role="dialog"`/`aria-modal`. See
 [decisions/0005](decisions/0005-panel-usability.md).
 
+The right column groups its cards into five tabs (Export, Workspaces, Import,
+Trash, Checks) instead of stacking all six cards. The session selection bar
+only archives sessions; the whole-workspace archive lives in the Workspaces
+tab and says so. Rows and batch actions read `running` and `legacy` from the
+catalog and disable archive/delete/move before submitting; the backend's
+`assertNotActive` remains the final authority. See
+[decisions/0008](decisions/0008-tools-tabs-and-danger-guards.md).
+
 ## Workspace backup
 
 DSH's file-owning unit is the workspace, not the session. The Workspace backup

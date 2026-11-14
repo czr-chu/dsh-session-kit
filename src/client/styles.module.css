@@ -488,7 +488,7 @@
   border-radius: calc(var(--dsw-radius-sm, 6px) - 2px);
   background: transparent;
   color: var(--dsw-alias-label-secondary);
-  font: 500 12px/18px var(--dsw-font-family, inherit);
+  font: 500 11px/18px var(--dsw-font-family, inherit);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -832,4 +832,49 @@ textarea:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+/* Tools panel tabs keep the column short; workspace actions no longer sit below every card. */
+.tools-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-alias-radius-m, 8px);
+  background: var(--dsw-alias-bg-l2);
+}
+.tools-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm, 6px);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: 500 12px/18px var(--dsw-font-family, inherit);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tools-tab:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-l3);
+}
+.tools-tab-active,
+.tools-tab-active:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-1, Canvas);
+  box-shadow: 0 0 0 1px var(--dsw-alias-border-l2);
+}
+.tools-tab-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.selection-guard {
+  flex: 1 1 100%;
+  color: var(--dsw-alias-state-warn-primary, var(--dsw-alias-label-secondary));
+  font: 12px/18px var(--dsw-font-family, inherit);
 }

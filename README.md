@@ -57,6 +57,10 @@ storage layout or rewriting session files by hand.
   created, title or directory; select one, many, or all. Long groups render 25
   rows at a time with a **show more** button, and the selection bar reports
   selected ids that the current filter hides.
+- The tools column is split into **Export**, **Workspaces**, **Import**,
+  **Trash** and **Checks** tabs so it stays short. The selection bar archives
+  sessions; the Workspaces tab archives a whole workspace. Running sessions
+  disable archive/delete/move and explain why.
 - Archived sessions stay visible with an **archived** badge and a dimmed row.
 - Subagent transcripts are hidden by default (they can be requested explicitly).
 - Click a row for its **storage size** (all retained generations, lock files
@@ -516,7 +520,7 @@ npm test
 node --import tsx/esm --test dsh-session-kit/test/*.test.mjs
 ~~~
 
-Expected result: **326 tests**, with 9 guarded real-backend cases skipped under
+Expected result: **331 tests**, with 9 guarded real-backend cases skipped under
 plain <code>node --test</code> (they run when the DSH checkout is available
 through <code>tsx</code>). The suite covers session listing/reading, compact
 building, workspace file collection and sensitive exclusions, archive

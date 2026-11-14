@@ -27,6 +27,7 @@
  */
 
 import React from 'react'
+import { dangerBlocks } from './guards.js'
 import cssStyles from './styles.module.css'
 
 /** Kebab-case CSS Module locals mapped to the camelCase names used below. */
@@ -53,6 +54,11 @@ const zh = {
   'panel.statArchived': '已归档',
   'panel.statLegacy': '旧格式',
   'panel.tools': '工具',
+  'panel.toolsTabExport': '导出',
+  'panel.toolsTabWorkspaces': '工作区',
+  'panel.toolsTabImport': '导入',
+  'panel.toolsTabTrash': '回收站',
+  'panel.toolsTabChecks': '检查',
   'panel.exportReady': '已选 {count} 个会话',
   'panel.exportNeedSelection': '先在左侧选择会话',
   'panel.exportSection': '导出',
@@ -78,10 +84,11 @@ const zh = {
   'panel.workspaceBackupFailedLine': '{workspace}：{message}',
   'panel.workspaceArchiveSection': '工作区归档',
   'panel.workspaceArchiveHint':
-    '把整个工作区当成一个项目归档：归档其下所有会话并移除工作区注册，目录、会话日志和工作区文件都保留，之后可以整体恢复。',
+    '独立于中部的“归档会话”：这是工作区级操作，会归档该工作区下的全部会话并移除工作区注册；目录、会话日志和工作区文件保留，之后可整体恢复。',
   'panel.workspaceArchiveSelect': '工作区',
   'panel.workspaceArchiveButton': '归档整个工作区',
   'panel.workspaceArchiveNoTarget': '没有可归档的工作区。',
+  'panel.workspaceArchiveActive': '该工作区有 {count} 个会话正在运行，停止后才能归档整个工作区。',
   'panel.workspaceArchiveTitle': '归档整个工作区',
   'panel.workspaceArchiveBody':
     '将归档「{title}」下的 {count} 个会话，并移除工作区注册。目录、会话日志和工作区文件都会保留，之后可以恢复这个工作区。',
@@ -323,8 +330,8 @@ const zh = {
   'panel.statusBadgeActive': '未归档',
   'panel.searchCount': '匹配 {matched} / 共 {total}',
   'panel.selectSession': '选择会话 {title}',
-  'panel.archive': '归档',
-  'panel.unarchive': '恢复',
+  'panel.archive': '归档会话',
+  'panel.unarchive': '取消归档',
   'panel.delete': '删除',
   'panel.archiveSelected': '归档选中',
   'panel.unarchiveSelected': '恢复选中',
@@ -333,6 +340,9 @@ const zh = {
   'panel.unarchiveDone': '已恢复 {count} 个会话',
   'panel.deleteDone': '已删除 {count} 个会话（已移到 session-kit-trash）',
   'panel.actionFailed': '操作失败',
+  'panel.guardTitle': '操作被阻止',
+  'panel.guardRunning': '{count} 个选中的会话正在运行，请先停止后再执行归档、删除或迁移。',
+  'panel.guardLegacyMove': '{count} 个选中的会话仍是旧格式，请先升级格式再迁移。',
   'panel.actionPartialFailed': '有 {count} 个会话操作失败',
   'panel.actionFailureLine': '{id}：{reason}',
   'panel.actionUnknownReason': '未知错误',
@@ -389,6 +399,11 @@ const en = {
   'panel.statArchived': 'Archived',
   'panel.statLegacy': 'Legacy',
   'panel.tools': 'Tools',
+  'panel.toolsTabExport': 'Export',
+  'panel.toolsTabWorkspaces': 'Workspaces',
+  'panel.toolsTabImport': 'Import',
+  'panel.toolsTabTrash': 'Trash',
+  'panel.toolsTabChecks': 'Checks',
   'panel.exportReady': '{count} selected',
   'panel.exportNeedSelection': 'Select sessions on the left first',
   'panel.exportSection': 'Export',
@@ -415,10 +430,12 @@ const en = {
   'panel.workspaceBackupFailedLine': '{workspace}: {message}',
   'panel.workspaceArchiveSection': 'Workspace archive',
   'panel.workspaceArchiveHint':
-    'Archive a whole workspace as one project: archive every session and remove the workspace registration, while the directory, session logs and workspace files stay in place for a later restore.',
+    'Separate from the session archive in the middle: this workspace-level action archives every session and removes the workspace registration, while the directory, logs and files stay in place for a later restore.',
   'panel.workspaceArchiveSelect': 'Workspace',
   'panel.workspaceArchiveButton': 'Archive whole workspace',
   'panel.workspaceArchiveNoTarget': 'No workspace can be archived.',
+  'panel.workspaceArchiveActive':
+    '{count} session(s) in this workspace are running; stop them before archiving the workspace.',
   'panel.workspaceArchiveTitle': 'Archive whole workspace',
   'panel.workspaceArchiveBody':
     'Archive the {count} session(s) under “{title}” and remove the workspace registration. The directory, session logs and workspace files are kept, and the workspace can be restored later.',
@@ -669,8 +686,8 @@ const en = {
   'panel.statusBadgeActive': 'Active',
   'panel.searchCount': '{matched} matched of {total}',
   'panel.selectSession': 'Select session {title}',
-  'panel.archive': 'Archive',
-  'panel.unarchive': 'Restore',
+  'panel.archive': 'Archive session',
+  'panel.unarchive': 'Unarchive',
   'panel.delete': 'Delete',
   'panel.archiveSelected': 'Archive selected',
   'panel.unarchiveSelected': 'Restore selected',
@@ -679,6 +696,9 @@ const en = {
   'panel.unarchiveDone': 'Restored {count} sessions',
   'panel.deleteDone': 'Deleted {count} sessions (moved to session-kit-trash)',
   'panel.actionFailed': 'Action failed',
+  'panel.guardTitle': 'Action blocked',
+  'panel.guardRunning': '{count} selected session(s) are running; stop them before archiving, deleting or moving.',
+  'panel.guardLegacyMove': '{count} selected session(s) still use the legacy format; upgrade them before moving.',
   'panel.actionPartialFailed': '{count} sessions failed',
   'panel.actionFailureLine': '{id}: {reason}',
   'panel.actionUnknownReason': 'unknown error',
@@ -1543,6 +1563,7 @@ function SessionKitPanel(props) {
   const [shareBusy, setShareBusy] = React.useState(false)
   const [shareResult, setShareResult] = React.useState(null)
   const [importTab, setImportTab] = React.useState('archive')
+  const [toolsTab, setToolsTab] = React.useState('export')
   const [workspaceBackupIds, setWorkspaceBackupIds] = React.useState(() => new Set())
   const [importWorkspaceId, setImportWorkspaceId] = React.useState('')
   const [busy, setBusy] = React.useState('')
@@ -1643,6 +1664,7 @@ function SessionKitPanel(props) {
     if (busy !== '' || workspaceArchiveBusy !== '') return
     const workspace = catalog.workspaces.find((entry) => entry.workspaceId === workspaceId)
     if (workspace === undefined) return
+    if (refuseDangerous(workspace.sessionIds, 'workspace-archive')) return
     setWorkspaceArchiveConfirm({
       workspaceId: workspace.workspaceId,
       title: workspace.title !== '' ? workspace.title : workspace.path,
@@ -1653,6 +1675,8 @@ function SessionKitPanel(props) {
 
   async function runArchiveWorkspace(workspaceId) {
     if (workspaceArchiveBusy !== '' || workspaceId === '') return
+    const target = catalog.workspaces.find((entry) => entry.workspaceId === workspaceId)
+    if (target !== undefined && refuseDangerous(target.sessionIds, 'workspace-archive')) return
     setWorkspaceArchiveBusy(`archive:${workspaceId}`)
     try {
       const result = await props.archiveWorkspace(workspaceId)
@@ -1892,6 +1916,10 @@ function SessionKitPanel(props) {
   const truncated = shownCount < matchedCount
   const hiddenSelected = selectedCountOfHidden(selected, allVisible)
   const selectedCount = selected.size
+  const archiveBlock = dangerMessages(selectedForAction('archive'), 'archive')
+  const deleteBlock = dangerMessages(selectedForAction('delete'), 'delete')
+  const moveBlock = dangerMessages(selectedForAction('move'), 'move')
+  const guardMessages = [...new Set([...archiveBlock, ...deleteBlock, ...moveBlock])]
   const BATCH_LIMIT = 500
   const MIGRATE_LIMIT = 100
   const MOVE_LIMIT = 100
@@ -2178,6 +2206,7 @@ function SessionKitPanel(props) {
 
   /** Open the delete confirmation for the given session ids. */
   function requestDeleteConfirm(sessionIds) {
+    if (refuseDangerous(sessionIds, 'delete')) return
     const byId = new Map(catalog.sessions.map((session) => [session.id, session]))
     const titles = sessionIds.map((id) => {
       const session = byId.get(id)
@@ -2467,10 +2496,28 @@ function SessionKitPanel(props) {
     })
   }
 
+  /** Localized reasons why the given sessions must not enter a dangerous action. */
+  function dangerMessages(sessionIds, action) {
+    const byId = new Map(catalog.sessions.map((session) => [session.id, session]))
+    const sessions = sessionIds.map((id) => byId.get(id)).filter((session) => session !== undefined)
+    return dangerBlocks(sessions, action).map((block) =>
+      tr(block.reason === 'running' ? 'panel.guardRunning' : 'panel.guardLegacyMove', { count: block.count }),
+    )
+  }
+
+  /** Show a warning and return true when the action must be blocked. */
+  function refuseDangerous(sessionIds, action) {
+    const messages = dangerMessages(sessionIds, action)
+    if (messages.length === 0) return false
+    setNotice({ tone: 'warn', title: tr('panel.guardTitle'), lines: messages })
+    return true
+  }
+
   /** Run one archive/unarchive/delete batch, refresh the list, report failures. */
   async function runAction(action, sessionIds, options) {
     if (busy !== '') return
     if (sessionIds.length === 0) return
+    if ((action === 'archive' || action === 'delete') && refuseDangerous(sessionIds, action)) return
     if (sessionIds.length > BATCH_LIMIT) {
       setNotice({
         tone: 'error',
@@ -2673,6 +2720,7 @@ function SessionKitPanel(props) {
       })
       return
     }
+    if (refuseDangerous(sessionIds, 'move')) return
     const moveWorkspaces = catalog.workspaces.filter((workspace) => workspace.workspaceId !== '')
     if (moveWorkspaces.length === 0) {
       setNotice({ tone: 'warn', title: tr('panel.moveTitle'), lines: [tr('panel.moveNoWorkspaces')] })
@@ -2703,6 +2751,7 @@ function SessionKitPanel(props) {
   /** Copy the selected sessions into a workspace, then refresh the catalog. */
   async function runMove(sessionIds, workspaceId) {
     if (busy !== '' || workspaceId === '') return
+    if (refuseDangerous(sessionIds, 'move')) return
     setBusy('move')
     setNotice(null)
     try {
@@ -2852,6 +2901,7 @@ function SessionKitPanel(props) {
           const checked = selected.has(session.id)
           const archived = session.archived === true
           const rowBusy = busy !== ''
+          const rowBlock = session.running ? tr('panel.guardRunning', { count: 1 }) : ''
           const detail = details[session.id]
           const detailReady = detail !== undefined && detail.phase === 'ready'
           const detailOpen = openDetail === session.id
@@ -3004,8 +3054,9 @@ function SessionKitPanel(props) {
                       'button',
                       {
                         type: 'button',
-                        style: rowButtonStyle('ghost', rowBusy),
-                        disabled: rowBusy,
+                        style: rowButtonStyle('ghost', rowBusy || rowBlock !== ''),
+                        disabled: rowBusy || rowBlock !== '',
+                        title: rowBlock === '' ? undefined : rowBlock,
                         onClick: () => {
                           void runAction('archive', [session.id])
                         },
@@ -3016,8 +3067,9 @@ function SessionKitPanel(props) {
                   'button',
                   {
                     type: 'button',
-                    style: rowButtonStyle('dangerGhost', rowBusy),
-                    disabled: rowBusy,
+                    style: rowButtonStyle('dangerGhost', rowBusy || rowBlock !== ''),
+                    disabled: rowBusy || rowBlock !== '',
+                    title: rowBlock === '' ? undefined : rowBlock,
                     onClick: () => requestDeleteConfirm([session.id]),
                   },
                   tr('panel.delete'),
@@ -3178,6 +3230,7 @@ function SessionKitPanel(props) {
           hiddenSelected > 0
             ? h('span', { className: styles.selectionHidden }, tr('panel.selectedHidden', { count: hiddenSelected }))
             : null,
+          guardMessages.length > 0 ? h('span', { className: styles.selectionGuard }, guardMessages.join(' ')) : null,
           h(
             'div',
             { className: styles.selectionActions },
@@ -3198,8 +3251,9 @@ function SessionKitPanel(props) {
               'button',
               {
                 type: 'button',
-                style: buttonStyle('secondary', busy !== ''),
-                disabled: busy !== '',
+                style: buttonStyle('secondary', busy !== '' || archiveBlock.length > 0),
+                disabled: busy !== '' || archiveBlock.length > 0,
+                title: archiveBlock.length > 0 ? archiveBlock.join(' ') : undefined,
                 onClick: batchArchive,
               },
               tr('panel.archive'),
@@ -3218,8 +3272,9 @@ function SessionKitPanel(props) {
               'button',
               {
                 type: 'button',
-                style: buttonStyle('secondary', busy !== ''),
-                disabled: busy !== '',
+                style: buttonStyle('secondary', busy !== '' || moveBlock.length > 0),
+                disabled: busy !== '' || moveBlock.length > 0,
+                title: moveBlock.length > 0 ? moveBlock.join(' ') : undefined,
                 onClick: requestMoveConfirm,
               },
               tr('panel.moveToWorkspace'),
@@ -3228,8 +3283,9 @@ function SessionKitPanel(props) {
               'button',
               {
                 type: 'button',
-                style: buttonStyle('dangerGhost', busy !== ''),
-                disabled: busy !== '',
+                style: buttonStyle('dangerGhost', busy !== '' || deleteBlock.length > 0),
+                disabled: busy !== '' || deleteBlock.length > 0,
+                title: deleteBlock.length > 0 ? deleteBlock.join(' ') : undefined,
                 onClick: batchDelete,
               },
               tr('panel.delete'),
@@ -3501,6 +3557,15 @@ function SessionKitPanel(props) {
       ? workspaceArchiveTarget
       : (archiveTargets[0]?.workspaceId ?? '')
   const archiveBusy = workspaceArchiveBusy !== ''
+  const archiveTargetWorkspace = archiveTargets.find((workspace) => workspace.workspaceId === selectedArchiveTarget)
+  const archiveTargetRunning =
+    archiveTargetWorkspace === undefined
+      ? 0
+      : archiveTargetWorkspace.sessionIds.filter((id) => {
+          const session = catalog.sessions.find((entry) => entry.id === id)
+          return session !== undefined && session.running === true
+        }).length
+  const archiveTargetBlock = archiveTargetRunning > 0
   const workspaceArchivePanel = h(
     'div',
     { className: styles.toolCard },
@@ -3541,6 +3606,13 @@ function SessionKitPanel(props) {
               ),
             ),
           ),
+          archiveTargetBlock
+            ? h(
+                'p',
+                { className: styles.toolCardStatus, style: { color: T.warn } },
+                tr('panel.workspaceArchiveActive', { count: archiveTargetRunning }),
+              )
+            : null,
         ),
     h(
       'div',
@@ -3549,8 +3621,9 @@ function SessionKitPanel(props) {
         'button',
         {
           type: 'button',
-          style: buttonStyle('secondary', archiveBusy || selectedArchiveTarget === ''),
-          disabled: archiveBusy || selectedArchiveTarget === '',
+          style: buttonStyle('secondary', archiveBusy || selectedArchiveTarget === '' || archiveTargetBlock),
+          disabled: archiveBusy || selectedArchiveTarget === '' || archiveTargetBlock,
+          title: archiveTargetBlock ? tr('panel.workspaceArchiveActive', { count: archiveTargetRunning }) : undefined,
           onClick: () => askArchiveWorkspace(selectedArchiveTarget),
         },
         tr('panel.workspaceArchiveButton'),
@@ -4013,15 +4086,47 @@ function SessionKitPanel(props) {
     ),
   )
 
+  const toolTabs = [
+    { id: 'export', label: tr('panel.toolsTabExport') },
+    { id: 'workspaces', label: tr('panel.toolsTabWorkspaces') },
+    { id: 'import', label: tr('panel.toolsTabImport') },
+    { id: 'trash', label: tr('panel.toolsTabTrash') },
+    { id: 'checks', label: tr('panel.toolsTabChecks') },
+  ]
   const toolsPanel = h(
     'aside',
     { className: styles.toolsPanel, 'aria-label': tr('panel.tools') },
-    exportPanel,
-    workspaceBackupPanel,
-    workspaceArchivePanel,
-    importPanel,
-    trashPanel,
-    attachmentPanel,
+    h(
+      'div',
+      { className: styles.toolsTabs, role: 'tablist', 'aria-label': tr('panel.tools') },
+      ...toolTabs.map((tab) =>
+        h(
+          'button',
+          {
+            key: tab.id,
+            type: 'button',
+            role: 'tab',
+            className: styles.toolsTab + (toolsTab === tab.id ? ' ' + styles.toolsTabActive : ''),
+            'aria-selected': toolsTab === tab.id ? 'true' : 'false',
+            onClick: () => setToolsTab(tab.id),
+          },
+          tab.label,
+        ),
+      ),
+    ),
+    h(
+      'div',
+      { className: styles.toolsTabBody, role: 'tabpanel' },
+      toolsTab === 'export'
+        ? h(React.Fragment, null, exportPanel, workspaceBackupPanel)
+        : toolsTab === 'workspaces'
+          ? workspaceArchivePanel
+          : toolsTab === 'import'
+            ? importPanel
+            : toolsTab === 'trash'
+              ? trashPanel
+              : attachmentPanel,
+    ),
   )
 
   const mainGrid = h('div', { className: styles.mainGrid }, sessionsPanel, toolsPanel)
