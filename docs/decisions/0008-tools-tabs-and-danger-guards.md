@@ -69,9 +69,11 @@ the controls looked usable when the operation was guaranteed to fail.
   `refuseDangerous`, the workspace-archive guard and the selection guard.
 - `npm run lint` covers free identifiers in the client source.
 - `npm test` (331 tests), `npm run build:client`, `npm run format:check`.
-- Manual smoke: open the panel on DSH 0.2.2-rc.3, switch all five tabs, select
-  a running session and confirm archive/delete/move are disabled; select a
-  workspace with a running member and confirm its archive button is disabled.
+- Manual smoke still required before release: open the panel on DSH
+  0.2.2-rc.3, switch all five tabs, select a running session and confirm
+  archive/delete/move are disabled; select a workspace with a running member
+  and confirm its archive button is disabled. The build and source tests do not
+  exercise layout or a real browser.
 
 ## Rollback
 
