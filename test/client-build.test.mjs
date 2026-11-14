@@ -38,7 +38,7 @@ test('tools panel tabs and dangerous-action guards stay wired', () => {
   assert.match(source, /function refuseDangerous\(/)
   assert.match(source, /refuseDangerous\(target\.sessionIds, 'workspace-archive'\)/)
   assert.match(source, /styles\.selectionGuard/)
-  assert.match(source, /panel\.guardRunning/)
+  assert.match(source, /panel\.guardActive/)
 })
 
 test('workspace selects use the normalized workspace options helper', () => {

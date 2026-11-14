@@ -88,7 +88,7 @@ const zh = {
   'panel.workspaceArchiveSelect': '工作区',
   'panel.workspaceArchiveButton': '归档整个工作区',
   'panel.workspaceArchiveNoTarget': '没有可归档的工作区。',
-  'panel.workspaceArchiveActive': '该工作区有 {count} 个会话正在运行，停止后才能归档整个工作区。',
+  'panel.workspaceArchiveActive': '该工作区有 {count} 个会话处于活动状态（运行中或已打开），关闭后才能归档整个工作区。',
   'panel.workspaceArchiveTitle': '归档整个工作区',
   'panel.workspaceArchiveBody':
     '将归档「{title}」下的 {count} 个会话，并移除工作区注册。目录、会话日志和工作区文件都会保留，之后可以恢复这个工作区。',
@@ -341,7 +341,8 @@ const zh = {
   'panel.deleteDone': '已删除 {count} 个会话（已移到 session-kit-trash）',
   'panel.actionFailed': '操作失败',
   'panel.guardTitle': '操作被阻止',
-  'panel.guardRunning': '{count} 个选中的会话正在运行，请先停止后再执行归档、删除或迁移。',
+  'panel.guardActive':
+    '{count} 个选中的会话处于活动状态（运行中或已打开），请先停止并在其他会话中关闭后再归档、删除或迁移。',
   'panel.guardLegacyMove': '{count} 个选中的会话仍是旧格式，请先升级格式再迁移。',
   'panel.actionPartialFailed': '有 {count} 个会话操作失败',
   'panel.actionFailureLine': '{id}：{reason}',
@@ -435,7 +436,7 @@ const en = {
   'panel.workspaceArchiveButton': 'Archive whole workspace',
   'panel.workspaceArchiveNoTarget': 'No workspace can be archived.',
   'panel.workspaceArchiveActive':
-    '{count} session(s) in this workspace are running; stop them before archiving the workspace.',
+    '{count} session(s) in this workspace are active (running or open); stop and close them before archiving the workspace.',
   'panel.workspaceArchiveTitle': 'Archive whole workspace',
   'panel.workspaceArchiveBody':
     'Archive the {count} session(s) under “{title}” and remove the workspace registration. The directory, session logs and workspace files are kept, and the workspace can be restored later.',
@@ -697,7 +698,8 @@ const en = {
   'panel.deleteDone': 'Deleted {count} sessions (moved to session-kit-trash)',
   'panel.actionFailed': 'Action failed',
   'panel.guardTitle': 'Action blocked',
-  'panel.guardRunning': '{count} selected session(s) are running; stop them before archiving, deleting or moving.',
+  'panel.guardActive':
+    '{count} selected session(s) are active (running or open); stop them and close them in their conversation before archiving, deleting or moving.',
   'panel.guardLegacyMove': '{count} selected session(s) still use the legacy format; upgrade them before moving.',
   'panel.actionPartialFailed': '{count} sessions failed',
   'panel.actionFailureLine': '{id}: {reason}',
@@ -902,6 +904,7 @@ function normalizeSession(raw) {
     workspaceId: pickString(record.workspaceId),
     workspaceTitle: pickString(record.workspaceTitle),
     running: record.running === true,
+    live: record.live === true,
     archived: record.archived === true,
     legacy: record.legacy === true,
     formatStatus: pickString(record.formatStatus),
@@ -2501,7 +2504,7 @@ function SessionKitPanel(props) {
     const byId = new Map(catalog.sessions.map((session) => [session.id, session]))
     const sessions = sessionIds.map((id) => byId.get(id)).filter((session) => session !== undefined)
     return dangerBlocks(sessions, action).map((block) =>
-      tr(block.reason === 'running' ? 'panel.guardRunning' : 'panel.guardLegacyMove', { count: block.count }),
+      tr(block.reason === 'active' ? 'panel.guardActive' : 'panel.guardLegacyMove', { count: block.count }),
     )
   }
 
@@ -2901,7 +2904,7 @@ function SessionKitPanel(props) {
           const checked = selected.has(session.id)
           const archived = session.archived === true
           const rowBusy = busy !== ''
-          const rowBlock = session.running ? tr('panel.guardRunning', { count: 1 }) : ''
+          const rowBlock = session.running || session.live ? tr('panel.guardActive', { count: 1 }) : ''
           const detail = details[session.id]
           const detailReady = detail !== undefined && detail.phase === 'ready'
           const detailOpen = openDetail === session.id
@@ -3563,7 +3566,7 @@ function SessionKitPanel(props) {
       ? 0
       : archiveTargetWorkspace.sessionIds.filter((id) => {
           const session = catalog.sessions.find((entry) => entry.id === id)
-          return session !== undefined && session.running === true
+          return session !== undefined && (session.running === true || session.live === true)
         }).length
   const archiveTargetBlock = archiveTargetRunning > 0
   const workspaceArchivePanel = h(

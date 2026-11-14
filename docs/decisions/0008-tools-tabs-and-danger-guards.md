@@ -32,10 +32,10 @@ the controls looked usable when the operation was guaranteed to fail.
    row actions say "Archive session" / "Unarchive"; the Workspaces tab keeps
    "Archive whole workspace" and its hint explicitly says it archives every
    session and removes the workspace registration.
-3. **Block dangerous actions before submitting.** `running` sessions disable
-   archive, delete and move, with the reason shown in the selection bar, the
-   row tooltip and a notice if the action is still invoked. Legacy sessions
-   disable move (matching `lib/move.js`). A workspace with a running member
+3. **Block dangerous actions before submitting.** Sessions that are running or
+   open (`live`) disable archive, delete and move, with the reason shown in the
+   selection bar, the row tooltip and a notice if the action is still invoked.
+   Legacy sessions disable move (matching `lib/move.js`). A workspace with a running member
    cannot be archived as a whole. Backend checks remain the authority; this is
    an additional, earlier guard.
 4. **No auto-stop.** The guard never stops an agent to make an operation
@@ -58,9 +58,9 @@ the controls looked usable when the operation was guaranteed to fail.
 
 - Switching tabs adds one click; the default Export tab is the most common
   entry point.
-- The browser guard uses `running` and `legacy` from `GET /session-kit/list`.
-  It cannot see a live-but-idle session that the backend knows about, so the
-  backend error path remains necessary.
+- The browser guard uses `running`, `live` and `legacy` from
+  `GET /session-kit/list`. The backend error path remains necessary for states
+  the catalog does not expose.
 - The tab state is local and resets when the panel reloads.
 
 ## Verification

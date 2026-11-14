@@ -27,8 +27,8 @@ All notable changes to this plugin are recorded here. The format follows
   Checks), so the workspace archive list no longer stretches one long column.
   The selection bar says "Archive session"; archiving a whole workspace stays
   in the Workspaces tab and its hint spells out the difference.
-- Archive, delete and move are disabled for running sessions, and move is also
-  disabled for legacy-format sessions. The selection bar, row tooltip and a
+- Archive, delete and move are disabled for active sessions (running or open),
+  and move is also disabled for legacy-format sessions. The selection bar, row tooltip and a
   notice explain the block; the browser never stops an agent automatically.
   A workspace with a running member cannot be archived as a whole. Backend
   checks remain the final authority. See

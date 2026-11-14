@@ -59,8 +59,8 @@ storage layout or rewriting session files by hand.
   selected ids that the current filter hides.
 - The tools column is split into **Export**, **Workspaces**, **Import**,
   **Trash** and **Checks** tabs so it stays short. The selection bar archives
-  sessions; the Workspaces tab archives a whole workspace. Running sessions
-  disable archive/delete/move and explain why.
+  sessions; the Workspaces tab archives a whole workspace. Active sessions
+  (running or open) disable archive/delete/move and explain why.
 - Archived sessions stay visible with an **archived** badge and a dimmed row.
 - Subagent transcripts are hidden by default (they can be requested explicitly).
 - Click a row for its **storage size** (all retained generations, lock files
