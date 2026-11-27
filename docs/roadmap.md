@@ -15,7 +15,9 @@ Shipped through 0.14.0:
 - experimental, selectable per-session related-file handling on delete;
 - legacy-format migration through DSH's official persistence chain (single and
   batch);
-- copy-then-trash move of sessions between workspaces;
+- copy-then-trash move of sessions to existing or newly registered workspaces;
+- safe session compression (compact/compressed) with new-id replacement and
+  source-to-trash recovery;
 - whole-workspace archive/restore: archive member sessions, write a restore
   record, remove only the workspace registration, and restore later without
   moving files;

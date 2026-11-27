@@ -29,9 +29,16 @@ on-disk format by hand.
 - Archive/unarchive, delete to `$DSH_HOME/session-kit-trash`, restore or
   permanently purge a trash operation from the Trash card, or explicitly erase
   permanently after a separate confirmation.
-- Move selected sessions into another workspace: the copy is written under a new
-  id, verified, attached there, and the source is moved to the trash so the move
-  stays reversible.
+- Move selected sessions into another workspace (existing or newly registered
+  at an absolute existing directory): the copy is written under a new id,
+  verified, attached there, and the source is moved to the trash so the move
+  stays reversible. A new workspace registration is removed again if every
+  session is skipped.
+- Compress selected sessions to a new-id `compact` copy (main conversation only)
+  or `compressed` copy (all events/tool structure, stream deltas cleared,
+  oversized strings truncated), then move the source to the trash. The source
+  remains recoverable until its trash operation is purged. Move and compression
+  use a two-stage dialog and require an explicit acknowledgement.
 - Upgrade legacy logs through DSH's official migration chain; old generations
   are retained and refusals are reported.
 - Import a public `chat.deepseek.com/share/<id>` conversation into a chosen
@@ -44,6 +51,9 @@ on-disk format by hand.
   shared file may be affected. The UI requires an explicit file selection and a
   second confirmation.
 - Permanent delete has no trash copy and no rollback.
+- Move and compression create new ids and trash the sources; old-id links stop
+  working. A new workspace path must be an existing, unregistered directory; it
+  is never created or reused implicitly.
 - Exports contain conversation content and may contain workspace files; review
   an archive before sharing it. Never commit session data or credentials.
 - Workspace export skips VCS metadata, dependency/build caches, symlinks and
