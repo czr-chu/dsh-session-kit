@@ -43,6 +43,11 @@ jobs:
         run: |
           mkdir -p dist
           npm pack --pack-destination dist
+          # Stable asset name so the catalog can point at
+          # releases/latest/download/dsh-session-kit.tgz and the Market can
+          # compare an older versioned asset install with the latest release.
+          VERSION="$(node -p "require('./package.json').version")"
+          cp "dist/dsh-session-kit-${VERSION}.tgz" "dist/dsh-session-kit.tgz"
       - name: create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

@@ -1,6 +1,6 @@
 # Roadmap
 
-Shipped through 0.14.0:
+Shipped through 0.14.1:
 
 - session/workspace browsing, search, sorting, progressive per-group rendering,
   archived badges and selection;

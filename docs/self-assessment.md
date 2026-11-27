@@ -1,6 +1,6 @@
 # Public-release self-assessment
 
-Self-check for dsh-session-kit <code>0.14.0</code> (2026-11-28). The check was
+Self-check for dsh-session-kit <code>0.14.1</code> (2026-11-28). The check was
 code-and-test plus limited real <code>dsh web</code> spot checks; no live
 DeepSeek share API call and no real cross-machine restore. Evidence is marked
 by source:

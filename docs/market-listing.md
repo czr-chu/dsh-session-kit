@@ -10,13 +10,29 @@ catalog. Listing does **not** require an npm package: a GitHub-only entry may om
 - Repository: <https://github.com/czr-chu/dsh-session-kit>
 - Topics: `dsh-plugin`, `dsh`, `deepseek-harness`
 - Manifest: `dsh.bundle.patch` points at `cordis.patch.yml`
-- Recommended install: `dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.14.0`
+- Recommended install: `dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.14.1`
 - npm: **not published** under this name (see below)
-- Catalog PR: <https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/15048> (open)
+- Catalog PR: <https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/15048> (merged 2026-11-13)
+- Catalog entry: `data/plugins/czr-chu__dsh-session-kit.yml`
+- Catalog update needed: the merged entry still pins `tarball` to v0.13.0; change it to the floating asset below so the DSH Market can offer updates
 
-## Submit the catalog entry
+## Catalog entry
 
-Fork `awesome-dsh-plugin/awesome-dsh-plugin`, add
+Current merged entry (update pending):
+
+```yaml
+tarball: https://github.com/czr-chu/dsh-session-kit/releases/download/v0.13.0/dsh-session-kit-0.13.0.tgz
+```
+
+Replace that line with the floating, stable asset name:
+
+```yaml
+tarball: https://github.com/czr-chu/dsh-session-kit/releases/latest/download/dsh-session-kit.tgz
+```
+
+The full entry should be:
+
+Fork `awesome-dsh-plugin/awesome-dsh-plugin`, edit
 `data/plugins/czr-chu__dsh-session-kit.yml`:
 
 ```yaml
@@ -27,10 +43,45 @@ description:
   en: 'Session manager for DSH: export in full, compact or compressed form, back up workspaces as per-workspace ZIPs, restore deleted sessions from a reversible trash, move sessions into existing or new workspaces, compress sessions into smaller new-id copies, check attachment references, and archive/restore a whole workspace without moving its files.'
   zh: 'DSH 会话管理：全量/精简/压缩导出，按工作区打包备份，回收站恢复误删会话，迁移到已有/新建工作区，把会话压缩为更小的新 id 副本，检查附件引用是否可解析，以及不移动文件地归档/恢复整个工作区。'
 icon: https://raw.githubusercontent.com/czr-chu/dsh-session-kit/main/assets/icon-512.png
+tarball: https://github.com/czr-chu/dsh-session-kit/releases/latest/download/dsh-session-kit.tgz
 ```
 
 Open a PR against `main`. After merge the catalog regenerates; the market reads
-it on open, usually within a day.
+it on open, usually within a day. Direct edit link:
+<https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/edit/main/data/plugins/czr-chu__dsh-session-kit.yml>.
+
+## Why the Market showed no update
+
+The DSH Market updates GitHub-only archives only when the catalog entry has a
+**floating release asset**:
+
+```text
+https://github.com/<owner>/<repo>/releases/latest/download/<stable-asset>.tgz
+```
+
+A version-pinned URL such as
+`.../releases/download/v0.13.0/dsh-session-kit-0.13.0.tgz` is a fixed archive.
+The Market has no npm identity to compare for this plugin and intentionally
+does not guess one; the pinned entry therefore showed the installed version
+but no update. The same applies to a `link:` install, which the Market reports
+as a linked checkout and does not offer to update.
+
+The release workflow now uploads both:
+
+```text
+dsh-session-kit-<version>.tgz   versioned, reproducible archive
+dsh-session-kit.tgz             stable alias for releases/latest/download/
+```
+
+After the catalog entry points at the stable alias, the Market can:
+
+1. resolve `releases/latest` to the newest tag;
+2. read `package.json` at that tag and compare `version`;
+3. offer the update with the stable alias as the install target.
+
+Until the catalog update is merged, existing Market-installed copies still use
+their pinned spec and will not show an update. The CLI/GitHub-tag install path
+is unaffected.
 
 ## Why GitHub-only (npm naming)
 

@@ -3,7 +3,7 @@
 <img src="https://raw.githubusercontent.com/czr-chu/dsh-session-kit/main/assets/icon-512.png" width="72" align="right" alt="dsh-session-kit icon">
 
 **DeepSeek Harness 的会话管理、备份与迁移工具包。**
-Version **0.14.0** · 公开 beta · [English](README.md)
+Version **0.14.1** · 公开 beta · [English](README.md)
 
 dsh-session-kit 为 DeepSeek Harness（DSH）增加一个 **会话管理（Session manager）**
 面板和一个 <code>session_kit</code> agent 工具：按**工作区**备份整个项目（全部会话 +
@@ -250,10 +250,10 @@ dsh-session-kit 为 DeepSeek Harness（DSH）增加一个 **会话管理（Sessi
 
 ~~~bash
 # 从 GitHub 安装（建议固定 release tag）
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.14.0
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.14.1
 
 # 或直接从 GitHub Release 的 tgz 安装
-# dsh plugin --profile web add 'https://github.com/czr-chu/dsh-session-kit/releases/download/v0.14.0/dsh-session-kit-0.14.0.tgz'
+# dsh plugin --profile web add 'https://github.com/czr-chu/dsh-session-kit/releases/download/v0.14.1/dsh-session-kit-0.14.1.tgz'
 
 # 从本地 checkout 安装（便于迭代）
 dsh plugin --profile web add ~/src/dsh-session-kit
@@ -266,7 +266,7 @@ dsh plugin --profile web list --depth 0
 一行。
 
 桌面版/Web 的 **插件 → 添加插件** 对话框可直接输入 GitHub 仓库地址
-（`https://github.com/czr-chu/dsh-session-kit#v0.14.0`）、Release 的 `.tgz`
+（`https://github.com/czr-chu/dsh-session-kit#v0.14.1`）、Release 的 `.tgz`
 直链，或绝对本地目录。仓库是公开的，Git 安装不需要 GitHub token；完整说明见
 [docs/install.md](docs/install.md)。
 

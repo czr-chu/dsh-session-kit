@@ -4,6 +4,19 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.1] - 2026-11-28
+
+### Fixed
+
+- Release workflow now also uploads a **stable alias asset**
+  `dsh-session-kit.tgz` beside the versioned tarball. The DSH market can point
+  its catalog entry at
+  `https://github.com/czr-chu/dsh-session-kit/releases/latest/download/dsh-session-kit.tgz`
+  and then detect updates for GitHub-only installs; a version-pinned
+  `tarball` in the catalog is intentionally not an update source.
+- Market-listing documentation records the required floating asset and the
+  catalog-entry update.
+
 ## [0.14.0] - 2026-11-28
 
 ### Added
