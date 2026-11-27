@@ -14,7 +14,9 @@ catalog. Listing does **not** require an npm package: a GitHub-only entry may om
 - npm: **not published** under this name (see below)
 - Catalog PR: <https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/15048> (merged 2026-11-13)
 - Catalog entry: `data/plugins/czr-chu__dsh-session-kit.yml`
-- Catalog update needed: the merged entry still pins `tarball` to v0.13.0; change it to the floating asset below so the DSH Market can offer updates
+- Catalog update branch: `czr-chu/awesome-dsh-plugin:update-dsh-session-kit-market`
+- Open PR: <https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/compare/main...czr-chu:update-dsh-session-kit-market?expand=1>
+- The merged upstream entry still pins `tarball` to v0.13.0; the branch changes it to the floating asset below so the DSH Market can offer updates
 
 ## Catalog entry
 
