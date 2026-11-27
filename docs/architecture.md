@@ -13,17 +13,19 @@ the Connection trust check exactly like the shipped open-in-app plugin, plus a
 | --- | --- |
 | Read | `GET /session-kit/info`, `GET /session-kit/list`, `POST /session-kit/session-detail`, `POST /session-kit/session-files`, `GET /session-kit/attachment-report` |
 | Archive | `POST /session-kit/export`, `POST /session-kit/export-workspace`, `POST /session-kit/import`, `POST /session-kit/import-share` |
-| Manage | `POST /session-kit/archive`, `POST /session-kit/unarchive`, `POST /session-kit/delete`, `POST /session-kit/migrate`, `POST /session-kit/move` |
+| Manage | `POST /session-kit/archive`, `POST /session-kit/unarchive`, `POST /session-kit/delete`, `POST /session-kit/migrate`, `POST /session-kit/move`, `POST /session-kit/compress` |
 | Workspace archive | `GET /session-kit/workspace-archives`, `POST /session-kit/workspace-archive`, `POST /session-kit/workspace-restore` |
 | Trash | `GET /session-kit/trash`, `POST /session-kit/trash-restore`, `POST /session-kit/trash-purge` |
 
 The tool exposes the same operations as actions: `list`, `export`,
 `export_workspace`, `import`, `archive`, `unarchive`, `delete`, `migrate`,
 `files`, `detail`, `import_share`, `trash_list`, `trash_restore`, `trash_purge`,
-`move`, `workspace_archive_list`, `workspace_archive`, `workspace_restore`,
+`move`, `compress`, `workspace_archive_list`, `workspace_archive`, `workspace_restore`,
 `attachment_report`. Routes and actions share one scope parser
 (`parseSessionIdList`), so `sessionIds` is trimmed and de-duplicated everywhere
-and `'all'` is accepted only where the action documents it. `detail` mirrors
+and `'all'` is accepted only where the action documents it. `move` and
+`compress` both require `confirm: true`; they create a new id and trash the
+source, never rewrite a committed generation. `detail` mirrors
 `POST /session-kit/session-detail` for agents (same 100-id cap, same per-id
 error tolerance, no writes).
 
@@ -50,7 +52,8 @@ lib/export.js            multi-session ZIP: manifest, session folders, attachmen
 lib/workspace-backup.js  one workspace: all sessions + one file tree, manifest.backup
 lib/import.js            archive preflight, new-session creation, workspace restore
 lib/manage.js            archive/unarchive, delete-to-trash with lineage and registry cleanup
-lib/move.js              copy a session into another workspace, verify, then trash the source
+lib/move.js              copy a session into an existing/new workspace, verify, then trash the source
+lib/compress.js          compact/compressed replacement copy, verify, then trash the source
 lib/trash.js             trash operation manifest inventory, restore and permanent purge
 lib/format.js            canonical session JSONL + attachment ref helpers
 lib/zip.js               dependency-free ZIP reader/writer

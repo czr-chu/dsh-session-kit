@@ -698,10 +698,20 @@
   font: 12px/18px var(--dsw-font-family, inherit);
   color: var(--dsw-alias-label-secondary);
 }
-.field-column .select {
+.field-column .select,
+.field-column .search {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
+}
+.field-column .search {
+  flex: none;
+  height: 32px;
+}
+.field-error {
+  margin: 0;
+  font: 12px/18px var(--dsw-font-family, inherit);
+  color: var(--dsw-alias-state-error-primary);
 }
 
 .trash-list {

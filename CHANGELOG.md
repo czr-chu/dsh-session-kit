@@ -4,6 +4,34 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-11-28
+
+### Added
+
+- **Move to a new workspace.** The move dialog now offers an existing workspace
+  or a new workspace at an absolute, existing, unregistered directory. The new
+  workspace registration is cleaned up when every session is skipped; the
+  directory is never modified. The agent action accepts
+  `workspacePath`/`workspaceTitle`.
+- **Compress a session.** The panel and `session_kit action=compress` replace a
+  session with a new-id `compact` (main conversation only) or `compressed`
+  (all events/tool structure, stream deltas cleared, oversized strings
+  truncated) copy, verify it, and move the source to the trash. Source sessions
+  remain recoverable until the trash operation is purged.
+- Two-stage confirmation for move and compression: configure first, then a
+  red danger dialog whose final button stays disabled until an explicit
+  "I understand" checkbox is checked. Both routes also require
+  `confirm: true`.
+
+### Changed
+
+- Move is now documented and tested as a destructive rewrite: new id, source
+  to trash, old-id links stop working. `docs/decisions/0009` records the audit
+  of permanent delete, related-file delete, trash purge, workspace archive,
+  move and compression; permanent delete already had a two-stage flow.
+- Feature matrix and self-assessment refreshed to 365 tests (359 pass + 6
+  guarded skips), including real-host move/compress smoke evidence.
+
 ## [0.13.0] - 2026-11-14
 
 ### Added

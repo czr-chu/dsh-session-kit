@@ -12,7 +12,7 @@
  *  - the authenticated browser routes the client half calls —
  *    GET /session-kit/{info,list} and
  *    POST /session-kit/{export,export-workspace,import,archive,unarchive,
- *    delete,migrate,session-files,session-detail,import-share,move,
+ *    delete,migrate,session-files,session-detail,import-share,move,compress,
  *    trash,trash-restore,trash-purge,workspace-archives,workspace-archive,
  *    workspace-restore} — fenced by the
  *    Connection service exactly like every other plugin-owned route; a fenced
@@ -20,9 +20,9 @@
  *    other failure; and
  *  - one agent tool (`session_kit`) with list / export / export_workspace /
  *    import / archive / unarchive / delete / migrate / files / detail /
- *    trash_list / trash_restore / trash_purge / move / attachment_report /
- *    workspace_archive_list / workspace_archive / workspace_restore /
- *    import_share actions.
+ *    trash_list / trash_restore / trash_purge / move / compress /
+ *    attachment_report / workspace_archive_list / workspace_archive /
+ *    workspace_restore / import_share actions.
  *
  * Both faces share one `parseSessionIdList` for scope parsing (`'all'` where
  * meaningful, trimming, de-duplication, batch caps) instead of each handler
@@ -158,6 +158,8 @@ export const MAX_FILE_BATCH = 100
 export const MAX_DETAIL_BATCH = 100
 /** Upper bound on one workspace-move batch (mirrors `lib/move.js`). */
 export const MAX_MOVE_BATCH = 100
+/** Upper bound on one session-compression batch (mirrors `lib/compress.js`). */
+export const MAX_COMPRESS_BATCH = 100
 /** Upper bound on one multi-workspace backup batch (each workspace is one ZIP). */
 export const MAX_WORKSPACE_BATCH = 20
 /** Upper bound on workspace archive records returned by one listing. */
@@ -166,6 +168,10 @@ export const MAX_WORKSPACE_ARCHIVES = 500
 export const MAX_SELECTED_FILES = 5000
 /** Export modes every route and tool action accepts. */
 const EXPORT_MODE_VALUES = new Set(['full', 'compact', 'compressed'])
+/** Compression modes the session-compression surface accepts (`lib/compress.js`). */
+const COMPRESS_MODE_VALUES = new Set(['compact', 'compressed'])
+/** Mode used when a compress request omits `mode`. */
+const DEFAULT_COMPRESS_MODE = 'compressed'
 
 /** Upper bound on one share-link/input string. */
 export const MAX_SHARE_INPUT_LENGTH = 2048
@@ -183,6 +189,7 @@ let exportModule
 let importModule
 let trashModule
 let moveModule
+let compressModule
 let attachmentReportModule
 let workspaceArchiveModule
 
@@ -211,6 +218,7 @@ let workspaceArchiveModule
  *   import?: object,
  *   trash?: object,
  *   move?: object,
+ *   compress?: object,
  *   attachmentReport?: object,
  * } | undefined} override set.
  */
@@ -229,6 +237,7 @@ function moduleOverrides(internals) {
     import: modules.import,
     trash: modules.trash,
     move: modules.move,
+    compress: modules.compress,
     attachmentReport: modules.attachmentReport,
     workspaceArchive: modules.workspaceArchive,
   }
@@ -459,6 +468,28 @@ async function loadMove(overrides) {
 }
 
 /**
+ * Resolve the session-compression module lazily (`lib/compress.js`).
+ * @param {{compress?: object} | undefined} overrides - module injection seam.
+ * @returns {Promise<object>} compress module namespace.
+ */
+async function loadCompress(overrides) {
+  if (overrides !== undefined) {
+    if (overrides.compress === undefined || overrides.compress === null) {
+      throw new SessionPortFormatError('unavailable', '会话压缩模块不可用')
+    }
+    return overrides.compress
+  }
+  if (compressModule === undefined) {
+    try {
+      compressModule = await import('./lib/compress.js')
+    } catch (error) {
+      throw new SessionPortFormatError('unavailable', `会话压缩模块不可用：${errorText(error)}`)
+    }
+  }
+  return compressModule
+}
+
+/**
  * Resolve the workspace archive module lazily (`lib/workspace-archive.js`).
  * @param {{workspaceArchive?: object} | undefined} overrides - module injection seam.
  * @returns {Promise<object>} workspace archive module namespace.
@@ -641,6 +672,9 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
           workspaceBackup: true,
           trash: true,
           move: true,
+          compress: true,
+          compressModes: ['compact', 'compressed'],
+          destructiveSessionRewrite: true,
           workspaceArchive: true,
           attachmentReport: true,
           attachments: helpers.servicesOf(ctx).attachments !== undefined,
@@ -654,7 +688,16 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
         move: {
           mode: 'copy-then-trash',
           batchLimit: MAX_MOVE_BATCH,
-          note: '迁移会写入一个新 id 的会话（cwd=目标工作区）并读回验证，然后把源会话移入回收站；旧 id 失效，子代理转录不复制，源目录可从回收站恢复。',
+          newWorkspace: true,
+          note: '迁移会写入一个新 id 的会话（cwd=目标工作区）并读回验证，然后把源会话移入回收站；旧 id 失效，子代理转录不复制，源目录可从回收站恢复。目标可以是已有 workspaceId，或 newWorkspacePath/newWorkspaceTitle 新建工作区（路径必须是已存在的绝对目录；已注册路径报 workspace-exists）。',
+        },
+        compress: {
+          mode: 'copy-then-trash',
+          batchLimit: MAX_COMPRESS_BATCH,
+          modes: ['compact', 'compressed'],
+          defaultMode: DEFAULT_COMPRESS_MODE,
+          destructiveSessionRewrite: true,
+          note: '压缩会写入一个新 id 的会话（cwd 不变、回挂原工作区）并读回验证，然后把源会话移入回收站；旧 id 失效，可从回收站恢复。compact 仅保留用户消息与最终回答；compressed 保留全部事件与工具结构，清空 stream/chunks/deltas 并截断超长字符串。活动/运行中、子代理转录、旧格式会话在写入前跳过。',
         },
         workspaceArchives: {
           mode: 'archive-sessions-then-deregister',
@@ -771,6 +814,10 @@ async function dispatchRequest(ctx, settings, overrides, connection, req, res) {
     }
     if (path === `${ROUTE_PREFIX}/move` && method === 'POST') {
       await handleMove(ctx, settings, overrides, req, res)
+      return
+    }
+    if (path === `${ROUTE_PREFIX}/compress` && method === 'POST') {
+      await handleCompress(ctx, settings, overrides, req, res)
       return
     }
     if (path === `${ROUTE_PREFIX}/workspace-archives` && method === 'GET') {
@@ -1601,7 +1648,13 @@ async function handleTrashPurge(ctx, settings, overrides, req, res) {
  * path) is written and read back first, then the source is moved into the
  * trash directory, so a failed copy never loses the conversation. Each session
  * is preflighted individually; unsafe sources appear in `skipped`.
- * Body: `{ workspaceId: string, sessionIds: string[], confirm: true }`.
+ *
+ * The destination is exactly one of `workspaceId` (an existing registered
+ * workspace) or `newWorkspacePath` plus optional `newWorkspaceTitle` (an
+ * absolute, existing directory `lib/move.js` registers as a new workspace; an
+ * already-registered path answers `400 workspace-exists`).
+ * Body: `{ workspaceId?, newWorkspacePath?, newWorkspaceTitle?, sessionIds,
+ * confirm: true }`.
  * @param {object} ctx - the plugin context.
  * @param {object} settings - resolved settings.
  * @param {object | undefined} overrides - module injection seam.
@@ -1616,18 +1669,98 @@ async function handleMove(ctx, settings, overrides, req, res) {
       '迁移会把源会话移入回收站（可恢复），需要 confirm:true；活动会话、子代理转录和旧格式会话会被跳过',
     )
   }
-  const workspaceId = optionalString(payload.workspaceId, 'workspaceId', { required: true })
+  const workspaceId = optionalString(payload.workspaceId, 'workspaceId')
+  const newWorkspacePath = optionalString(payload.newWorkspacePath, 'newWorkspacePath')
+  const newWorkspaceTitle = optionalString(payload.newWorkspaceTitle, 'newWorkspaceTitle')
+  if (workspaceId !== undefined && newWorkspacePath !== undefined) {
+    throw new SessionPortFormatError(
+      'invalid-argument',
+      'workspaceId 与 newWorkspacePath 只能二选一：前者迁移到已有工作区，后者新建工作区',
+    )
+  }
+  if (workspaceId === undefined && newWorkspacePath === undefined) {
+    throw new SessionPortFormatError('invalid-body', '请求缺少 workspaceId 或 newWorkspacePath（字符串）')
+  }
+  if (newWorkspaceTitle !== undefined && newWorkspacePath === undefined) {
+    throw new SessionPortFormatError('invalid-argument', 'newWorkspaceTitle 只能与 newWorkspacePath 一起使用')
+  }
   const sessionIds = parseSessionIdList(payload.sessionIds, { allowAll: false, maxBatch: MAX_MOVE_BATCH })
   if (sessionIds === undefined) {
     throw new SessionPortFormatError('invalid-argument', 'move 需要 sessionIds 数组（要迁移的会话 id）')
   }
   const move = await loadMove(overrides)
+  if (typeof move.moveSessions !== 'function') {
+    throw new SessionPortFormatError('unavailable', '会话迁移模块不可用')
+  }
   const moved = await move.moveSessions(ctx, {
-    workspaceId,
     sessionIds,
+    ...(workspaceId !== undefined
+      ? { workspaceId }
+      : {
+          newWorkspace: {
+            path: newWorkspacePath,
+            ...(newWorkspaceTitle !== undefined ? { title: newWorkspaceTitle } : {}),
+          },
+        }),
     ...trashOptions(settings),
   })
   sendJson(res, 200, { ok: true, ...moved })
+}
+
+/**
+ * `POST /session-kit/compress` — rewrite sessions into compact/compressed copies.
+ *
+ * A compression is copy-then-trash: a NEW session id is written with the
+ * source `cwd` and a transformed event log, read back, and only then is the
+ * source moved into the trash directory. A session id is never rewritten in
+ * place, so the old id keeps resolving to the trashed source and can be
+ * restored.
+ *
+ * `mode` defaults to `compressed`; a value outside `compact`/`compressed` is
+ * `400 invalid-argument`. Sources that are live, running, subagent transcripts
+ * or in an older format are reported in `skipped` without writing anything.
+ * Body: `{ sessionIds: string[], mode?: 'compact'|'compressed', confirm: true }`.
+ * Answers `{ok, mode, compressed, skipped, warnings}`.
+ * @param {object} ctx - the plugin context.
+ * @param {object} settings - resolved settings.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {import('node:http').IncomingMessage} req - request.
+ * @param {import('node:http').ServerResponse} res - response.
+ */
+async function handleCompress(ctx, settings, overrides, req, res) {
+  const payload = await readJsonBody(req, MAX_JSON_BODY_BYTES)
+  if (payload.confirm !== true) {
+    throw new SessionPortFormatError(
+      'confirm-required',
+      '压缩会生成新 id 的会话并把源会话移入回收站（可恢复），需要 confirm:true；活动会话、子代理转录和旧格式会话会被跳过',
+    )
+  }
+  let mode = DEFAULT_COMPRESS_MODE
+  if (payload.mode !== undefined) {
+    if (typeof payload.mode !== 'string' || !COMPRESS_MODE_VALUES.has(payload.mode)) {
+      throw new SessionPortFormatError('invalid-argument', 'mode 必须是 "compact" 或 "compressed"')
+    }
+    mode = payload.mode
+  }
+  const sessionIds = parseSessionIdList(payload.sessionIds, { allowAll: false, maxBatch: MAX_COMPRESS_BATCH })
+  if (sessionIds === undefined) {
+    throw new SessionPortFormatError('invalid-argument', 'compress 需要 sessionIds 数组（要压缩的会话 id）')
+  }
+  const compress = await loadCompress(overrides)
+  if (typeof compress.compressSessions !== 'function') {
+    throw new SessionPortFormatError('unavailable', '会话压缩模块不可用')
+  }
+  const result = await compress.compressSessions(ctx, { sessionIds, mode, ...trashOptions(settings) })
+  const compressed = Array.isArray(result?.compressed) ? result.compressed : []
+  const skipped = Array.isArray(result?.skipped) ? result.skipped : []
+  const warnings = Array.isArray(result?.warnings) ? result.warnings : []
+  sendJson(res, 200, {
+    ok: true,
+    mode: typeof result?.mode === 'string' && COMPRESS_MODE_VALUES.has(result.mode) ? result.mode : mode,
+    compressed,
+    skipped,
+    warnings,
+  })
 }
 
 /**
@@ -2029,7 +2162,8 @@ function registerTool(ctx, settings, overrides) {
           'action=files previews the workspace files a deletion would move for the selected sessions; the derivation is best effort (shell redirections, PTC scripts and files only mentioned in text cannot be discovered) and shared workspace files may be affected.',
           "action=detail reports each session's storage size, format status and archived state for up to 100 explicit ids; it reads through the same session service as the panel's detail view and writes nothing.",
           'action=trash_list inventories the trash directory (each delete writes an operation manifest); action=trash_restore moves the recorded session directories back to their original project directory, skips a target that already exists and re-registers workspace/archive/pin state, and action=trash_purge permanently erases selected operations (or "all") and requires confirm:true.',
-          'action=move copies the selected sessions into a destination workspace as NEW sessions (new ids, header.cwd = target path), reads each copy back, then moves the SOURCE session directories into the trash directory; a source that is live, running, a subagent transcript or an older format is skipped before copying, and a copy that fails verification leaves its source untouched. A move is reversible by restoring the trash operation. It requires confirm:true and workspaceId.',
+          'action=move copies the selected sessions into a destination workspace as NEW sessions (new ids, header.cwd = target path), reads each copy back, then moves the SOURCE session directories into the trash directory; a source that is live, running, a subagent transcript or an older format is skipped before copying, and a copy that fails verification leaves its source untouched. The destination is an existing workspaceId, or a new workspace registered from an absolute existing workspacePath (workspaceTitle optional; an already-registered path is refused). A move is reversible by restoring the trash operation. It requires confirm:true.',
+          'action=compress rewrites selected sessions into NEW session ids (the source id stops working) and moves the SOURCE sessions into the trash directory after each copy reads back, so a compression is reversible by restoring the trash operation. mode=compact keeps only user messages and final answers; mode=compressed keeps every event and tool-call structure, clears streamed deltas and truncates oversized strings (default). Both modes are lossy and never rewrite a session in place. Live/running sessions, subagent transcripts and older-format logs are skipped before any write. It requires confirm:true.',
           'action=delete with removeFiles:true requires selectedFiles (absolute paths from the files preview) and moves only those derived files; preview with action=files first and keep confirm:true. Without permanent:true nothing is erased.',
           'action=import_share imports a DeepSeek share conversation (chat.deepseek.com/share/<id> link or bare share id) as a NEW session; pass workspaceId to choose the target workspace, otherwise cwd or the deployment default directory is used.',
           'action=export_workspace backs up one or more workspaces as separate ZIPs: every main session in each workspace plus its whole file tree (sensitive files/build caches excluded, symlinks not followed). Pass workspaceIds for a batch (max 20) or a single workspaceId; the session-scoped export action keeps its behavior.',
@@ -2058,6 +2192,7 @@ function registerTool(ctx, settings, overrides) {
                 'trash_restore',
                 'trash_purge',
                 'move',
+                'compress',
                 'workspace_archive_list',
                 'workspace_archive',
                 'workspace_restore',
@@ -2065,13 +2200,13 @@ function registerTool(ctx, settings, overrides) {
                 'import_share',
               ],
               description:
-                "list: summarize sessions. export: save selected sessions as one ZIP. export_workspace: back up one whole workspace (sessions + file tree) as one ZIP. import: create new sessions from a ZIP or JSONL archive. archive/unarchive: toggle archived state. delete: move sessions to the trash directory. migrate: upgrade legacy session logs through DSH's official migration chain. files: preview the workspace files a deletion would move. detail: report each session's storage size, format status and archived state (bounded by the same 100-id cap as the detail route). trash_list: inventory recoverable trash operations. trash_restore: move recorded session directories back (never overwrites). trash_purge: permanently erase trash operations (requires confirm:true). move: copy sessions into a destination workspace (new ids) then trash the sources (requires confirm:true and workspaceId). workspace_archive_list: list whole-workspace archive records. workspace_archive: archive all sessions of one workspace and remove its registration only (requires confirm:true and workspaceId; directory/logs are kept). workspace_restore: restore one workspace archive by archiveId and reattach its sessions. attachment_report: read-only scan of attachment references whose host files no longer resolve (limit defaults to 300 sessions; nothing is deleted). import_share: import a DeepSeek share link as a new session.",
+                "list: summarize sessions. export: save selected sessions as one ZIP. export_workspace: back up one whole workspace (sessions + file tree) as one ZIP. import: create new sessions from a ZIP or JSONL archive. archive/unarchive: toggle archived state. delete: move sessions to the trash directory. migrate: upgrade legacy session logs through DSH's official migration chain. files: preview the workspace files a deletion would move. detail: report each session's storage size, format status and archived state (bounded by the same 100-id cap as the detail route). trash_list: inventory recoverable trash operations. trash_restore: move recorded session directories back (never overwrites). trash_purge: permanently erase trash operations (requires confirm:true). move: copy sessions into a destination workspace (new ids) then trash the sources (requires confirm:true and workspaceId, or workspacePath to register a new workspace). compress: create compact/compressed copies under new ids then trash the sources (lossy; requires confirm:true; mode defaults to compressed). workspace_archive_list: list whole-workspace archive records. workspace_archive: archive all sessions of one workspace and remove its registration only (requires confirm:true and workspaceId; directory/logs are kept). workspace_restore: restore one workspace archive by archiveId and reattach its sessions. attachment_report: read-only scan of attachment references whose host files no longer resolve (limit defaults to 300 sessions; nothing is deleted). import_share: import a DeepSeek share link as a new session.",
             },
             mode: {
               type: 'string',
               enum: ['full', 'compact', 'compressed'],
               description:
-                'export/export_workspace only: full keeps complete logs; compact keeps only the conversation (default from plugin config).',
+                'export/export_workspace: full keeps complete logs; compact keeps only the conversation (default from plugin config). compress: compact keeps only user messages and final answers, compressed keeps every event and tool-call structure while clearing streamed deltas and truncating oversized strings (default compressed); full is refused.',
             },
             sessionIds: {
               oneOf: [
@@ -2079,7 +2214,7 @@ function registerTool(ctx, settings, overrides) {
                 { type: 'string', enum: ['all'] },
               ],
               description:
-                'export/archive: session ids, or "all" (archive only). unarchive/delete/files/detail/move: explicit session ids ("all" is refused for safety). migrate: explicit ids, or "all" (requires confirm:true).',
+                'export/archive: session ids, or "all" (archive only). unarchive/delete/files/detail/move/compress: explicit session ids ("all" is refused for safety). migrate: explicit ids, or "all" (requires confirm:true).',
             },
             input: {
               type: 'string',
@@ -2088,7 +2223,17 @@ function registerTool(ctx, settings, overrides) {
             workspaceId: {
               type: 'string',
               description:
-                'import_share: target workspace id (resolved through the workspace registry); otherwise cwd or the deployment default directory is used. export_workspace: one workspace to back up (required unless workspaceIds is given). move: the destination workspace (required). workspace_archive: the workspace to archive (required).',
+                'import_share: target workspace id (resolved through the workspace registry); otherwise cwd or the deployment default directory is used. export_workspace: one workspace to back up (required unless workspaceIds is given). workspace_archive: the workspace to archive (required). move: the destination workspace (an existing workspace id; exactly one of workspaceId or workspacePath).',
+            },
+            workspacePath: {
+              type: 'string',
+              description:
+                'move only: absolute path of an existing directory to register as a NEW workspace and move the sessions into; mutually exclusive with workspaceId. An already-registered path is refused (workspace-exists).',
+            },
+            workspaceTitle: {
+              type: 'string',
+              description:
+                'move only: display title for the workspace created by workspacePath; providing it without workspacePath is an error.',
             },
             workspaceIds: {
               type: 'array',
@@ -2133,7 +2278,7 @@ function registerTool(ctx, settings, overrides) {
             confirm: {
               type: 'boolean',
               description:
-                'delete: must be true (and a second confirmation is required for permanent:true). migrate with sessionIds="all": must be true. move: must be true (the source sessions are moved into the trash directory). workspace_archive: must be true (the workspace registration is removed; the directory and logs are kept).',
+                'delete: must be true (and a second confirmation is required for permanent:true). migrate with sessionIds="all": must be true. move: must be true (the source sessions are moved into the trash directory). compress: must be true (a new session id is written and the source moves into the trash directory). workspace_archive: must be true (the workspace registration is removed; the directory and logs are kept).',
             },
             stopActivity: {
               type: 'boolean',
@@ -2283,6 +2428,9 @@ function registerTool(ctx, settings, overrides) {
           if (action === 'move') {
             return runMoveTool(ctx, settings, overrides, args)
           }
+          if (action === 'compress') {
+            return runCompressTool(ctx, settings, overrides, args)
+          }
           if (action === 'workspace_archive_list') {
             return runWorkspaceArchiveListTool(ctx, overrides)
           }
@@ -2302,7 +2450,7 @@ function registerTool(ctx, settings, overrides) {
             return runWorkspaceExportTool(ctx, settings, overrides, args)
           }
           throw new Error(
-            'session_kit: action 必须是 "list"、"export"、"export_workspace"、"import"、"archive"、"unarchive"、"delete"、"migrate"、"files"、"detail"、"trash_list"、"trash_restore"、"trash_purge"、"move"、"workspace_archive_list"、"workspace_archive"、"workspace_restore"、"attachment_report" 或 "import_share"',
+            'session_kit: action 必须是 "list"、"export"、"export_workspace"、"import"、"archive"、"unarchive"、"delete"、"migrate"、"files"、"detail"、"trash_list"、"trash_restore"、"trash_purge"、"move"、"compress"、"workspace_archive_list"、"workspace_archive"、"workspace_restore"、"attachment_report" 或 "import_share"',
           )
         },
       }),
@@ -2693,8 +2841,16 @@ async function runMoveTool(ctx, settings, overrides, args) {
     throw new Error('session_kit: move 需要 confirm:true（源会话会移入回收站，可从回收站恢复）')
   }
   const workspaceId = typeof args.workspaceId === 'string' ? args.workspaceId.trim() : ''
-  if (workspaceId === '') {
-    throw new Error('session_kit: move 需要 workspaceId（目标工作区 id，先用 action=list 查看）')
+  const workspacePath = typeof args.workspacePath === 'string' ? args.workspacePath.trim() : ''
+  const workspaceTitle = typeof args.workspaceTitle === 'string' ? args.workspaceTitle.trim() : ''
+  if (workspaceId !== '' && workspacePath !== '') {
+    throw new Error('session_kit: move 的 workspaceId 与 workspacePath 只能二选一（workspacePath 会新建工作区）')
+  }
+  if (workspaceId === '' && workspacePath === '') {
+    throw new Error('session_kit: move 需要 workspaceId（已有工作区）或 workspacePath（新建工作区目录）')
+  }
+  if (workspaceTitle !== '' && workspacePath === '') {
+    throw new Error('session_kit: workspaceTitle 只能与 workspacePath 一起使用')
   }
   const sessionIds = parseSessionIdList(args.sessionIds, { allowAll: false, maxBatch: MAX_MOVE_BATCH })
   if (sessionIds === undefined) {
@@ -2705,8 +2861,10 @@ async function runMoveTool(ctx, settings, overrides, args) {
     throw new Error('session_kit: 会话迁移模块不可用')
   }
   const outcome = await move.moveSessions(ctx, {
-    workspaceId,
     sessionIds,
+    ...(workspaceId !== ''
+      ? { workspaceId }
+      : { newWorkspace: { path: workspacePath, ...(workspaceTitle !== '' ? { title: workspaceTitle } : {}) } }),
     ...trashOptions(settings),
   })
   return moveToolText(outcome)
@@ -2723,8 +2881,9 @@ function moveToolText(outcome) {
   const target = outcome?.target ?? {}
   const label =
     typeof target.title === 'string' && target.title !== '' ? target.title : String(target.workspaceId ?? '')
+  const created = target.created === true ? '（本次新建工作区）' : ''
   const lines = [
-    `迁移目标：${label}（${String(target.workspaceId ?? '')}）→ ${String(target.path ?? '')}`,
+    `迁移目标：${label}（${String(target.workspaceId ?? '')}）→ ${String(target.path ?? '')}${created}`,
     `迁移：成功 ${moved.length} 个，跳过 ${skipped.length} 个`,
   ]
   for (const entry of moved) {
@@ -2745,6 +2904,78 @@ function moveToolText(outcome) {
     lines.push(`- 跳过 ${entry.id}：${reason}（${entry.message}）`)
   }
   for (const warning of outcome?.warnings ?? []) lines.push(`注意：${warning}`)
+  return lines.join('\n')
+}
+
+/**
+ * Run the compress tool action (parse -> copy-then-trash -> summary).
+ *
+ * The route and the tool share `lib/compress.js`; `confirm:true` is required
+ * because a NEW session id is written and the source sessions are moved into
+ * the trash directory.
+ * @param {object} ctx - the plugin context.
+ * @param {object} settings - resolved settings.
+ * @param {object | undefined} overrides - module injection seam.
+ * @param {object} args - model arguments.
+ * @returns {Promise<string>} summary text.
+ */
+async function runCompressTool(ctx, settings, overrides, args) {
+  if (args.confirm !== true) {
+    throw new Error('session_kit: compress 需要 confirm:true（会生成新 id 并把源会话移入回收站，可从回收站恢复）')
+  }
+  let mode = DEFAULT_COMPRESS_MODE
+  if (args.mode !== undefined) {
+    if (typeof args.mode !== 'string' || !COMPRESS_MODE_VALUES.has(args.mode)) {
+      throw new Error('session_kit: compress 的 mode 必须是 "compact" 或 "compressed"（默认 compressed）')
+    }
+    mode = args.mode
+  }
+  const sessionIds = parseSessionIdList(args.sessionIds, { allowAll: false, maxBatch: MAX_COMPRESS_BATCH })
+  if (sessionIds === undefined) {
+    throw new Error('session_kit: compress 需要 sessionIds 参数（要压缩的会话 id 数组）')
+  }
+  const compress = await loadCompress(overrides)
+  if (typeof compress.compressSessions !== 'function') {
+    throw new Error('session_kit: 会话压缩模块不可用')
+  }
+  const outcome = await compress.compressSessions(ctx, { sessionIds, mode, ...trashOptions(settings) })
+  return compressToolText(outcome, mode)
+}
+
+/**
+ * Tool result text for the compress action.
+ * @param {{mode?: string, compressed?: Array<object>, skipped?: Array<object>, warnings?: string[]}} outcome - compress result.
+ * @param {string} requestedMode - mode the caller asked for.
+ * @returns {string} summary text.
+ */
+function compressToolText(outcome, requestedMode) {
+  const compressed = Array.isArray(outcome?.compressed) ? outcome.compressed : []
+  const skipped = Array.isArray(outcome?.skipped) ? outcome.skipped : []
+  const mode = typeof outcome?.mode === 'string' ? outcome.mode : requestedMode
+  const modeLabel =
+    mode === 'compact'
+      ? 'compact（仅保留用户消息与最终回答，有损）'
+      : 'compressed（保留全部事件与工具结构，清空流式增量并截断超长字符串，有损）'
+  const lines = [`压缩模式：${modeLabel}`, `压缩：成功 ${compressed.length} 个，跳过 ${skipped.length} 个`]
+  for (const entry of compressed) {
+    const state = entry.sourceTrashed === true ? '源会话已移入回收站' : '源会话仍在原位置（见警告）'
+    lines.push(`- ${entry.sourceId} → ${entry.sessionId}（${entry.eventCount ?? 0} 个事件，${state}）`)
+  }
+  const reasons = {
+    active: '活动会话',
+    subagent: '子代理转录',
+    'format-version': '旧格式',
+    'read-failed': '读取失败',
+    'write-failed': '写入失败',
+    'verify-failed': '读回验证失败',
+    'compress-failed': '压缩失败',
+    'trash-failed': '回收站写入失败',
+  }
+  for (const entry of skipped) {
+    const reason = reasons[entry.reason] ?? entry.reason
+    lines.push(`- 跳过 ${entry.id}：${reason}（${entry.message}）`)
+  }
+  for (const warning of Array.isArray(outcome?.warnings) ? outcome.warnings : []) lines.push(`注意：${warning}`)
   return lines.join('\n')
 }
 

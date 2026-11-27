@@ -1,6 +1,6 @@
 # Public-release self-assessment
 
-Self-check for dsh-session-kit <code>0.11.0</code> (2026-11-07). The check was
+Self-check for dsh-session-kit <code>0.14.0</code> (2026-11-28). The check was
 code-and-test plus limited real <code>dsh web</code> spot checks; no live
 DeepSeek share API call and no real cross-machine restore. Evidence is marked
 by source:
@@ -68,8 +68,8 @@ From the plugin directory:
 node --test test/*.test.mjs
 ~~~
 
-Result: **246 tests, 240 passed, 0 failed, 5 skipped** (plain Node v22.23.2,
-about 0.26 s). The five skips are guarded tests that need a DSH repository
+Result: **365 tests, 359 passed, 0 failed, 6 skipped** (plain Node v22.23.2,
+about 0.26 s). The six skips are guarded tests that need a DSH repository
 checkout through <code>tsx</code>: compact-log product replay, two real JSONL
 persistence import cases, a real released v3 migration fixture, and the
 real-stored-session file-plan case.
@@ -80,12 +80,12 @@ From a DSH repository checkout:
 node --import tsx/esm --test dsh-session-kit/test/*.test.mjs
 ~~~
 
-Result: **246/246 passed, 0 skipped, 0 failed** (about 1.5 s). This run includes
+Result: **365/365 passed, 0 skipped, 0 failed** (about 1.5 s). This run includes
 the real persistence backend and product replay checks.
 
 Other checks: <code>node --check</code> passes for <code>index.js</code>,
 <code>src/client/index.js</code> and all <code>lib/*.js</code>; locale and package JSON
-parse; <code>npm pack --dry-run</code> reports 47 files, about 375 kB tarball (includes the README screenshot)
+parse; <code>npm pack --dry-run</code> reports 69 files, about 523 kB tarball (includes the README screenshot and the new decision record)
 
 ### 3.2 Real-backend and end-to-end evidence
 
@@ -96,7 +96,7 @@ parse; <code>npm pack --dry-run</code> reports 47 files, about 375 kB tarball (i
   <code>ValidationError: invalid config: unknown config key</code> and the
   plugin stayed inactive, confirming the new Config schema is enforced.
 - **[仓库自动化]** The <code>tsx</code> run exercises DSH's real JSONL
-  persistence and replay paths (the five guarded cases above), including a real
+  persistence and replay paths (the six guarded cases above), including a real
   released v3 migration fixture.
 - **[仓库记录]** <code>docs/research/migration-notes.md</code> records
   development validation with a disposable <code>DSH_HOME</code> and a headless
@@ -172,6 +172,21 @@ tree. Importing that ZIP into `ws-target` with
 `workspaceId=ws-target&restoreWorkspaceFiles=1` restored both files, created
 two new sessions in the target directory and attached them to `ws-target`.
 The browser Workspace backup card downloaded the same ZIP successfully.
+
+## 3.7 Destructive rewrite verification
+
+**[本次运行]** A disposable DSH 0.2.2 home was used to exercise the new
+`move` (existing and new workspace) and `compress` (compact and compressed)
+paths end to end against the real Host routes. Two synthetic sessions were
+imported, compressed in both modes, and moved to an existing workspace and to a
+newly registered workspace. Each operation returned a new id with
+`sourceTrashed: true`; the source directory and its trash operation were
+present, the destination workspace contained the copy, and the compressed
+session kept the expected event structure/payload bounds. A move that skipped
+every session removed the registration it had created. The panel was also
+exercised in headless Chrome: both operations require a first configuration
+dialog then a red confirmation, and the final button stayed disabled until the
+"I understand" checkbox was checked.
 
 ## 4. Feature status summary
 
@@ -310,7 +325,7 @@ release notes before calling it stable.
 Suggested pre-publication checklist:
 
 1. **CI matrix**: add a <code>tsx</code> job against a pinned DSH checkout so the
-   5 guarded real-backend cases run in CI, and run the same suite on Node 24.
+   6 guarded real-backend cases run in CI, and run the same suite on Node 24.
 2. **Browser smoke**: add a Playwright (or equivalent) job covering list/archive/
    delete-dialog/export/import and the newer detail/file-selection/permanent/
    share flows; at minimum, run a documented manual checklist on a disposable

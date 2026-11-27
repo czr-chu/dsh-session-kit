@@ -260,6 +260,41 @@ const zh = {
   'panel.moveReasonWrite': '写入失败',
   'panel.moveReasonVerify': '读回验证失败',
   'panel.moveReasonUnknown': '未知原因',
+  'panel.moveExistingTarget': '已有工作区',
+  'panel.moveNewTarget': '新建工作区',
+  'panel.moveNewPathLabel': '新工作区绝对路径',
+  'panel.moveNewPathPlaceholder': '/绝对路径/到/工作区',
+  'panel.moveNewTitleLabel': '新工作区标题（可选）',
+  'panel.moveNewTitlePlaceholder': '可选标题',
+  'panel.moveNewWorkspaceHint': '路径必须已存在、是目录，且尚未注册为工作区。',
+  'panel.moveTargetSummary': '目标：{target}',
+  'panel.moveSourceSummary': '源会话 {count} 个；迁移完成后源会话移入回收站，旧 id 链接失效。',
+  'panel.moveTargetInvalid': '请选择已有工作区，或填写有效的绝对路径。',
+  'panel.moveConfirmTitle': '确认迁移会话',
+  'panel.moveConfirmBody':
+    '将把 {count} 个会话复制到目标工作区并生成新 id，然后把源会话移入 session-kit-trash；旧 id 链接会失效。',
+  'panel.moveAcknowledge': '我已理解：会生成新 id，源会话移入回收站，旧 id 链接失效。',
+  'panel.compressTo': '压缩会话',
+  'panel.compressTitle': '压缩会话',
+  'panel.compressBody': '将生成压缩副本作为新 id，并把源会话移入 session-kit-trash；旧 id 链接会失效。',
+  'panel.compressModeLabel': '压缩模式',
+  'panel.compressModeCompactHint': '仅保留用户消息与最终回答；体积最小，但工具调用与过程会丢失。',
+  'panel.compressModeCompressedHint': '保留全部事件与工具调用结构；清空流式增量并截断超长输出，仍可能损失细节。',
+  'panel.compressSourceSummary': '源会话 {count} 个；完成后源会话移入回收站，旧 id 链接失效。',
+  'panel.compressConsequence': '当前模式：{mode}；压缩是有损操作，不能原地恢复。',
+  'panel.compressConfirmTitle': '确认压缩会话',
+  'panel.compressConfirmBody':
+    '为每个选中会话生成一个新 id 的压缩副本，并把源会话移入 session-kit-trash；{mode} 模式有损，旧 id 链接失效。',
+  'panel.compressAcknowledge': '我已理解：会生成新 id，源会话移入回收站，旧 id 链接失效，压缩有损。',
+  'panel.compressConfirm': '开始压缩',
+  'panel.compressBusy': '正在压缩…',
+  'panel.compressDone': '已压缩 {count} 个会话',
+  'panel.compressPartial': '已压缩 {count}，跳过 {skipped}',
+  'panel.compressSourceTrashed': '{source} → {target}（源会话已移入回收站）',
+  'panel.compressSourceKept': '{source} → {target}（源会话保留，见警告）',
+  'panel.compressFailed': '压缩失败',
+  'panel.tooManyCompress': '一次最多压缩 {max} 个会话。',
+  'panel.guardLegacyCompress': '{count} 个选中的会话仍是旧格式，请先升级格式再压缩。',
   'panel.confirmMigrate': '确认升级',
   'panel.confirmMore': '…另有 {count} 个会话',
   'panel.removeFiles': '同时移走该会话涉及的文件（移到回收站，实验性）',
@@ -342,7 +377,7 @@ const zh = {
   'panel.actionFailed': '操作失败',
   'panel.guardTitle': '操作被阻止',
   'panel.guardActive':
-    '{count} 个选中的会话处于活动状态（运行中或已打开），请先停止并在其他会话中关闭后再归档、删除或迁移。',
+    '{count} 个选中的会话处于活动状态（运行中或已打开），请先停止并在其他会话中关闭后再归档、删除、迁移或压缩。',
   'panel.guardLegacyMove': '{count} 个选中的会话仍是旧格式，请先升级格式再迁移。',
   'panel.actionPartialFailed': '有 {count} 个会话操作失败',
   'panel.actionFailureLine': '{id}：{reason}',
@@ -614,6 +649,49 @@ const en = {
   'panel.moveReasonWrite': 'write failed',
   'panel.moveReasonVerify': 'read-back verification failed',
   'panel.moveReasonUnknown': 'unknown reason',
+  'panel.moveExistingTarget': 'Existing workspace',
+  'panel.moveNewTarget': 'New workspace',
+  'panel.moveNewPathLabel': 'New workspace absolute path',
+  'panel.moveNewPathPlaceholder': '/absolute/path/to/workspace',
+  'panel.moveNewTitleLabel': 'New workspace title (optional)',
+  'panel.moveNewTitlePlaceholder': 'Optional title',
+  'panel.moveNewWorkspaceHint': 'The path must already exist, be a directory, and not already be a workspace.',
+  'panel.moveTargetSummary': 'Target: {target}',
+  'panel.moveSourceSummary':
+    '{count} source session(s); after the move the sources go to the trash and old-id links stop working.',
+  'panel.moveTargetInvalid': 'Choose an existing workspace or enter a valid absolute path.',
+  'panel.moveConfirmTitle': 'Confirm moving sessions',
+  'panel.moveConfirmBody':
+    'Copy {count} session(s) into the target workspace under new ids, then move the sources to session-kit-trash; old-id links stop working.',
+  'panel.moveAcknowledge':
+    'I understand: new ids are created, the sources go to the trash, and old-id links stop working.',
+  'panel.compressTo': 'Compress sessions',
+  'panel.compressTitle': 'Compress sessions',
+  'panel.compressBody':
+    'Create compressed copies under new ids, then move the sources to session-kit-trash; old-id links stop working.',
+  'panel.compressModeLabel': 'Compression mode',
+  'panel.compressModeCompactHint':
+    'Keep only user messages and final answers; smallest, but tool calls and process are lost.',
+  'panel.compressModeCompressedHint':
+    'Keep every event and tool-call structure; streamed deltas are dropped and oversized output truncated, so details can still be lost.',
+  'panel.compressSourceSummary':
+    '{count} source session(s); after compression the sources go to the trash and old-id links stop working.',
+  'panel.compressConsequence': 'Mode: {mode}; this is lossy and cannot be undone in place.',
+  'panel.compressConfirmTitle': 'Confirm compressing sessions',
+  'panel.compressConfirmBody':
+    'Create one compressed copy per selected session with a new id, then move the sources to session-kit-trash; {mode} is lossy and old-id links stop working.',
+  'panel.compressAcknowledge':
+    'I understand: new ids are created, the sources go to the trash, old-id links stop working, and compression is lossy.',
+  'panel.compressConfirm': 'Compress now',
+  'panel.compressBusy': 'Compressing…',
+  'panel.compressDone': 'Compressed {count} session(s)',
+  'panel.compressPartial': 'Compressed {count}, skipped {skipped}',
+  'panel.compressSourceTrashed': '{source} → {target} (source moved to trash)',
+  'panel.compressSourceKept': '{source} → {target} (source kept in place; see warnings)',
+  'panel.compressFailed': 'Compress failed',
+  'panel.tooManyCompress': 'At most {max} sessions can be compressed at once.',
+  'panel.guardLegacyCompress':
+    '{count} selected session(s) still use the legacy format; upgrade them before compressing.',
   'panel.confirmMigrate': 'Upgrade',
   'panel.confirmMore': '…and {count} more sessions',
   'panel.removeFiles': 'Also move related files (to trash, experimental)',
@@ -699,7 +777,7 @@ const en = {
   'panel.actionFailed': 'Action failed',
   'panel.guardTitle': 'Action blocked',
   'panel.guardActive':
-    '{count} selected session(s) are active (running or open); stop them and close them in their conversation before archiving, deleting or moving.',
+    '{count} selected session(s) are active (running or open); stop them and close them in their conversation before archiving, deleting, moving or compressing.',
   'panel.guardLegacyMove': '{count} selected session(s) still use the legacy format; upgrade them before moving.',
   'panel.actionPartialFailed': '{count} sessions failed',
   'panel.actionFailureLine': '{id}: {reason}',
@@ -1332,6 +1410,11 @@ function formatDateTime(value) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
+/** True for an absolute POSIX, Windows drive, or UNC path. */
+function isAbsolutePath(value) {
+  return typeof value === 'string' && (/^\//u.test(value) || /^[A-Za-z]:[\\/]/u.test(value) || /^\\\\/u.test(value))
+}
+
 /** Translate one Host skip reason into the dictionary wording. */
 function trashReasonOf(reason, tr) {
   if (reason === 'target-exists') return tr('panel.trashReasonTargetExists')
@@ -1531,6 +1614,7 @@ function confirmDialogNode(options) {
  *          exportWorkspace: Function, importSelection: Function, importShare: Function,
  *          manageSessions: Function, previewSessionFiles: Function,
  *          loadSessionDetails: Function, migrateSessions: Function, moveSessions: Function,
+ *          compressSessions: Function,
  *          loadTrash: Function, restoreTrash: Function, purgeTrash: Function,
  *          checkAttachments: Function, loadWorkspaceArchives: Function,
  *          archiveWorkspace: Function, restoreWorkspace: Function,
@@ -1558,6 +1642,13 @@ function SessionKitPanel(props) {
   const [confirmMigrate, setConfirmMigrate] = React.useState(null)
   const [moveRequest, setMoveRequest] = React.useState(null)
   const [moveTarget, setMoveTarget] = React.useState('')
+  const [moveTargetKind, setMoveTargetKind] = React.useState('existing')
+  const [moveNewPath, setMoveNewPath] = React.useState('')
+  const [moveNewTitle, setMoveNewTitle] = React.useState('')
+  const [moveUnderstood, setMoveUnderstood] = React.useState(false)
+  const [compressRequest, setCompressRequest] = React.useState(null)
+  const [compressMode, setCompressMode] = React.useState('compressed')
+  const [compressUnderstood, setCompressUnderstood] = React.useState(false)
   const [details, setDetails] = React.useState({})
   const [openDetail, setOpenDetail] = React.useState(null)
   const [shareInput, setShareInput] = React.useState('')
@@ -1922,10 +2013,12 @@ function SessionKitPanel(props) {
   const archiveBlock = dangerMessages(selectedForAction('archive'), 'archive')
   const deleteBlock = dangerMessages(selectedForAction('delete'), 'delete')
   const moveBlock = dangerMessages(selectedForAction('move'), 'move')
-  const guardMessages = [...new Set([...archiveBlock, ...deleteBlock, ...moveBlock])]
+  const compressBlock = dangerMessages(selectedForAction('compress'), 'compress')
+  const guardMessages = [...new Set([...archiveBlock, ...deleteBlock, ...moveBlock, ...compressBlock])]
   const BATCH_LIMIT = 500
   const MIGRATE_LIMIT = 100
   const MOVE_LIMIT = 100
+  const COMPRESS_LIMIT = 100
 
   /** Load one session's storage detail and derived files on demand and cache them. */
   async function loadSessionDetail(sessionId) {
@@ -2503,8 +2596,9 @@ function SessionKitPanel(props) {
   function dangerMessages(sessionIds, action) {
     const byId = new Map(catalog.sessions.map((session) => [session.id, session]))
     const sessions = sessionIds.map((id) => byId.get(id)).filter((session) => session !== undefined)
+    const legacyKey = action === 'compress' ? 'panel.guardLegacyCompress' : 'panel.guardLegacyMove'
     return dangerBlocks(sessions, action).map((block) =>
-      tr(block.reason === 'active' ? 'panel.guardActive' : 'panel.guardLegacyMove', { count: block.count }),
+      tr(block.reason === 'active' ? 'panel.guardActive' : legacyKey, { count: block.count }),
     )
   }
 
@@ -2709,6 +2803,7 @@ function SessionKitPanel(props) {
   }
 
   /** Open the workspace-move dialog for the currently selected sessions. */
+  /** Open the two-stage move flow at its configuration stage. */
   function requestMoveConfirm() {
     const sessionIds = selectedForAction('move')
     if (sessionIds.length === 0) {
@@ -2725,21 +2820,47 @@ function SessionKitPanel(props) {
     }
     if (refuseDangerous(sessionIds, 'move')) return
     const moveWorkspaces = catalog.workspaces.filter((workspace) => workspace.workspaceId !== '')
-    if (moveWorkspaces.length === 0) {
-      setNotice({ tone: 'warn', title: tr('panel.moveTitle'), lines: [tr('panel.moveNoWorkspaces')] })
-      return
-    }
     const byId = new Map(catalog.sessions.map((session) => [session.id, session]))
     const items = sessionIds.map((id) => {
       const session = byId.get(id)
       return session !== undefined && session.title !== '' ? session.title : id
     })
-    setMoveTarget(moveWorkspaces[0].workspaceId)
-    setMoveRequest({ sessionIds: [...sessionIds], items })
+    setMoveTargetKind(moveWorkspaces.length > 0 ? 'existing' : 'new')
+    setMoveTarget(moveWorkspaces.length > 0 ? moveWorkspaces[0].workspaceId : '')
+    setMoveNewPath('')
+    setMoveNewTitle('')
+    setMoveUnderstood(false)
+    setMoveRequest({ stage: 'configure', sessionIds: [...sessionIds], items })
   }
 
-  /** Localized reason for one skipped move entry. */
-  function moveReasonText(reason) {
+  /** Open the two-stage compress flow at its configuration stage. */
+  function requestCompressConfirm() {
+    const sessionIds = selectedForAction('compress')
+    if (sessionIds.length === 0) {
+      setNotice({ tone: 'error', title: tr('panel.compressFailed'), lines: [tr('panel.noSelection')] })
+      return
+    }
+    if (sessionIds.length > COMPRESS_LIMIT) {
+      setNotice({
+        tone: 'error',
+        title: tr('panel.compressFailed'),
+        lines: [tr('panel.tooManyCompress', { max: COMPRESS_LIMIT })],
+      })
+      return
+    }
+    if (refuseDangerous(sessionIds, 'compress')) return
+    const byId = new Map(catalog.sessions.map((session) => [session.id, session]))
+    const items = sessionIds.map((id) => {
+      const session = byId.get(id)
+      return session !== undefined && session.title !== '' ? session.title : id
+    })
+    setCompressMode('compressed')
+    setCompressUnderstood(false)
+    setCompressRequest({ stage: 'configure', sessionIds: [...sessionIds], items })
+  }
+
+  /** Localized reason for one skipped move or compress entry. */
+  function skipReasonText(reason) {
     const keys = {
       active: 'panel.moveReasonActive',
       subagent: 'panel.moveReasonSubagent',
@@ -2752,13 +2873,19 @@ function SessionKitPanel(props) {
   }
 
   /** Copy the selected sessions into a workspace, then refresh the catalog. */
-  async function runMove(sessionIds, workspaceId) {
-    if (busy !== '' || workspaceId === '') return
+  async function runMove(sessionIds, target) {
+    if (busy !== '') return
+    if (target === null || typeof target !== 'object') return
+    if (target.kind === 'new') {
+      if (!isAbsolutePath(target.path)) return
+    } else if (target.workspaceId === '') {
+      return
+    }
     if (refuseDangerous(sessionIds, 'move')) return
     setBusy('move')
     setNotice(null)
     try {
-      const result = await props.moveSessions(workspaceId, sessionIds)
+      const result = await props.moveSessions(target, sessionIds)
       const moved = Array.isArray(result.moved) ? result.moved : []
       const skipped = Array.isArray(result.skipped) ? result.skipped : []
       await reload({ quiet: true })
@@ -2777,7 +2904,7 @@ function SessionKitPanel(props) {
         lines.push(
           tr('panel.moveSkipLine', {
             id: String(entry.id ?? ''),
-            reason: moveReasonText(entry.reason),
+            reason: skipReasonText(entry.reason),
           }),
         )
       }
@@ -2796,6 +2923,56 @@ function SessionKitPanel(props) {
       if (mountedRef.current) {
         setBusy('')
         setMoveRequest(null)
+      }
+    }
+  }
+
+  /** Create compressed copies under new ids, then refresh the catalog. */
+  async function runCompress(sessionIds, mode) {
+    if (busy !== '') return
+    if (refuseDangerous(sessionIds, 'compress')) return
+    setBusy('compress')
+    setNotice(null)
+    try {
+      const result = await props.compressSessions(mode, sessionIds)
+      const compressed = Array.isArray(result.compressed) ? result.compressed : []
+      const skipped = Array.isArray(result.skipped) ? result.skipped : []
+      await reload({ quiet: true })
+      await props.refreshSessions()
+      setSelected(new Set())
+      const lines = []
+      for (const entry of compressed) {
+        lines.push(
+          tr(entry.sourceTrashed === true ? 'panel.compressSourceTrashed' : 'panel.compressSourceKept', {
+            source: String(entry.sourceId ?? ''),
+            target: String(entry.sessionId ?? ''),
+          }),
+        )
+        for (const warning of Array.isArray(entry.warnings) ? entry.warnings : []) lines.push(String(warning))
+      }
+      for (const entry of skipped) {
+        lines.push(
+          tr('panel.moveSkipLine', {
+            id: String(entry.id ?? ''),
+            reason: skipReasonText(entry.reason),
+          }),
+        )
+      }
+      for (const warning of Array.isArray(result.warnings) ? result.warnings : []) lines.push(String(warning))
+      setNotice({
+        tone: skipped.length > 0 ? 'warn' : 'success',
+        title:
+          skipped.length > 0
+            ? tr('panel.compressPartial', { count: compressed.length, skipped: skipped.length })
+            : tr('panel.compressDone', { count: compressed.length }),
+        lines: capNoticeLines(lines, tr),
+      })
+    } catch (error) {
+      setNotice({ tone: 'error', title: tr('panel.compressFailed'), lines: [errorMessageOf(error, tr)] })
+    } finally {
+      if (mountedRef.current) {
+        setBusy('')
+        setCompressRequest(null)
       }
     }
   }
@@ -3281,6 +3458,17 @@ function SessionKitPanel(props) {
                 onClick: requestMoveConfirm,
               },
               tr('panel.moveToWorkspace'),
+            ),
+            h(
+              'button',
+              {
+                type: 'button',
+                style: buttonStyle('secondary', busy !== '' || compressBlock.length > 0),
+                disabled: busy !== '' || compressBlock.length > 0,
+                title: compressBlock.length > 0 ? compressBlock.join(' ') : undefined,
+                onClick: requestCompressConfirm,
+              },
+              tr('panel.compressTo'),
             ),
             h(
               'button',
@@ -4354,47 +4542,298 @@ function SessionKitPanel(props) {
           },
         })
 
+  const moveWorkspaceRecord = catalog.workspaces.find((workspace) => workspace.workspaceId === moveTarget)
+  const movePathValid = isAbsolutePath(moveNewPath.trim())
+  const moveTargetValid = moveTargetKind === 'new' ? movePathValid : moveTarget !== ''
+  const moveTargetLabel =
+    moveTargetKind === 'new'
+      ? moveNewPath.trim() !== ''
+        ? moveNewPath.trim() + (moveNewTitle.trim() !== '' ? ' — ' + moveNewTitle.trim() : '')
+        : tr('panel.moveNewPathLabel')
+      : moveWorkspaceRecord !== undefined
+        ? moveWorkspaceRecord.title !== ''
+          ? moveWorkspaceRecord.title + ' — ' + moveWorkspaceRecord.path
+          : moveWorkspaceRecord.path
+        : tr('panel.moveTargetPlaceholder')
+  const compressModeText = compressMode === 'compact' ? tr('panel.modeCompact') : tr('panel.modeCompressed')
+
   const moveDialog =
     moveRequest === null
       ? null
-      : confirmDialogNode({
-          tr,
-          title: tr('panel.moveTitle'),
-          body: tr('panel.moveBody', { count: moveRequest.sessionIds.length }),
-          items: moveRequest.items,
-          control: h(
-            'div',
-            { className: styles.fieldColumn },
-            h(
-              'label',
-              { className: styles.fieldLabel, htmlFor: 'session-kit-move-target' },
-              tr('panel.moveTargetLabel'),
+      : moveRequest.stage === 'configure'
+        ? confirmDialogNode({
+            tr,
+            title: tr('panel.moveTitle'),
+            body: tr('panel.moveBody', { count: moveRequest.sessionIds.length }),
+            items: moveRequest.items,
+            control: h(
+              'div',
+              { className: styles.fieldColumn },
+              h(
+                'div',
+                { className: styles.modeGrid, role: 'radiogroup', 'aria-label': tr('panel.moveTargetLabel') },
+                h(
+                  'label',
+                  {
+                    className:
+                      moveTargetKind === 'existing' ? styles.modeCard + ' ' + styles.modeCardActive : styles.modeCard,
+                  },
+                  h('input', {
+                    type: 'radio',
+                    name: 'session-kit-move-kind',
+                    value: 'existing',
+                    checked: moveTargetKind === 'existing',
+                    disabled: busy !== '',
+                    onChange: () => setMoveTargetKind('existing'),
+                  }),
+                  h(
+                    'span',
+                    { className: styles.modeCardText },
+                    h('span', { className: styles.modeCardTitle }, tr('panel.moveExistingTarget')),
+                  ),
+                ),
+                h(
+                  'label',
+                  {
+                    className:
+                      moveTargetKind === 'new' ? styles.modeCard + ' ' + styles.modeCardActive : styles.modeCard,
+                  },
+                  h('input', {
+                    type: 'radio',
+                    name: 'session-kit-move-kind',
+                    value: 'new',
+                    checked: moveTargetKind === 'new',
+                    disabled: busy !== '',
+                    onChange: () => setMoveTargetKind('new'),
+                  }),
+                  h(
+                    'span',
+                    { className: styles.modeCardText },
+                    h('span', { className: styles.modeCardTitle }, tr('panel.moveNewTarget')),
+                  ),
+                ),
+              ),
+              moveTargetKind === 'existing'
+                ? h(
+                    'div',
+                    { className: styles.fieldColumn },
+                    h(
+                      'label',
+                      { className: styles.fieldLabel, htmlFor: 'session-kit-move-target' },
+                      tr('panel.moveTargetLabel'),
+                    ),
+                    h(
+                      'select',
+                      {
+                        id: 'session-kit-move-target',
+                        className: styles.select,
+                        value: moveTarget,
+                        disabled: busy !== '',
+                        onChange: (event) => setMoveTarget(event.target.value),
+                      },
+                      h('option', { value: '' }, tr('panel.moveTargetPlaceholder')),
+                      ...workspaceOptions,
+                    ),
+                  )
+                : h(
+                    'div',
+                    { className: styles.fieldColumn },
+                    h(
+                      'label',
+                      { className: styles.fieldLabel, htmlFor: 'session-kit-move-new-path' },
+                      tr('panel.moveNewPathLabel'),
+                    ),
+                    h('input', {
+                      id: 'session-kit-move-new-path',
+                      type: 'text',
+                      className: styles.search,
+                      value: moveNewPath,
+                      placeholder: tr('panel.moveNewPathPlaceholder'),
+                      disabled: busy !== '',
+                      onChange: (event) => setMoveNewPath(event.target.value),
+                    }),
+                    h(
+                      'label',
+                      { className: styles.fieldLabel, htmlFor: 'session-kit-move-new-title' },
+                      tr('panel.moveNewTitleLabel'),
+                    ),
+                    h('input', {
+                      id: 'session-kit-move-new-title',
+                      type: 'text',
+                      className: styles.search,
+                      value: moveNewTitle,
+                      placeholder: tr('panel.moveNewTitlePlaceholder'),
+                      disabled: busy !== '',
+                      onChange: (event) => setMoveNewTitle(event.target.value),
+                    }),
+                    h('p', { className: styles.modeHint }, tr('panel.moveNewWorkspaceHint')),
+                    moveNewPath.trim() !== '' && !movePathValid
+                      ? h('p', { className: styles.fieldError }, tr('panel.moveTargetInvalid'))
+                      : null,
+                  ),
+              h('p', { className: styles.modeHint }, tr('panel.moveTargetSummary', { target: moveTargetLabel })),
             ),
-            h(
-              'select',
-              {
-                id: 'session-kit-move-target',
-                className: styles.select,
-                value: moveTarget,
-                disabled: busy !== '',
-                onChange: (event) => setMoveTarget(event.target.value),
-              },
-              h('option', { value: '' }, tr('panel.moveTargetPlaceholder')),
-              ...workspaceOptions,
+            details: linesNode([
+              tr('panel.moveSourceSummary', { count: moveRequest.sessionIds.length }),
+              tr('panel.moveNote'),
+            ]),
+            note: '',
+            confirmRole: 'primary',
+            confirmLabel: tr('panel.continue'),
+            busyLabel: tr('panel.continue'),
+            busy: busy !== '',
+            confirmDisabled: !moveTargetValid,
+            onCancel: () => setMoveRequest(null),
+            onConfirm: () => {
+              if (!moveTargetValid) return
+              setMoveRequest({ ...moveRequest, stage: 'confirm' })
+            },
+          })
+        : confirmDialogNode({
+            tr,
+            title: tr('panel.moveConfirmTitle'),
+            body: tr('panel.moveConfirmBody', { count: moveRequest.sessionIds.length }),
+            items: moveRequest.items,
+            control: h(
+              'div',
+              { className: styles.fieldColumn },
+              h('p', { className: styles.modeHint }, tr('panel.moveTargetSummary', { target: moveTargetLabel })),
+              h(
+                'label',
+                { className: styles.checkRow },
+                h('input', {
+                  type: 'checkbox',
+                  checked: moveUnderstood,
+                  disabled: busy !== '',
+                  onChange: (event) => setMoveUnderstood(event.target.checked),
+                }),
+                h('span', { className: styles.checkText }, tr('panel.moveAcknowledge')),
+              ),
             ),
-          ),
-          note: tr('panel.moveNote'),
-          confirmRole: 'primary',
-          confirmLabel: tr('panel.moveConfirm'),
-          busyLabel: tr('panel.moveBusy'),
-          busy: busy !== '',
-          busyAction: busy === 'move',
-          confirmDisabled: moveTarget === '',
-          onCancel: () => setMoveRequest(null),
-          onConfirm: () => {
-            void runMove(moveRequest.sessionIds, moveTarget)
-          },
-        })
+            note: '',
+            danger: true,
+            confirmRole: 'danger',
+            confirmLabel: tr('panel.moveConfirm'),
+            busyLabel: tr('panel.moveBusy'),
+            busy: busy !== '',
+            busyAction: busy === 'move',
+            confirmDisabled: !moveUnderstood,
+            onCancel: () => setMoveRequest(null),
+            onConfirm: () => {
+              const target =
+                moveTargetKind === 'new'
+                  ? { kind: 'new', path: moveNewPath.trim(), title: moveNewTitle.trim() }
+                  : { kind: 'existing', workspaceId: moveTarget }
+              void runMove(moveRequest.sessionIds, target)
+            },
+          })
+
+  const compressDialog =
+    compressRequest === null
+      ? null
+      : compressRequest.stage === 'configure'
+        ? confirmDialogNode({
+            tr,
+            title: tr('panel.compressTitle'),
+            body: tr('panel.compressBody', { count: compressRequest.sessionIds.length }),
+            items: compressRequest.items,
+            control: h(
+              'div',
+              { className: styles.fieldColumn },
+              h(
+                'div',
+                { className: styles.modeGrid, role: 'radiogroup', 'aria-label': tr('panel.compressModeLabel') },
+                h(
+                  'label',
+                  {
+                    className:
+                      compressMode === 'compact' ? styles.modeCard + ' ' + styles.modeCardActive : styles.modeCard,
+                  },
+                  h('input', {
+                    type: 'radio',
+                    name: 'session-kit-compress-mode',
+                    value: 'compact',
+                    checked: compressMode === 'compact',
+                    disabled: busy !== '',
+                    onChange: () => setCompressMode('compact'),
+                  }),
+                  h(
+                    'span',
+                    { className: styles.modeCardText },
+                    h('span', { className: styles.modeCardTitle }, tr('panel.modeCompact')),
+                    h('span', { className: styles.modeHint }, tr('panel.compressModeCompactHint')),
+                  ),
+                ),
+                h(
+                  'label',
+                  {
+                    className:
+                      compressMode === 'compressed' ? styles.modeCard + ' ' + styles.modeCardActive : styles.modeCard,
+                  },
+                  h('input', {
+                    type: 'radio',
+                    name: 'session-kit-compress-mode',
+                    value: 'compressed',
+                    checked: compressMode === 'compressed',
+                    disabled: busy !== '',
+                    onChange: () => setCompressMode('compressed'),
+                  }),
+                  h(
+                    'span',
+                    { className: styles.modeCardText },
+                    h('span', { className: styles.modeCardTitle }, tr('panel.modeCompressed')),
+                    h('span', { className: styles.modeHint }, tr('panel.compressModeCompressedHint')),
+                  ),
+                ),
+              ),
+              h('p', { className: styles.modeHint }, tr('panel.compressConsequence', { mode: compressModeText })),
+            ),
+            details: linesNode([tr('panel.compressSourceSummary', { count: compressRequest.sessionIds.length })]),
+            note: '',
+            confirmRole: 'primary',
+            confirmLabel: tr('panel.continue'),
+            busyLabel: tr('panel.continue'),
+            busy: busy !== '',
+            onCancel: () => setCompressRequest(null),
+            onConfirm: () => setCompressRequest({ ...compressRequest, stage: 'confirm' }),
+          })
+        : confirmDialogNode({
+            tr,
+            title: tr('panel.compressConfirmTitle'),
+            body: tr('panel.compressConfirmBody', {
+              count: compressRequest.sessionIds.length,
+              mode: compressModeText,
+            }),
+            items: compressRequest.items,
+            control: h(
+              'div',
+              { className: styles.fieldColumn },
+              h('p', { className: styles.modeHint }, tr('panel.compressConsequence', { mode: compressModeText })),
+              h(
+                'label',
+                { className: styles.checkRow },
+                h('input', {
+                  type: 'checkbox',
+                  checked: compressUnderstood,
+                  disabled: busy !== '',
+                  onChange: (event) => setCompressUnderstood(event.target.checked),
+                }),
+                h('span', { className: styles.checkText }, tr('panel.compressAcknowledge')),
+              ),
+            ),
+            note: '',
+            danger: true,
+            confirmRole: 'danger',
+            confirmLabel: tr('panel.compressConfirm'),
+            busyLabel: tr('panel.compressBusy'),
+            busy: busy !== '',
+            busyAction: busy === 'compress',
+            confirmDisabled: !compressUnderstood,
+            onCancel: () => setCompressRequest(null),
+            onConfirm: () => {
+              void runCompress(compressRequest.sessionIds, compressMode)
+            },
+          })
 
   const trashDialog =
     trashConfirm === null
@@ -4458,6 +4897,7 @@ function SessionKitPanel(props) {
     filesDialog,
     migrateDialog,
     moveDialog,
+    compressDialog,
     trashDialog,
     workspaceArchiveDialog,
   )
@@ -4848,15 +5288,42 @@ async function migrateSelection(sessionIds) {
 
 /**
  * Copy sessions into a workspace through the Host's copy-then-trash route.
- * @param {string} workspaceId destination workspace id
+ * @param {{kind: 'existing' | 'new', workspaceId?: string, path?: string, title?: string}} target destination workspace or a new workspace path
  * @param {string[]} sessionIds source session ids
  * @returns {Promise<object>} the Host payload (`moved`, `skipped`, `warnings`)
  */
-async function moveToWorkspace(workspaceId, sessionIds) {
+async function moveToWorkspace(target, sessionIds) {
+  const requestBody = { sessionIds, confirm: true }
+  if (target.kind === 'new') {
+    requestBody.newWorkspacePath = target.path
+    if (typeof target.title === 'string' && target.title.trim() !== '')
+      requestBody.newWorkspaceTitle = target.title.trim()
+  } else {
+    requestBody.workspaceId = target.workspaceId
+  }
   const response = await fetch(hostUrl('/move'), {
     method: 'POST',
     headers: { 'content-type': 'application/json', accept: 'application/json' },
-    body: JSON.stringify({ workspaceId, sessionIds, confirm: true }),
+    body: JSON.stringify(requestBody),
+  })
+  const payload = await jsonBody(response)
+  if (!response.ok || payload === null || typeof payload !== 'object' || payload.ok !== true) {
+    throw requestFailure(payload, response.status)
+  }
+  return payload
+}
+
+/**
+ * Create compressed copies of sessions through the Host's copy-then-trash route.
+ * @param {'compact' | 'compressed'} mode compression mode
+ * @param {string[]} sessionIds source session ids
+ * @returns {Promise<object>} the Host payload (`compressed`, `skipped`, `warnings`)
+ */
+async function compressSessionsOnHost(mode, sessionIds) {
+  const response = await fetch(hostUrl('/compress'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({ sessionIds, mode, confirm: true }),
   })
   const payload = await jsonBody(response)
   if (!response.ok || payload === null || typeof payload !== 'object' || payload.ok !== true) {
@@ -4934,7 +5401,8 @@ function apply(ctx) {
             previewSessionFiles: (sessionIds) => previewSessionFiles(sessionIds),
             loadSessionDetails: (sessionIds) => loadSessionDetails(sessionIds),
             migrateSessions: (sessionIds) => migrateSelection(sessionIds),
-            moveSessions: (workspaceId, sessionIds) => moveToWorkspace(workspaceId, sessionIds),
+            moveSessions: (target, sessionIds) => moveToWorkspace(target, sessionIds),
+            compressSessions: (mode, sessionIds) => compressSessionsOnHost(mode, sessionIds),
             loadTrash: () => loadTrashInventory(),
             restoreTrash: (operationId, sessionIds) => restoreTrashBatch(operationId, sessionIds),
             purgeTrash: (operationIds) => purgeTrashBatch(operationIds),

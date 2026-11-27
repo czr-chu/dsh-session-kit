@@ -17,15 +17,25 @@ test('move adds a legacy block on top of running', () => {
   ])
 })
 
-test('legacy alone only blocks move, not archive or delete', () => {
+test('compress blocks active sessions and legacy formats', () => {
+  const sessions = [{ running: true }, { live: true }, { legacy: true }, { legacy: false }]
+  assert.deepEqual(dangerBlocks(sessions, 'compress'), [
+    { reason: 'active', count: 2 },
+    { reason: 'legacy', count: 1 },
+  ])
+})
+
+test('legacy alone only blocks move and compress, not archive or delete', () => {
   const sessions = [{ legacy: true }]
   assert.deepEqual(dangerBlocks(sessions, 'archive'), [])
   assert.deepEqual(dangerBlocks(sessions, 'delete'), [])
   assert.deepEqual(dangerBlocks(sessions, 'move'), [{ reason: 'legacy', count: 1 }])
+  assert.deepEqual(dangerBlocks(sessions, 'compress'), [{ reason: 'legacy', count: 1 }])
 })
 
 test('safe sessions and malformed input produce no blocks', () => {
   assert.deepEqual(dangerBlocks([{ running: false, live: false, legacy: false }], 'move'), [])
+  assert.deepEqual(dangerBlocks([{ running: false, live: false, legacy: false }], 'compress'), [])
   assert.deepEqual(dangerBlocks([], 'workspace-archive'), [])
   assert.deepEqual(dangerBlocks(null, 'delete'), [])
   assert.deepEqual(dangerBlocks([null, 1, 'x'], 'delete'), [])

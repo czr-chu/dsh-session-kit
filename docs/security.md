@@ -56,6 +56,23 @@ sessions and verifies that every backend location is a real session directory
 named after the encoded session id under a canonical project directory, without
 following symlinks. A move failure rolls back already-moved directories. Users
 who want permanent erasure delete the trash folder themselves.
+## Session replacement (move and compression)
+
+A move or compression is a copy-then-trash replacement, never an in-place
+rewrite of a committed session id. The plugin preflights live/running,
+subagent and legacy sources before writing, creates a new session, reads it
+back through the session query, attaches it to the workspace, and only then
+moves the source into `session-kit-trash`. A failed copy leaves the source
+untouched; a failed trash move keeps both and reports `sourceTrashed: false`.
+The panel uses two dialogs (configure, then a red confirmation with an explicit
+"I understand" checkbox) and the Host independently requires `confirm: true`.
+
+A new move workspace path is absolute, must already exist as a directory, and
+is canonicalized with `realpath`. A path already registered as a workspace is
+refused with `workspace-exists` instead of being silently reused. If every
+session is skipped, the empty registration created by that request is removed;
+the directory and its files are never touched.
+
 ## Workspace archive records
 
 A whole-workspace archive writes `<DSH_HOME>/session-kit-workspace-archive/<archiveId>/record.json`

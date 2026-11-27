@@ -12,7 +12,7 @@
 
 /**
  * @param {Array<{running?: boolean, live?: boolean, legacy?: boolean}>} sessions
- * @param {'archive' | 'delete' | 'move' | 'workspace-archive'} action
+ * @param {'archive' | 'delete' | 'move' | 'compress' | 'workspace-archive'} action
  * @returns {DangerBlock[]}
  */
 export function dangerBlocks(sessions, action) {
@@ -25,6 +25,6 @@ export function dangerBlocks(sessions, action) {
   ).length
   const blocks = []
   if (active > 0) blocks.push({ reason: 'active', count: active })
-  if (action === 'move' && legacy > 0) blocks.push({ reason: 'legacy', count: legacy })
+  if ((action === 'move' || action === 'compress') && legacy > 0) blocks.push({ reason: 'legacy', count: legacy })
   return blocks
 }

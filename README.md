@@ -4,7 +4,7 @@
 
 **Session manager, backup, and migration toolkit for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).**
 
-Version **0.13.0** · public beta · [中文说明](README.zh.md)
+Version **0.14.0** · public beta · [中文说明](README.zh.md)
 
 dsh-session-kit adds a **Session manager** panel and a <code>session_kit</code> agent
 tool to DeepSeek Harness (DSH). It backs up a whole **workspace** (every session
@@ -188,13 +188,19 @@ Deletes stay recoverable until you purge them.
 ### Move a session to another workspace
 
 - **Move card action / `move`.** Select sessions and choose **Move to workspace**
-  (next to archive and delete). Pick the destination in the dialog.
+  (next to archive and delete). The first dialog offers an **existing
+  workspace** or a **new workspace** at an absolute directory that already
+  exists; the second red dialog requires an explicit "I understand" checkbox.
 - DSH binds a session to a workspace through the header's `cwd`, and that value
   cannot be re-labelled in place. The plugin therefore copies each session into
   the target workspace under a **new id**, verifies the copy by reading it back
   through the session query, attaches it there, and only then moves the source
   directory into the trash. A failed copy leaves the source untouched; a failed
   trash move keeps the copy and reports it.
+- A new workspace path is canonicalized and refused if it is relative, missing,
+  not a directory or already registered. If every session in the batch is
+  skipped, the empty registration created by this request is removed again; the
+  directory is never touched.
 - Live/running sessions, subagent transcripts and older-format logs are skipped
   before any write. Subagent transcripts are not copied (they travel with the
   source into the trash); attachment bytes are shared, not duplicated; archived
@@ -202,6 +208,23 @@ Deletes stay recoverable until you purge them.
 - The old id stops working after a move; restoring the trash operation brings the
   source and its old id back. The batch is per-session tolerant (max 100) and
   requires `confirm: true`.
+
+### Compress a session
+
+- **Compress card action / `compress`.** Select sessions and choose
+  **Compress sessions**. The first dialog picks a mode; the second red dialog
+  requires an explicit "I understand" checkbox.
+- `compact` keeps only the main conversation (user messages and final answers).
+  `compressed` keeps every event and tool-call structure, empties streamed delta
+  arrays and truncates oversized strings with a marker. Both are lossy.
+- Compression is a **replacement**, not an in-place edit: DSH log generations
+  are immutable. The plugin writes a new session id, verifies it, attaches it to
+  the same workspace, then moves the source to `session-kit-trash`. The old id
+  stops working; the source can be restored from the trash until purged.
+- Active/live, running, subagent and legacy sessions are skipped before any
+  write. A failed copy or read-back leaves the source in place; a failed trash
+  move keeps both copy and source and reports `sourceTrashed: false`.
+
 
 ### Attachment reference check
 
@@ -281,7 +304,8 @@ The <code>session_kit</code> tool exposes the same operations to the model:
 | <code>archive</code> / <code>unarchive</code> | Toggle the durable archive state | batch ids supported |
 | <code>delete</code> | Move sessions to the trash | requires <code>confirm: true</code>; optional <code>removeFiles</code> with explicit <code>selectedFiles</code>; <code>permanent: true</code> erases irreversibly |
 | <code>migrate</code> | Upgrade legacy logs through DSH's official migration | <code>sessionIds</code> or <code>all</code> (needs <code>confirm: true</code>) |
-| <code>move</code> | Copy sessions into another workspace, then trash the sources | requires <code>confirm: true</code> and <code>workspaceId</code>; new ids; skips live/subagent/legacy |
+| <code>move</code> | Copy sessions into an existing or new workspace, then trash the sources | requires <code>confirm: true</code> and <code>workspaceId</code> or <code>workspacePath</code>/<code>workspaceTitle</code>; new ids; skips live/subagent/legacy |
+| <code>compress</code> | Replace sessions with smaller new-id copies, then trash the sources | requires <code>confirm: true</code>; <code>mode: compact</code> or <code>compressed</code>; new ids; source stays in trash |
 | <code>trash_list</code> | List trash operations with size and restorable flag | read-only |
 | <code>trash_restore</code> | Move an operation's sessions back into their workspace | <code>operationId</code>; optional <code>sessionIds</code> subset |
 | <code>trash_purge</code> | Permanently erase trash operations | requires <code>confirm: true</code>; <code>operationIds</code> or <code>all</code>, optional <code>olderThanDays</code> |
@@ -306,10 +330,10 @@ a Web or Desktop deployment; a headless deployment still gets the
 
 ~~~bash
 # from GitHub (recommended: pin a release tag)
-dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.13.0
+dsh plugin --profile web add github:czr-chu/dsh-session-kit#v0.14.0
 
 # or directly from a GitHub Release tarball
-# dsh plugin --profile web add 'https://github.com/czr-chu/dsh-session-kit/releases/download/v0.13.0/dsh-session-kit-0.13.0.tgz'
+# dsh plugin --profile web add 'https://github.com/czr-chu/dsh-session-kit/releases/download/v0.14.0/dsh-session-kit-0.14.0.tgz'
 
 # from a local checkout (iterating on the plugin)
 dsh plugin --profile web add ~/src/dsh-session-kit
@@ -322,7 +346,7 @@ Restart <code>dsh web</code> after installing, then refresh the page. The sideba
 gets a **Session manager** row under Plugins.
 
 In the Desktop/Web **Plugins → Add plugin** dialog, enter either the GitHub
-repository URL (`https://github.com/czr-chu/dsh-session-kit#v0.13.0`), the
+repository URL (`https://github.com/czr-chu/dsh-session-kit#v0.14.0`), the
 Release `.tgz` URL, or an absolute local directory. The repository is public; no
 GitHub token is needed for a Git install. See [docs/install.md](docs/install.md)
 for the repository requirements and offline install.
@@ -357,7 +381,10 @@ An incompatible DSH version is refused at install time through
    related-file selection and a separate permanent-erase confirmation. The
    **Trash** card at the bottom of the tools column lists delete operations and
    can restore or permanently purge them. **Move to workspace** copies the
-   selected sessions into another workspace and moves the sources to the trash.
+   selected sessions into another workspace (existing or newly registered) and
+   moves the sources to the trash. **Compress sessions** replaces each selected
+   session with a smaller new-id copy; both operations use a two-stage
+   confirmation and require an explicit acknowledgement.
 6. **Upgrade legacy rows.** A row with the legacy badge can be upgraded singly or
    in a batch through DSH's official migration; the old generation is kept.
 7. **Import a DeepSeek share.** In the Import card choose the **DeepSeek share**
@@ -447,6 +474,11 @@ selected files per delete.
   overwritten.
 - Delete is a trash move with strict backend-location validation and rollback;
   permanent delete is opt-in, validated before erasing, and irreversible.
+- Move and compression never rewrite a committed session id in place. Both write
+  a verified new session, then trash the source; the source stays recoverable
+  until its trash operation is purged. The panel uses a two-stage dialog and the
+  Host requires `confirm: true`; a new workspace path is canonicalized and must
+  be an existing, unregistered directory.
 - Share import accepts only <code>chat.deepseek.com/share/&lt;id&gt;</code> links
   or bare share ids, never arbitrary URLs, with timeout and response-size caps.
 - Deleting with related files is **experimental and best effort**. The derivation
@@ -520,7 +552,7 @@ npm test
 node --import tsx/esm --test dsh-session-kit/test/*.test.mjs
 ~~~
 
-Expected result: **331 tests**, with 9 guarded real-backend cases skipped under
+Expected result: **365 tests**, with 6 guarded real-backend cases skipped under
 plain <code>node --test</code> (they run when the DSH checkout is available
 through <code>tsx</code>). The suite covers session listing/reading, compact
 building, workspace file collection and sensitive exclusions, archive
